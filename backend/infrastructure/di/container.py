@@ -16,7 +16,9 @@ from backend.adapters.telemetry import DeterministicTelemetrySanitizer, LocalNoo
 from backend.adapters.txadmin import LocalTxAdminDetector
 from backend.application.project.service import ProjectApplicationService
 from backend.adapters.config import FiveMConfigValidator, LocalConfigSecretScanner
+from backend.adapters.git import GitPythonProvider
 from backend.application.config.service import ConfigApplicationService
+from backend.application.git.service import GitApplicationService
 from backend.application.setup.service import SetupApplicationService
 from backend.application.telemetry.service import TelemetryApplicationService
 from backend.domain.shared_kernel.identifiers import ProjectId
@@ -59,6 +61,13 @@ class ApplicationContainer:
             container=self,
             sanitizer=self.telemetry_sanitizer,
             delivery=self.telemetry_delivery,
+        )
+
+    def create_git_service(self) -> GitApplicationService:
+        return GitApplicationService(
+            container=self,
+            provider=GitPythonProvider(),
+            stream_publisher=self.stream_publisher,
         )
 
     def create_config_service(self) -> ConfigApplicationService:

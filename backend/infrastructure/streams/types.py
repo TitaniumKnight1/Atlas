@@ -61,5 +61,7 @@ STREAM_EVENT_TYPES: dict[str, str] = {
     "ServerOutputLine": StreamTopic.SERVER_OUTPUT,
     "ServerErrorLine": StreamTopic.SERVER_OUTPUT,
     "OperationProgress": StreamTopic.OP_PROGRESS,
+    "GitOperationStarted": StreamTopic.OP_PROGRESS,
+    "GitOperationCompleted": StreamTopic.OP_PROGRESS,
     "MetricSample": StreamTopic.METRICS,
 }

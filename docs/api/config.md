@@ -33,7 +33,7 @@ Responsibility: configuration inventory, snapshots, preview/apply/revert change 
 | `ConfigChangePlanned` | `project_id`, file refs, risk | Backup, Audit |
 | `ConfigChanged` | `project_id`, change set id, affected files | Resource, Automation, Incident, Audit |
 | `ConfigValidationFailed` | `project_id`, validator id, severity | Incident, Automation, Resources |
-| `SecretScanFindingDetected` | `project_id`, severity, redacted preview | Telemetry, Audit |
+| `SecretScanFindingDetected` | `project_id`, severity, redacted preview | Audit, Event bus (local-only; never telemetry) |
 
 ## Subscribed Events
 
@@ -62,10 +62,13 @@ Responsibility: configuration inventory, snapshots, preview/apply/revert change 
 | `GET /api/v1/projects/{project_id}/config-files` | filters | config list |
 | `POST /api/v1/projects/{project_id}/config-files/rescan` | path filters | scan result |
 | `POST /api/v1/projects/{project_id}/config/change-plan` | proposed edits | command plan and diff |
+| `POST /api/v1/projects/{project_id}/config/change-dry-run` | proposed edits | validation simulation |
 | `POST /api/v1/projects/{project_id}/config/change-sets/apply` | approved plan | execution refs |
 | `POST /api/v1/projects/{project_id}/config/change-sets/{change_set_id}/revert-plan` | id | command plan |
 | `POST /api/v1/projects/{project_id}/config/validation-runs` | validator filters | run/findings |
 | `GET /api/v1/projects/{project_id}/config/findings` | filters | findings |
+| `POST /api/v1/projects/{project_id}/config/secret-scan` | optional config file id | finding summary |
+| `GET /api/v1/projects/{project_id}/config/secret-findings` | status filters | redacted findings |
 
 ## Open Questions
 

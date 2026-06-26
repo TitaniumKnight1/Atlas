@@ -540,3 +540,116 @@ class SecretScanFindingRecord(Base):
     status: Mapped[str] = mapped_column(String, nullable=False)
     detected_at: Mapped[str] = mapped_column(String, nullable=False)
     metadata_json: Mapped[dict | None] = mapped_column(JSON)
+
+
+class GitRepositoryRecord(Base):
+    __tablename__ = "git_repositories"
+    __table_args__ = (
+        UniqueConstraint("project_id", "local_path", name="uq_git_repositories_project_path"),
+        CheckConstraint("repository_role in ('project', 'resource', 'template', 'unknown')", name="ck_git_repositories_role"),
+        Index("idx_git_repositories_project_role", "project_id", "repository_role"),
+    )
+
+    git_repository_id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    local_path: Mapped[str] = mapped_column(Text, nullable=False)
+    remote_url: Mapped[str | None] = mapped_column(Text)
+    default_branch: Mapped[str | None] = mapped_column(String)
+    repository_role: Mapped[str] = mapped_column(String, nullable=False)
+    resource_id: Mapped[str | None] = mapped_column(String)
+    last_scanned_at: Mapped[str | None] = mapped_column(String)
+
+
+class GitRefRecord(Base):
+    __tablename__ = "git_refs"
+    __table_args__ = (
+        UniqueConstraint("git_repository_id", "ref_name", "ref_type", name="uq_git_refs_repo_name_type"),
+        CheckConstraint("ref_type in ('branch', 'tag', 'remote')", name="ck_git_refs_type"),
+        Index("idx_git_refs_repo_current", "git_repository_id", "is_current"),
+    )
+
+    git_ref_id: Mapped[str] = mapped_column(String, primary_key=True)
+    git_repository_id: Mapped[str] = mapped_column(ForeignKey("git_repositories.git_repository_id"), nullable=False)
+    ref_name: Mapped[str] = mapped_column(Text, nullable=False)
+    ref_type: Mapped[str] = mapped_column(String, nullable=False)
+    commit_sha: Mapped[str | None] = mapped_column(String)
+    is_current: Mapped[int] = mapped_column(Integer, nullable=False)
+    detected_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class GitCommitRecord(Base):
+    __tablename__ = "git_commits"
+    __table_args__ = (
+        UniqueConstraint("git_repository_id", "commit_sha", name="uq_git_commits_repo_sha"),
+        Index("idx_git_commits_repo_time", "git_repository_id", "committed_at"),
+    )
+
+    git_commit_id: Mapped[str] = mapped_column(String, primary_key=True)
+    git_repository_id: Mapped[str] = mapped_column(ForeignKey("git_repositories.git_repository_id"), nullable=False)
+    commit_sha: Mapped[str] = mapped_column(String, nullable=False)
+    parent_shas_json: Mapped[list | None] = mapped_column(JSON)
+    author_name: Mapped[str | None] = mapped_column(String)
+    author_email_hash: Mapped[str | None] = mapped_column(String)
+    committed_at: Mapped[str | None] = mapped_column(String)
+    message_summary: Mapped[str | None] = mapped_column(Text)
+
+
+class GitWorktreeStatusSnapshotRecord(Base):
+    __tablename__ = "git_worktree_status_snapshots"
+    __table_args__ = (
+        CheckConstraint("is_dirty in (0, 1)", name="ck_git_status_dirty"),
+        Index("idx_git_status_repo_time", "git_repository_id", "captured_at"),
+        Index("idx_git_status_dirty", "is_dirty", "captured_at"),
+    )
+
+    git_status_snapshot_id: Mapped[str] = mapped_column(String, primary_key=True)
+    git_repository_id: Mapped[str] = mapped_column(ForeignKey("git_repositories.git_repository_id"), nullable=False)
+    head_commit_sha: Mapped[str | None] = mapped_column(String)
+    branch_name: Mapped[str | None] = mapped_column(String)
+    is_dirty: Mapped[int] = mapped_column(Integer, nullable=False)
+    ahead_count: Mapped[int | None] = mapped_column(Integer)
+    behind_count: Mapped[int | None] = mapped_column(Integer)
+    captured_at: Mapped[str] = mapped_column(String, nullable=False)
+    summary_json: Mapped[dict | None] = mapped_column(JSON)
+
+
+class GitFileChangeRecord(Base):
+    __tablename__ = "git_file_changes"
+    __table_args__ = (
+        UniqueConstraint("git_status_snapshot_id", "path", name="uq_git_file_changes_snapshot_path"),
+        Index("idx_git_file_changes_status", "change_status"),
+        CheckConstraint(
+            "change_status in ('added', 'modified', 'deleted', 'renamed', 'untracked')",
+            name="ck_git_file_changes_status",
+        ),
+    )
+
+    git_file_change_id: Mapped[str] = mapped_column(String, primary_key=True)
+    git_status_snapshot_id: Mapped[str] = mapped_column(ForeignKey("git_worktree_status_snapshots.git_status_snapshot_id"), nullable=False)
+    path: Mapped[str] = mapped_column(Text, nullable=False)
+    change_status: Mapped[str] = mapped_column(String, nullable=False)
+    old_path: Mapped[str | None] = mapped_column(Text)
+    insertions: Mapped[int | None] = mapped_column(Integer)
+    deletions: Mapped[int | None] = mapped_column(Integer)
+
+
+class GitOperationRecord(Base):
+    __tablename__ = "git_operations"
+    __table_args__ = (
+        CheckConstraint(
+            "operation_type in ('clone', 'fetch', 'pull', 'checkout', 'commit', 'diff', 'status')",
+            name="ck_git_operations_type",
+        ),
+        CheckConstraint("status in ('planned', 'running', 'succeeded', 'failed', 'cancelled')", name="ck_git_operations_status"),
+        Index("idx_git_operations_repo_time", "git_repository_id", "started_at"),
+        Index("idx_git_operations_status", "status"),
+    )
+
+    git_operation_id: Mapped[str] = mapped_column(String, primary_key=True)
+    git_repository_id: Mapped[str] = mapped_column(ForeignKey("git_repositories.git_repository_id"), nullable=False)
+    operation_type: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    command_execution_id: Mapped[str | None] = mapped_column(ForeignKey("command_executions.command_execution_id"))
+    started_at: Mapped[str | None] = mapped_column(String)
+    finished_at: Mapped[str | None] = mapped_column(String)
+    result_json: Mapped[dict | None] = mapped_column(JSON)
