@@ -284,3 +284,134 @@ class TelemetryDeliveryAttemptRecord(Base):
     attempted_at: Mapped[str] = mapped_column(String, nullable=False)
     http_status: Mapped[int | None] = mapped_column(Integer)
     error_summary: Mapped[str | None] = mapped_column(Text)
+
+
+class ArtifactVersionRecord(Base):
+    __tablename__ = "artifact_versions"
+    __table_args__ = (
+        UniqueConstraint("platform", "build_number", name="uq_artifact_versions_platform_build"),
+        CheckConstraint("platform in ('windows', 'linux')", name="ck_artifact_versions_platform"),
+        CheckConstraint("channel in ('recommended', 'latest', 'optional', 'pinned')", name="ck_artifact_versions_channel"),
+        Index("idx_artifact_versions_channel", "platform", "channel", "released_at"),
+    )
+
+    artifact_version_id: Mapped[str] = mapped_column(String, primary_key=True)
+    platform: Mapped[str] = mapped_column(String, nullable=False)
+    channel: Mapped[str] = mapped_column(String, nullable=False)
+    build_number: Mapped[str] = mapped_column(String, nullable=False)
+    download_url: Mapped[str | None] = mapped_column(Text)
+    sha256: Mapped[str | None] = mapped_column(String)
+    released_at: Mapped[str | None] = mapped_column(String)
+    discovered_at: Mapped[str] = mapped_column(String, nullable=False)
+    metadata_json: Mapped[dict | None] = mapped_column(JSON)
+
+
+class ProjectArtifactPinRecord(Base):
+    __tablename__ = "project_artifact_pins"
+    __table_args__ = (
+        UniqueConstraint("project_id", "environment_id", name="uq_project_artifact_pins_project_environment"),
+        CheckConstraint("channel_preference in ('recommended', 'latest', 'pinned')", name="ck_project_artifact_pins_channel"),
+        Index("idx_project_artifact_pins_project", "project_id"),
+    )
+
+    artifact_pin_id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    environment_id: Mapped[str | None] = mapped_column(ForeignKey("environment_profiles.environment_id"))
+    artifact_version_id: Mapped[str | None] = mapped_column(ForeignKey("artifact_versions.artifact_version_id"))
+    channel_preference: Mapped[str] = mapped_column(String, nullable=False)
+    pinned_reason: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class SetupRecipeRecord(Base):
+    __tablename__ = "setup_recipes"
+    __table_args__ = (
+        UniqueConstraint("recipe_slug", "recipe_version", name="uq_setup_recipes_slug_version"),
+        CheckConstraint("source_type in ('builtin', 'plugin', 'local')", name="ck_setup_recipes_source_type"),
+        Index("idx_setup_recipes_source", "source_type", "source_ref"),
+    )
+
+    setup_recipe_id: Mapped[str] = mapped_column(String, primary_key=True)
+    recipe_slug: Mapped[str] = mapped_column(String, nullable=False)
+    display_name: Mapped[str] = mapped_column(String, nullable=False)
+    source_type: Mapped[str] = mapped_column(String, nullable=False)
+    source_ref: Mapped[str | None] = mapped_column(String)
+    recipe_version: Mapped[str] = mapped_column(String, nullable=False)
+    definition_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class SetupRunRecord(Base):
+    __tablename__ = "setup_runs"
+    __table_args__ = (
+        CheckConstraint("status in ('planned', 'running', 'succeeded', 'failed', 'cancelled')", name="ck_setup_runs_status"),
+        CheckConstraint("dry_run in (0, 1)", name="ck_setup_runs_dry_run"),
+        Index("idx_setup_runs_project_time", "project_id", "started_at"),
+        Index("idx_setup_runs_status", "status"),
+    )
+
+    setup_run_id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    environment_id: Mapped[str | None] = mapped_column(ForeignKey("environment_profiles.environment_id"))
+    setup_recipe_id: Mapped[str | None] = mapped_column(ForeignKey("setup_recipes.setup_recipe_id"))
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    dry_run: Mapped[int] = mapped_column(Integer, nullable=False)
+    started_at: Mapped[str | None] = mapped_column(String)
+    finished_at: Mapped[str | None] = mapped_column(String)
+    summary_json: Mapped[dict | None] = mapped_column(JSON)
+
+
+class SetupRunStepRecord(Base):
+    __tablename__ = "setup_run_steps"
+    __table_args__ = (
+        UniqueConstraint("setup_run_id", "step_order", name="uq_setup_run_steps_run_order"),
+        Index("idx_setup_run_steps_run_status", "setup_run_id", "status"),
+    )
+
+    setup_step_id: Mapped[str] = mapped_column(String, primary_key=True)
+    setup_run_id: Mapped[str] = mapped_column(ForeignKey("setup_runs.setup_run_id"), nullable=False)
+    step_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    step_key: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    started_at: Mapped[str | None] = mapped_column(String)
+    finished_at: Mapped[str | None] = mapped_column(String)
+    details_json: Mapped[dict | None] = mapped_column(JSON)
+
+
+class DependencyCheckRecord(Base):
+    __tablename__ = "dependency_checks"
+    __table_args__ = (
+        CheckConstraint("category in ('binary', 'database', 'config', 'network', 'filesystem')", name="ck_dependency_checks_category"),
+        CheckConstraint("status in ('pass', 'warning', 'fail', 'skipped')", name="ck_dependency_checks_status"),
+        Index("idx_dependency_checks_project_time", "project_id", "checked_at"),
+        Index("idx_dependency_checks_status", "status"),
+    )
+
+    dependency_check_id: Mapped[str] = mapped_column(String, primary_key=True)
+    setup_run_id: Mapped[str | None] = mapped_column(ForeignKey("setup_runs.setup_run_id"))
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    check_key: Mapped[str] = mapped_column(String, nullable=False)
+    category: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    message: Mapped[str | None] = mapped_column(Text)
+    details_json: Mapped[dict | None] = mapped_column(JSON)
+    checked_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class TxAdminInstanceRecord(Base):
+    __tablename__ = "txadmin_instances"
+    __table_args__ = (
+        UniqueConstraint("project_id", "txdata_path_id", name="uq_txadmin_instances_project_txdata"),
+        Index("idx_txadmin_instances_project", "project_id"),
+    )
+
+    txadmin_instance_id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    txdata_path_id: Mapped[str | None] = mapped_column(ForeignKey("project_paths.project_path_id"))
+    host: Mapped[str | None] = mapped_column(String)
+    port: Mapped[int | None] = mapped_column(Integer)
+    detected_version: Mapped[str | None] = mapped_column(String)
+    last_seen_at: Mapped[str | None] = mapped_column(String)
+    metadata_json: Mapped[dict | None] = mapped_column(JSON)

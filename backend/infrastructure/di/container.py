@@ -7,10 +7,13 @@ from threading import RLock
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.adapters.filesystem import LocalProjectFilesystemInspector
+from backend.adapters.filesystem import LocalProjectFilesystemInspector, LocalSetupFilesystem
+from backend.adapters.fivem import CfxArtifactClient
 from backend.adapters.persistence.schema import bootstrap_schema
 from backend.adapters.telemetry import DeterministicTelemetrySanitizer, LocalNoopTelemetryDelivery
+from backend.adapters.txadmin import LocalTxAdminDetector
 from backend.application.project.service import ProjectApplicationService
+from backend.application.setup.service import SetupApplicationService
 from backend.application.telemetry.service import TelemetryApplicationService
 from backend.domain.shared_kernel.identifiers import ProjectId
 from backend.infrastructure.event_bus import InProcessEventBus
@@ -24,6 +27,9 @@ class ApplicationContainer:
     session_factory: sessionmaker[Session]
     event_bus: InProcessEventBus
     filesystem_inspector: LocalProjectFilesystemInspector
+    setup_filesystem: LocalSetupFilesystem
+    artifact_client: CfxArtifactClient
+    txadmin_detector: LocalTxAdminDetector
     telemetry_sanitizer: DeterministicTelemetrySanitizer
     telemetry_delivery: LocalNoopTelemetryDelivery
     writer_lock: RLock = field(default_factory=RLock)
@@ -46,6 +52,14 @@ class ApplicationContainer:
             delivery=self.telemetry_delivery,
         )
 
+    def create_setup_service(self) -> SetupApplicationService:
+        return SetupApplicationService(
+            container=self,
+            artifact_client=self.artifact_client,
+            filesystem=self.setup_filesystem,
+            txadmin=self.txadmin_detector,
+        )
+
     def close(self) -> None:
         self.engine.dispose()
 
@@ -59,6 +73,9 @@ def create_application_container(app_data_dir: Path) -> ApplicationContainer:
         session_factory=create_session_factory(engine),
         event_bus=InProcessEventBus(),
         filesystem_inspector=LocalProjectFilesystemInspector(),
+        setup_filesystem=LocalSetupFilesystem(),
+        artifact_client=CfxArtifactClient(),
+        txadmin_detector=LocalTxAdminDetector(),
         telemetry_sanitizer=DeterministicTelemetrySanitizer(),
         telemetry_delivery=LocalNoopTelemetryDelivery(),
     )

@@ -13,6 +13,8 @@ Create/open/list projects, environment profiles, settings, paths. First full ver
 ### M2 — Telemetry sanitizer + crash capture (thin)
 Opt-in/disable preference, the sanitization layer (strip license keys, tokens, IPs, DB credentials, Steam/Rockstar IDs, player info), local queue, Atlas-only Sentry wiring. Placed early on purpose: capture your own dev crashes from the start, and the sanitizer is leak-critical, so it is in place and tested before sensitive data flows everywhere. Risk: PII leak if incomplete — treat as security-grade.
 
+Precondition before any future Sentry SDK/transport milestone: the ADR-0005 independent adversarial sanitizer audit gate must pass, and telemetry remains disabled by default until then.
+
 ### M3 — Setup & Artifacts + process supervision
 The onboarding wizard (download artifacts, configure txAdmin, generate server.cfg, install dependencies, create database, validate) plus the process adapter to start/stop/supervise the server. First big user-facing payoff — you can stand up a running server — and it unblocks everything needing one (monitoring, incidents, automation). Risk: MEDIUM-HIGH — artifact channels, txAdmin handoff, heavy filesystem mutation (leans on dry-run/undo from M1).
 
