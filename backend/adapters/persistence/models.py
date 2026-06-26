@@ -1049,3 +1049,81 @@ class IncidentStackTraceRecord(Base):
     language: Mapped[str | None] = mapped_column(String)
     thread_name: Mapped[str | None] = mapped_column(Text)
     is_primary: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class IncidentFingerprintRecord(Base):
+    __tablename__ = "incident_fingerprints"
+    __table_args__ = (
+        UniqueConstraint("incident_group_id", "fingerprint", "algorithm_version", name="uq_incident_fingerprints_group_fp_algo"),
+        Index("idx_incident_fingerprints_active", "fingerprint", "is_active"),
+    )
+
+    incident_fingerprint_id: Mapped[str] = mapped_column(String, primary_key=True)
+    incident_group_id: Mapped[str] = mapped_column(ForeignKey("incident_groups.incident_group_id"), nullable=False)
+    fingerprint: Mapped[str] = mapped_column(Text, nullable=False)
+    algorithm_version: Mapped[str] = mapped_column(String, nullable=False)
+    components_json: Mapped[dict | None] = mapped_column(JSON)
+    is_active: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class IncidentStackFrameRecord(Base):
+    __tablename__ = "incident_stack_frames"
+    __table_args__ = (
+        UniqueConstraint("stack_trace_id", "frame_index", name="uq_incident_stack_frames_trace_index"),
+        Index("idx_incident_stack_frames_trace_index", "stack_trace_id", "frame_index"),
+        Index("idx_incident_stack_frames_hash", "frame_hash"),
+    )
+
+    stack_frame_id: Mapped[str] = mapped_column(String, primary_key=True)
+    stack_trace_id: Mapped[str] = mapped_column(ForeignKey("incident_stack_traces.stack_trace_id"), nullable=False)
+    frame_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    function_name: Mapped[str | None] = mapped_column(Text)
+    file_path: Mapped[str | None] = mapped_column(Text)
+    line_number: Mapped[int | None] = mapped_column(Integer)
+    column_number: Mapped[int | None] = mapped_column(Integer)
+    resource_id: Mapped[str | None] = mapped_column(String)
+    in_app: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    frame_hash: Mapped[str | None] = mapped_column(Text)
+
+
+class IncidentRelatedGroupRecord(Base):
+    __tablename__ = "incident_related_groups"
+    __table_args__ = (
+        UniqueConstraint("source_group_id", "target_group_id", "relation_type", name="uq_incident_related_groups"),
+        Index("idx_incident_related_source", "source_group_id"),
+        Index("idx_incident_related_target", "target_group_id"),
+    )
+
+    incident_relation_id: Mapped[str] = mapped_column(String, primary_key=True)
+    source_group_id: Mapped[str] = mapped_column(ForeignKey("incident_groups.incident_group_id"), nullable=False)
+    target_group_id: Mapped[str] = mapped_column(ForeignKey("incident_groups.incident_group_id"), nullable=False)
+    relation_type: Mapped[str] = mapped_column(String, nullable=False)
+    confidence: Mapped[float | None] = mapped_column()
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class IncidentGroupRuleRecord(Base):
+    __tablename__ = "incident_group_rules"
+    __table_args__ = (Index("idx_incident_group_rules_project_enabled", "project_id", "is_enabled"),)
+
+    incident_group_rule_id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    rule_type: Mapped[str] = mapped_column(String, nullable=False)
+    match_json: Mapped[dict | None] = mapped_column(JSON)
+    action_json: Mapped[dict | None] = mapped_column(JSON)
+    is_enabled: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class IncidentNoteRecord(Base):
+    __tablename__ = "incident_notes"
+    __table_args__ = (Index("idx_incident_notes_group_time", "incident_group_id", "created_at"),)
+
+    incident_note_id: Mapped[str] = mapped_column(String, primary_key=True)
+    incident_group_id: Mapped[str] = mapped_column(ForeignKey("incident_groups.incident_group_id"), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[str | None] = mapped_column(String)
+    created_by: Mapped[str | None] = mapped_column(String)

@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query
 
 from backend.api.dependencies import get_container
-from backend.api.schemas.incident import ErrorPayload, ResponseEnvelope
+from backend.api.schemas.incident import CompareIncidentsRequest, ErrorPayload, ResponseEnvelope
 from backend.application.incident import IncidentApplicationError
 from backend.domain.shared_kernel import ProjectId
 from backend.infrastructure.di import ApplicationContainer
@@ -28,6 +28,36 @@ def list_incidents(
 def get_incident(project_id: str, incident_group_id: str, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
     try:
         return _success(container.create_incident_service().get_incident(ProjectId(project_id), incident_group_id))
+    except IncidentApplicationError as error:
+        return _failure(error)
+
+
+@router.get("/projects/{project_id}/incidents/{incident_group_id}/timeline", response_model=ResponseEnvelope)
+def get_group_timeline(project_id: str, incident_group_id: str, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        return _success(container.create_incident_service().get_group_timeline(ProjectId(project_id), incident_group_id))
+    except IncidentApplicationError as error:
+        return _failure(error)
+
+
+@router.post("/projects/{project_id}/incidents/compare", response_model=ResponseEnvelope)
+def compare_incidents(
+    project_id: str,
+    body: CompareIncidentsRequest,
+    container: ApplicationContainer = Depends(get_container),
+) -> ResponseEnvelope:
+    try:
+        return _success(
+            container.create_incident_service().compare_incidents(ProjectId(project_id), incident_group_ids=body.incident_group_ids)
+        )
+    except IncidentApplicationError as error:
+        return _failure(error)
+
+
+@router.post("/projects/{project_id}/incidents/migrate-grouping", response_model=ResponseEnvelope)
+def migrate_grouping(project_id: str, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        return _success(container.create_incident_service().migrate_placeholder_incidents(ProjectId(project_id)))
     except IncidentApplicationError as error:
         return _failure(error)
 

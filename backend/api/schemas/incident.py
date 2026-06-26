@@ -13,3 +13,7 @@ class ResponseEnvelope(BaseModel):
     data: dict | list[dict] | None = None
     error: ErrorPayload | None = None
     warnings: list[str] = Field(default_factory=list)
+
+
+class CompareIncidentsRequest(BaseModel):
+    incident_group_ids: list[str] = Field(min_length=2)

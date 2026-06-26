@@ -7,10 +7,10 @@ Responsibility: local incident ingestion, fingerprinting, grouping, occurrence a
 | Slice | Scope | M7a status |
 | --- | --- | --- |
 | **M7a** | Crash-triggered capture, occurrence write, environment snapshot assembly, breadcrumbs, local queries, `IncidentCaptured` event | **Implemented** |
-| **M7b** | Fingerprinting, deduplication, grouping, related incidents, rules, compare | Deferred |
+| **M7b** | Fingerprinting, deduplication, grouping, timeline, related groups, compare | **Implemented** |
 | **M7c** | Markdown export, export sanitization, export history | Deferred |
 
-M7a implements a subset of the commands/queries below. Deferred items remain specified for future slices.
+M7a implements capture and snapshot assembly. M7b implements fingerprinting, deduplication, grouping, group timeline, related groups, compare, and placeholder migration. Deferred items remain specified for future slices.
 
 ## Privacy boundary
 
@@ -28,7 +28,8 @@ M7c export is the deliberate outbound path and requires sanitization; it is out 
 
 | Name | Inputs | Outputs | Errors | Behavior | PRD trace |
 | --- | --- | --- | --- | --- | --- |
-| `CaptureServerCrash` | `project_id`, `process_run_id`, `exit_code` | group id, occurrence id | `NotFound`, `ProjectScopeViolation` | M7a: assembles environment snapshot from M3b/M4/M5/M6 reads; auto-triggered on `ServerCrashed`. No preview/undo. | Local crash capture |
+| `CaptureServerCrash` | `project_id`, `process_run_id`, `exit_code` | group id, occurrence id, fingerprint | `NotFound`, `ProjectScopeViolation` | M7a capture + M7b fingerprint/dedupe; auto-triggered on `ServerCrashed`. No preview/undo. | Local crash capture |
+| `MigrateIncidentGrouping` | `project_id` | merge/move/delete counts | `ProjectScopeViolation` | M7b: idempotent backfill of M7a placeholder groups. | Placeholder transition |
 | `AppendIncidentOccurrence` | `project_id`, group id, occurrence payload | occurrence id | `NotFound`, `ProjectScopeViolation` | Adds occurrence to existing group. | Deduplication/history |
 | `AttachBreadcrumbs` | `project_id`, occurrence id, breadcrumbs | accepted count | `NotFound`, `ValidationFailed` | Local-only timeline write. | Timeline/breadcrumbs |
 | `AttachIncidentContextSnapshot` | `project_id`, occurrence id, context type, snapshot/local file ref | context snapshot id | `NotFound`, `ValidationFailed` | Stores local debugging context. | Environment/config/log snapshots |
@@ -56,6 +57,9 @@ M7c export is the deliberate outbound path and requires sanitization; it is out 
 | Event | Payload summary | Consumers |
 | --- | --- | --- |
 | `IncidentCaptured` | `project_id`, group id, occurrence id, severity, category | Audit (local bus only in M7a) |
+| `NewIncidentGroupCreated` | `project_id`, group id, occurrence id, fingerprint | Audit |
+| `OccurrenceDeduplicated` | `project_id`, group id, occurrence id, fingerprint | Audit |
+| `IncidentGrouped` | `project_id`, group id, fingerprint, occurrence count | Audit |
 | `IncidentCreated` | `project_id`, group id, occurrence id, severity | Automation, Monitoring, Audit |
 | `IncidentOccurrenceAppended` | `project_id`, group id, occurrence id | Automation, Audit |
 | `IncidentStatusChanged` | `project_id`, group id, status | Automation, Audit |
@@ -96,9 +100,9 @@ M7c export is the deliberate outbound path and requires sanitization; it is out 
 | `GET /api/v1/projects/{project_id}/incidents/{group_id}` | ids | incident detail |
 | `GET /api/v1/projects/{project_id}/incidents/occurrences/{occurrence_id}/timeline` | occurrence id | breadcrumbs, context snapshots, stack trace (M7a) |
 | `POST /api/v1/projects/{project_id}/incidents/ingest` | incident payload | group/occurrence refs (M7b+) |
-| `GET /api/v1/projects/{project_id}/incidents/{group_id}/timeline` | occurrence/time filters | timeline |
-| `POST /api/v1/projects/{project_id}/incidents/{group_id}/status` | status/reason | group summary |
-| `POST /api/v1/projects/{project_id}/incidents/compare` | group/occurrence ids | comparison report |
+| `GET /api/v1/projects/{project_id}/incidents/{group_id}/timeline` | occurrence/time filters | group occurrence timeline (M7b) |
+| `POST /api/v1/projects/{project_id}/incidents/compare` | group ids | comparison report (M7b) |
+| `POST /api/v1/projects/{project_id}/incidents/migrate-grouping` | ids | placeholder migration stats (M7b) |
 | `POST /api/v1/projects/{project_id}/incidents/{group_id}/exports/markdown` | redaction profile | export ref/warnings |
 | `GET /api/v1/projects/{project_id}/streams/incidents` | filters | incident stream topic |
 
@@ -108,5 +112,7 @@ M7c export is the deliberate outbound path and requires sanitization; it is out 
 
 ## Deviations
 
-- M7a uses placeholder per-capture fingerprints (`capture:{occurrence_id}`) instead of M7b deduplication fingerprints.
-- M7a API surface is a subset of this contract; ingest, status, compare, export, and incidents SSE stream are deferred to M7b/M7c.
+- M7b implements automatic related-group linking only for shared `resource_hint` with different fingerprints (`same_root_cause`, confidence 0.6). User rules, notes, and manual relate APIs remain deferred.
+- `incident_group_rules` and `incident_notes` tables exist for future use; no rule/note API in M7b.
+- `incident_stack_frames` table exists; no frame rows written until structured stack traces are available.
+- M7b API surface is still a subset of this contract; ingest, status, export, and incidents SSE stream are deferred to M7c or later.
