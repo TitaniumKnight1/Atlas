@@ -40,6 +40,10 @@ class GrantCapabilitiesRequest(BaseModel):
     idempotency_key: str | None = None
 
 
+class StartPluginRunRequest(BaseModel):
+    mode: str = "normal"
+
+
 class RevokeCapabilityRequest(BaseModel):
     capability: str
     idempotency_key: str | None = None

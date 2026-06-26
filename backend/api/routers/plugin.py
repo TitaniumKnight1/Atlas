@@ -11,6 +11,7 @@ from backend.api.schemas.plugin import (
     RevokeCapabilityRequest,
     SetGlobalPluginRequest,
     SetPluginEnabledRequest,
+    StartPluginRunRequest,
     ValidateManifestRequest,
 )
 from backend.application.plugin import PluginApplicationError
@@ -143,6 +144,63 @@ def revoke_plugin_capability(
                 idempotency_key=request.idempotency_key,
             )
         )
+    except PluginApplicationError as error:
+        return _failure(error)
+
+
+@router.post("/projects/{project_id}/plugins/{plugin_id}/runtime/run", response_model=ResponseEnvelope)
+def run_plugin_runtime(
+    project_id: str,
+    plugin_id: str,
+    request: StartPluginRunRequest,
+    container: ApplicationContainer = Depends(get_container),
+) -> ResponseEnvelope:
+    try:
+        return _success(
+            container.create_plugin_host_service().run_plugin(
+                plugin_id,
+                ProjectId(project_id),
+                mode=request.mode,
+            )
+        )
+    except PluginApplicationError as error:
+        return _failure(error)
+
+
+@router.get("/projects/{project_id}/plugins/{plugin_id}/runtime/{runtime_id}", response_model=ResponseEnvelope)
+def get_plugin_runtime(
+    project_id: str,
+    plugin_id: str,
+    runtime_id: str,
+    container: ApplicationContainer = Depends(get_container),
+) -> ResponseEnvelope:
+    try:
+        return _success(container.create_plugin_host_service().get_runtime(runtime_id, ProjectId(project_id)))
+    except PluginApplicationError as error:
+        return _failure(error)
+
+
+@router.post("/projects/{project_id}/plugins/{plugin_id}/runtime/{runtime_id}/stop", response_model=ResponseEnvelope)
+def stop_plugin_runtime(
+    project_id: str,
+    plugin_id: str,
+    runtime_id: str,
+    container: ApplicationContainer = Depends(get_container),
+) -> ResponseEnvelope:
+    try:
+        return _success(container.create_plugin_host_service().stop_plugin(runtime_id, ProjectId(project_id)))
+    except PluginApplicationError as error:
+        return _failure(error)
+
+
+@router.get("/projects/{project_id}/plugins/{plugin_id}/capability-calls", response_model=ResponseEnvelope)
+def list_plugin_capability_calls(
+    project_id: str,
+    plugin_id: str,
+    container: ApplicationContainer = Depends(get_container),
+) -> ResponseEnvelope:
+    try:
+        return _success(container.create_plugin_host_service().list_capability_calls(plugin_id, ProjectId(project_id)))
     except PluginApplicationError as error:
         return _failure(error)
 

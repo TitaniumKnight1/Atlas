@@ -37,3 +37,39 @@ def plugin_disabled(plugin_id: str, *, reason: str | None = None) -> DomainEvent
         project_id=None,
         payload={"plugin_id": plugin_id, "reason": reason},
     )
+
+
+def plugin_started(plugin_id: str, *, runtime_id: str, project_id: ProjectId, pid: int) -> DomainEventEnvelope:
+    return DomainEventEnvelope.create(
+        event_type="PluginStarted",
+        aggregate_ref=AggregateRef("PluginRuntime", runtime_id),
+        project_id=project_id,
+        payload={"plugin_id": plugin_id, "runtime_id": runtime_id, "project_id": str(project_id), "pid": pid},
+    )
+
+
+def plugin_stopped(plugin_id: str, *, runtime_id: str, project_id: ProjectId) -> DomainEventEnvelope:
+    return DomainEventEnvelope.create(
+        event_type="PluginStopped",
+        aggregate_ref=AggregateRef("PluginRuntime", runtime_id),
+        project_id=project_id,
+        payload={"plugin_id": plugin_id, "runtime_id": runtime_id, "project_id": str(project_id)},
+    )
+
+
+def plugin_capability_call_denied(plugin_id: str, *, capability: str, project_id: ProjectId, reason: str) -> DomainEventEnvelope:
+    return DomainEventEnvelope.create(
+        event_type="PluginCapabilityCallDenied",
+        aggregate_ref=AggregateRef("Plugin", plugin_id),
+        project_id=project_id,
+        payload={"plugin_id": plugin_id, "capability": capability, "project_id": str(project_id), "reason": reason},
+    )
+
+
+def plugin_failed(plugin_id: str, *, runtime_id: str, project_id: ProjectId, summary: str) -> DomainEventEnvelope:
+    return DomainEventEnvelope.create(
+        event_type="PluginFailed",
+        aggregate_ref=AggregateRef("PluginRuntime", runtime_id),
+        project_id=project_id,
+        payload={"plugin_id": plugin_id, "runtime_id": runtime_id, "project_id": str(project_id), "summary": summary},
+    )

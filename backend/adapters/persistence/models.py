@@ -1524,3 +1524,53 @@ class PluginTrustRecord(Base):
     granted_capabilities_json: Mapped[list] = mapped_column(JSON, nullable=False)
     consented_at: Mapped[str] = mapped_column(String, nullable=False)
     revoked_at: Mapped[str | None] = mapped_column(String)
+
+
+class PluginRuntimeRecord(Base):
+    """Plugin subprocess runtime — scoped to project when mediating project capabilities."""
+
+    __tablename__ = "plugin_runtimes"
+    __table_args__ = (
+        CheckConstraint(
+            "status in ('starting', 'running', 'stopped', 'failed', 'crashed', 'timed_out')",
+            name="ck_plugin_runtimes_status",
+        ),
+        Index("idx_plugin_runtimes_plugin_project", "plugin_id", "project_id"),
+        Index("idx_plugin_runtimes_status", "status"),
+    )
+
+    runtime_id: Mapped[str] = mapped_column(String, primary_key=True)
+    plugin_id: Mapped[str] = mapped_column(ForeignKey("plugin_registrations.plugin_id"), nullable=False)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    pid: Mapped[int | None] = mapped_column(Integer)
+    started_at: Mapped[str] = mapped_column(String, nullable=False)
+    stopped_at: Mapped[str | None] = mapped_column(String)
+    exit_code: Mapped[int | None] = mapped_column(Integer)
+    failure_summary_json: Mapped[dict | None] = mapped_column(JSON)
+
+
+class PluginCapabilityCallRecord(Base):
+    """Audit of every capability mediation attempt at the plugin host boundary."""
+
+    __tablename__ = "plugin_capability_calls"
+    __table_args__ = (
+        CheckConstraint("decision in ('granted', 'denied', 'unknown')", name="ck_plugin_capability_calls_decision"),
+        CheckConstraint(
+            "outcome in ('succeeded', 'failed', 'denied', 'error')",
+            name="ck_plugin_capability_calls_outcome",
+        ),
+        Index("idx_plugin_capability_calls_plugin_time", "plugin_id", "occurred_at"),
+        Index("idx_plugin_capability_calls_project_time", "project_id", "occurred_at"),
+    )
+
+    call_id: Mapped[str] = mapped_column(String, primary_key=True)
+    runtime_id: Mapped[str | None] = mapped_column(ForeignKey("plugin_runtimes.runtime_id"))
+    plugin_id: Mapped[str] = mapped_column(ForeignKey("plugin_registrations.plugin_id"), nullable=False)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    capability: Mapped[str] = mapped_column(String, nullable=False)
+    decision: Mapped[str] = mapped_column(String, nullable=False)
+    outcome: Mapped[str] = mapped_column(String, nullable=False)
+    request_json: Mapped[dict | None] = mapped_column(JSON)
+    response_json: Mapped[dict | None] = mapped_column(JSON)
+    occurred_at: Mapped[str] = mapped_column(String, nullable=False)

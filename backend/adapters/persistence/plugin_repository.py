@@ -197,6 +197,111 @@ class PluginRepository:
             query = query.where(PluginTrustRecord.project_id.is_(None))
         return self._session.execute(query.order_by(PluginTrustRecord.consented_at.desc())).scalars().first()
 
+    def create_runtime(
+        self,
+        *,
+        runtime_id: StableIdentifier,
+        plugin_id: str,
+        project_id: ProjectId,
+        status: str,
+        pid: int | None,
+        started_at: datetime,
+    ):
+        from backend.adapters.persistence.models import PluginRuntimeRecord
+
+        if project_id is not None:
+            self._ensure_project_scope(project_id)
+        record = PluginRuntimeRecord(
+            runtime_id=str(runtime_id),
+            plugin_id=plugin_id,
+            project_id=str(project_id),
+            status=status,
+            pid=pid,
+            started_at=started_at.isoformat(),
+            stopped_at=None,
+            exit_code=None,
+            failure_summary_json=None,
+        )
+        self._session.add(record)
+        return record
+
+    def finish_runtime(
+        self,
+        runtime,
+        *,
+        status: str,
+        stopped_at: datetime,
+        exit_code: int | None = None,
+        failure_summary: dict[str, Any] | None = None,
+    ) -> None:
+        runtime.status = status
+        runtime.stopped_at = stopped_at.isoformat()
+        runtime.exit_code = exit_code
+        if failure_summary is not None:
+            runtime.failure_summary_json = failure_summary
+
+    def get_runtime(self, runtime_id: str):
+        from backend.adapters.persistence.models import PluginRuntimeRecord
+
+        return self._session.get(PluginRuntimeRecord, runtime_id)
+
+    def list_runtimes(self, plugin_id: str, project_id: ProjectId | None = None) -> list:
+        from backend.adapters.persistence.models import PluginRuntimeRecord
+
+        query = select(PluginRuntimeRecord).where(PluginRuntimeRecord.plugin_id == plugin_id)
+        if project_id is not None:
+            self._ensure_project_scope(project_id)
+            query = query.where(PluginRuntimeRecord.project_id == str(project_id))
+        return list(self._session.execute(query.order_by(PluginRuntimeRecord.started_at.desc())).scalars())
+
+    def record_capability_call(
+        self,
+        *,
+        call_id: StableIdentifier,
+        runtime_id: str | None,
+        plugin_id: str,
+        project_id: ProjectId,
+        capability: str,
+        decision: str,
+        outcome: str,
+        request_json: dict[str, Any] | None,
+        response_json: dict[str, Any] | None,
+        occurred_at: datetime,
+    ):
+        from backend.adapters.persistence.models import PluginCapabilityCallRecord
+
+        self._ensure_project_scope(project_id)
+        record = PluginCapabilityCallRecord(
+            call_id=str(call_id),
+            runtime_id=runtime_id,
+            plugin_id=plugin_id,
+            project_id=str(project_id),
+            capability=capability,
+            decision=decision,
+            outcome=outcome,
+            request_json=request_json or {},
+            response_json=response_json or {},
+            occurred_at=occurred_at.isoformat(),
+        )
+        self._session.add(record)
+        return record
+
+    def list_capability_calls(self, plugin_id: str, project_id: ProjectId, *, limit: int = 100) -> list:
+        from backend.adapters.persistence.models import PluginCapabilityCallRecord
+
+        self._ensure_project_scope(project_id)
+        return list(
+            self._session.execute(
+                select(PluginCapabilityCallRecord)
+                .where(
+                    PluginCapabilityCallRecord.plugin_id == plugin_id,
+                    PluginCapabilityCallRecord.project_id == str(project_id),
+                )
+                .order_by(PluginCapabilityCallRecord.occurred_at.desc())
+                .limit(limit)
+            ).scalars()
+        )
+
     def _ensure_project_scope(self, project_id: ProjectId) -> None:
         if self._project_id is not None and self._project_id != project_id:
             raise ProjectScopeRequired("Repository project scope does not match requested project_id")

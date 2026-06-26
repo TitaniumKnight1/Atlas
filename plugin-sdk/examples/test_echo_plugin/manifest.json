@@ -1,0 +1,10 @@
+{
+  "manifest_version": "1",
+  "plugin_id": "com.atlas.test-echo",
+  "name": "Atlas Test Echo Plugin",
+  "version": "1.0.0",
+  "author": "Atlas",
+  "entry_script": "plugin.py",
+  "contribution_points": ["config-validators", "incident-enrichers", "commands"],
+  "requested_capabilities": ["read-config", "read-incidents", "filesystem-write"]
+}

@@ -69,6 +69,11 @@ class ApplicationContainer:
             project_id=project_id,
         )
 
+    def create_plugin_host_service(self) -> PluginHostService:
+        from backend.application.plugin.host_service import PluginHostService
+
+        return PluginHostService(container=self)
+
     def create_plugin_service(self) -> PluginApplicationService:
         if self._plugin_service is None:
             self._plugin_service = PluginApplicationService(container=self)
