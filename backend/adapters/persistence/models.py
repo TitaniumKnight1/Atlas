@@ -1441,3 +1441,86 @@ class BackupRetentionEventRecord(Base):
     reason: Mapped[str | None] = mapped_column(Text)
     occurred_at: Mapped[str] = mapped_column(String, nullable=False)
     details_json: Mapped[dict | None] = mapped_column(JSON)
+
+
+class PluginSettingRecord(Base):
+    __tablename__ = "plugin_settings"
+
+    setting_key: Mapped[str] = mapped_column(String, primary_key=True)
+    setting_value_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class PluginRegistrationRecord(Base):
+    """App-global plugin registry — installations are not project-scoped."""
+
+    __tablename__ = "plugin_registrations"
+    __table_args__ = (
+        UniqueConstraint("plugin_key", name="uq_plugin_registrations_plugin_key"),
+        CheckConstraint(
+            "registration_status in ('registered', 'disabled', 'restricted')",
+            name="ck_plugin_registrations_status",
+        ),
+        CheckConstraint(
+            "trust_status in ('pending_consent', 'consented', 'denied', 'revoked')",
+            name="ck_plugin_registrations_trust_status",
+        ),
+        Index("idx_plugin_registrations_enabled", "is_enabled"),
+    )
+
+    plugin_id: Mapped[str] = mapped_column(String, primary_key=True)
+    plugin_key: Mapped[str] = mapped_column(String, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    version: Mapped[str] = mapped_column(String, nullable=False)
+    author: Mapped[str] = mapped_column(Text, nullable=False)
+    manifest_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    source_ref: Mapped[str | None] = mapped_column(Text)
+    contribution_points_json: Mapped[list] = mapped_column(JSON, nullable=False)
+    requested_capabilities_json: Mapped[list] = mapped_column(JSON, nullable=False)
+    registration_status: Mapped[str] = mapped_column(String, nullable=False)
+    trust_status: Mapped[str] = mapped_column(String, nullable=False)
+    is_enabled: Mapped[int] = mapped_column(Integer, nullable=False)
+    registered_at: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class PluginCapabilityGrantRecord(Base):
+    """Capability grants — project_id NULL means app-global grant."""
+
+    __tablename__ = "plugin_capability_grants"
+    __table_args__ = (
+        UniqueConstraint("plugin_id", "project_id", "capability", name="uq_plugin_capability_grants_scope"),
+        Index("idx_plugin_capability_grants_plugin", "plugin_id", "is_active"),
+        Index("idx_plugin_capability_grants_project", "project_id", "is_active"),
+    )
+
+    grant_id: Mapped[str] = mapped_column(String, primary_key=True)
+    plugin_id: Mapped[str] = mapped_column(ForeignKey("plugin_registrations.plugin_id"), nullable=False)
+    project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.project_id"))
+    capability: Mapped[str] = mapped_column(String, nullable=False)
+    scope_json: Mapped[dict | None] = mapped_column(JSON)
+    is_active: Mapped[int] = mapped_column(Integer, nullable=False)
+    granted_at: Mapped[str] = mapped_column(String, nullable=False)
+    revoked_at: Mapped[str | None] = mapped_column(String)
+
+
+class PluginTrustRecord(Base):
+    """Explicit user consent records — per plugin, optionally per project."""
+
+    __tablename__ = "plugin_trust_records"
+    __table_args__ = (
+        Index("idx_plugin_trust_plugin_project", "plugin_id", "project_id"),
+        CheckConstraint(
+            "consent_model in ('integrity_not_sandbox')",
+            name="ck_plugin_trust_consent_model",
+        ),
+    )
+
+    trust_record_id: Mapped[str] = mapped_column(String, primary_key=True)
+    plugin_id: Mapped[str] = mapped_column(ForeignKey("plugin_registrations.plugin_id"), nullable=False)
+    project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.project_id"))
+    consent_model: Mapped[str] = mapped_column(String, nullable=False)
+    trust_acknowledgment_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    granted_capabilities_json: Mapped[list] = mapped_column(JSON, nullable=False)
+    consented_at: Mapped[str] = mapped_column(String, nullable=False)
+    revoked_at: Mapped[str | None] = mapped_column(String)

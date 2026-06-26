@@ -20,6 +20,7 @@ from backend.application.incident.service import IncidentApplicationService
 from backend.application.monitoring.alerts import MonitoringAlertService
 from backend.application.monitoring.retention import MonitoringRetentionService
 from backend.application.monitoring.service import MonitoringApplicationService
+from backend.application.plugin.service import PluginApplicationService
 from backend.application.project.service import ProjectApplicationService
 from backend.adapters.config import FiveMConfigValidator, LocalConfigSecretScanner
 from backend.adapters.git import GitPythonProvider
@@ -58,6 +59,7 @@ class ApplicationContainer:
     _automation_service: AutomationApplicationService | None = field(default=None, repr=False)
     _backup_service: BackupApplicationService | None = field(default=None, repr=False)
     _backup_scheduler_service: BackupSchedulerService | None = field(default=None, repr=False)
+    _plugin_service: PluginApplicationService | None = field(default=None, repr=False)
 
     def create_unit_of_work(self, project_id: ProjectId | None = None) -> SingleWriterSQLiteUnitOfWork:
         return SingleWriterSQLiteUnitOfWork(
@@ -66,6 +68,11 @@ class ApplicationContainer:
             writer_lock=self.writer_lock,
             project_id=project_id,
         )
+
+    def create_plugin_service(self) -> PluginApplicationService:
+        if self._plugin_service is None:
+            self._plugin_service = PluginApplicationService(container=self)
+        return self._plugin_service
 
     def create_project_service(self) -> ProjectApplicationService:
         return ProjectApplicationService(container=self, filesystem_inspector=self.filesystem_inspector)

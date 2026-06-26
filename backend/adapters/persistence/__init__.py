@@ -6,6 +6,7 @@ from backend.adapters.persistence.git_repository import GitRepository
 from backend.adapters.persistence.resource_repository import ResourceRepository
 from backend.adapters.persistence.incident_repository import IncidentRepository
 from backend.adapters.persistence.monitoring_repository import MonitoringRepository
+from backend.adapters.persistence.plugin_repository import PluginRepository
 from backend.adapters.persistence.project_repository import ProjectRepository
 from backend.adapters.persistence.schema import bootstrap_schema
 from backend.adapters.persistence.setup_repository import SetupRepository
@@ -20,6 +21,7 @@ __all__ = [
     "ResourceRepository",
     "IncidentRepository",
     "MonitoringRepository",
+    "PluginRepository",
     "ProjectRepository",
     "SetupRepository",
     "TelemetryRepository",

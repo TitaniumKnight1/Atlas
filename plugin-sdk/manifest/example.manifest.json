@@ -1,0 +1,9 @@
+{
+  "manifest_version": "1",
+  "plugin_id": "com.example.config-helper",
+  "name": "Config Helper",
+  "version": "1.0.0",
+  "author": "Example Author",
+  "contribution_points": ["config-validators"],
+  "requested_capabilities": ["read-config"]
+}
