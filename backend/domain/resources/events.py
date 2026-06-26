@@ -64,3 +64,56 @@ def resource_deleted(project_id: ProjectId, resource_id: str, resource_name: str
         project_id=project_id,
         payload={"project_id": str(project_id), "resource_id": resource_id, "resource_name": resource_name},
     )
+
+
+def resource_rolled_back(project_id: ProjectId, resource_id: str, resource_name: str, rollback_run_id: str) -> DomainEventEnvelope:
+    return DomainEventEnvelope.create(
+        event_type="ResourceRolledBack",
+        aggregate_ref=AggregateRef("ResourceRollbackRun", rollback_run_id),
+        project_id=project_id,
+        payload={
+            "project_id": str(project_id),
+            "resource_id": resource_id,
+            "resource_name": resource_name,
+            "rollback_run_id": rollback_run_id,
+        },
+    )
+
+
+def resource_rollback_failed(
+    project_id: ProjectId, resource_id: str, resource_name: str, rollback_run_id: str, error: str
+) -> DomainEventEnvelope:
+    return DomainEventEnvelope.create(
+        event_type="ResourceRollbackFailed",
+        aggregate_ref=AggregateRef("ResourceRollbackRun", rollback_run_id),
+        project_id=project_id,
+        payload={
+            "project_id": str(project_id),
+            "resource_id": resource_id,
+            "resource_name": resource_name,
+            "rollback_run_id": rollback_run_id,
+            "error": error,
+        },
+    )
+
+
+def rollback_batch_completed(project_id: ProjectId, rollback_run_id: str, succeeded_count: int) -> DomainEventEnvelope:
+    return DomainEventEnvelope.create(
+        event_type="RollbackBatchCompleted",
+        aggregate_ref=AggregateRef("ResourceRollbackRun", rollback_run_id),
+        project_id=project_id,
+        payload={"project_id": str(project_id), "rollback_run_id": rollback_run_id, "succeeded_count": succeeded_count},
+    )
+
+
+def rollback_batch_halted(project_id: ProjectId, rollback_run_id: str, failed_resource_name: str) -> DomainEventEnvelope:
+    return DomainEventEnvelope.create(
+        event_type="RollbackBatchHalted",
+        aggregate_ref=AggregateRef("ResourceRollbackRun", rollback_run_id),
+        project_id=project_id,
+        payload={
+            "project_id": str(project_id),
+            "rollback_run_id": rollback_run_id,
+            "failed_resource_name": failed_resource_name,
+        },
+    )

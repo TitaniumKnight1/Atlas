@@ -19,6 +19,7 @@ from backend.application.commands import (
     RiskLevel,
     UndoPlan,
 )
+from backend.application.commands.serialization import compensation_to_storage
 from backend.application.commands.recorder import CommandAuditRecorder
 from backend.application.config.service import RestoreConfigFileCompensation
 from backend.application.git.service import RemoveClonedRepositoryCompensation
@@ -226,7 +227,7 @@ class ResourceLifecycleService:
                     "UndoInstallResource",
                     f"Remove installed resource {target_name} and restore server.cfg",
                     composite,
-                    {**composite.describe(), "project_id": str(project_id)},
+                    {**compensation_to_storage(composite), "project_id": str(project_id)},
                 ),
                 idempotency_key=idempotency_key,
             )
@@ -331,7 +332,7 @@ class ResourceLifecycleService:
                     "UndoUpdateResource",
                     f"Restore prior files for {record.resource_name}",
                     compensation,
-                    {**compensation.describe(), "project_id": str(project_id)},
+                    {**compensation_to_storage(compensation), "project_id": str(project_id)},
                 ),
                 idempotency_key=idempotency_key,
             )
@@ -439,7 +440,7 @@ class ResourceLifecycleService:
                     "UndoSetResourceEnabledState",
                     f"Restore server.cfg for {record.resource_name}",
                     compensation,
-                    {**compensation.describe(), "project_id": str(project_id)},
+                    {**compensation_to_storage(compensation), "project_id": str(project_id)},
                 ),
                 idempotency_key=idempotency_key,
             )
@@ -546,7 +547,7 @@ class ResourceLifecycleService:
                     "UndoDeleteResource",
                     f"Restore deleted resource {resource_name}",
                     composite,
-                    {**composite.describe(), "project_id": str(project_id)},
+                    {**compensation_to_storage(composite), "project_id": str(project_id)},
                     warnings=[] if preview.preview["reversible"] else ["File restore may be incomplete."],
                 ),
                 idempotency_key=idempotency_key,

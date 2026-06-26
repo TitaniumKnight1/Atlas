@@ -39,3 +39,8 @@ class UpdateResourceRequest(BaseModel):
 
 class SetEnabledStateRequest(BaseModel):
     enabled: bool
+
+
+class RollbackResourcesRequest(BaseModel):
+    resource_ids: list[str] | None = None
+    command_execution_ids: list[str] | None = None

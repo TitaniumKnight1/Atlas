@@ -10,6 +10,8 @@ from backend.adapters.persistence.models import (
     ResourceHealthSnapshotRecord,
     ResourceInstallSourceRecord,
     ResourceRecord,
+    ResourceRollbackOutcomeRecord,
+    ResourceRollbackRunRecord,
     ResourceStateChangeRecord,
     ResourceVersionRecord,
 )
@@ -259,6 +261,103 @@ class ResourceRepository:
         record = self._session.get(ResourceRecord, resource_id)
         if record is not None and record.project_id == str(project_id):
             self._session.delete(record)
+
+    def get_latest_undoable_state_change(self, project_id: ProjectId, resource_id: str) -> ResourceStateChangeRecord | None:
+        self._ensure_project_scope(project_id)
+        return self._session.execute(
+            select(ResourceStateChangeRecord)
+            .where(ResourceStateChangeRecord.resource_id == resource_id)
+            .where(ResourceStateChangeRecord.change_type.in_(("install", "update", "enable", "disable")))
+            .where(ResourceStateChangeRecord.command_execution_id.is_not(None))
+            .order_by(ResourceStateChangeRecord.changed_at.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+
+    def create_rollback_run(
+        self,
+        *,
+        rollback_run_id: StableIdentifier,
+        project_id: ProjectId,
+        status: str,
+        plan_json: dict[str, Any],
+        started_at: datetime,
+    ) -> ResourceRollbackRunRecord:
+        self._ensure_project_scope(project_id)
+        record = ResourceRollbackRunRecord(
+            resource_rollback_run_id=str(rollback_run_id),
+            project_id=str(project_id),
+            status=status,
+            plan_json=plan_json,
+            result_json=None,
+            command_execution_id=None,
+            started_at=started_at.isoformat(),
+            finished_at=None,
+        )
+        self._session.add(record)
+        return record
+
+    def add_rollback_outcome(
+        self,
+        *,
+        outcome_id: StableIdentifier,
+        rollback_run_id: str,
+        project_id: ProjectId,
+        resource_id: str | None,
+        resource_name: str,
+        command_execution_id: str | None,
+        position: int,
+        status: str,
+        error_message: str | None = None,
+        outcome_json: dict[str, Any] | None = None,
+    ) -> ResourceRollbackOutcomeRecord:
+        self._ensure_project_scope(project_id)
+        record = ResourceRollbackOutcomeRecord(
+            resource_rollback_outcome_id=str(outcome_id),
+            resource_rollback_run_id=rollback_run_id,
+            project_id=str(project_id),
+            resource_id=resource_id,
+            resource_name=resource_name,
+            command_execution_id=command_execution_id,
+            position=position,
+            status=status,
+            error_message=error_message,
+            outcome_json=outcome_json or {},
+        )
+        self._session.add(record)
+        return record
+
+    def finish_rollback_run(
+        self,
+        *,
+        rollback_run_id: str,
+        status: str,
+        result_json: dict[str, Any],
+        command_execution_id: str | None,
+        finished_at: datetime,
+    ) -> None:
+        record = self._session.get(ResourceRollbackRunRecord, rollback_run_id)
+        if record is None:
+            return
+        record.status = status
+        record.result_json = result_json
+        record.command_execution_id = command_execution_id
+        record.finished_at = finished_at.isoformat()
+
+    def list_rollback_outcomes(self, rollback_run_id: str) -> list[ResourceRollbackOutcomeRecord]:
+        return list(
+            self._session.execute(
+                select(ResourceRollbackOutcomeRecord)
+                .where(ResourceRollbackOutcomeRecord.resource_rollback_run_id == rollback_run_id)
+                .order_by(ResourceRollbackOutcomeRecord.position)
+            ).scalars()
+        )
+
+    def get_rollback_run(self, project_id: ProjectId, rollback_run_id: str) -> ResourceRollbackRunRecord | None:
+        self._ensure_project_scope(project_id)
+        record = self._session.get(ResourceRollbackRunRecord, rollback_run_id)
+        if record is None or record.project_id != str(project_id):
+            return None
+        return record
 
     def _ensure_project_scope(self, project_id: ProjectId) -> None:
         if self._project_id is not None and self._project_id != project_id:

@@ -1,4 +1,5 @@
 from backend.application.resources.lifecycle import InstallSource, ResourceLifecycleError, ResourceLifecycleService
+from backend.application.resources.rollback import ResourceRollbackError, ResourceRollbackService
 from backend.application.resources.service import ResourceApplicationError, ResourceApplicationService
 
 __all__ = [
@@ -7,4 +8,6 @@ __all__ = [
     "ResourceApplicationService",
     "ResourceLifecycleError",
     "ResourceLifecycleService",
+    "ResourceRollbackError",
+    "ResourceRollbackService",
 ]

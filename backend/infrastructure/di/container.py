@@ -91,6 +91,15 @@ class ApplicationContainer:
             stream_publisher=self.stream_publisher,
         )
 
+    def create_resource_rollback_service(self) -> ResourceRollbackService:
+        from backend.application.resources.rollback import ResourceRollbackService
+
+        return ResourceRollbackService(
+            container=self,
+            filesystem=self.setup_filesystem,
+            stream_publisher=self.stream_publisher,
+        )
+
     def create_setup_service(self) -> SetupApplicationService:
         service = SetupApplicationService(
             container=self,

@@ -769,3 +769,45 @@ class ResourceInstallSourceRecord(Base):
     plugin_id: Mapped[str | None] = mapped_column(String)
     trusted_at: Mapped[str | None] = mapped_column(String)
     metadata_json: Mapped[dict | None] = mapped_column(JSON)
+
+
+class ResourceRollbackRunRecord(Base):
+    __tablename__ = "resource_rollback_runs"
+    __table_args__ = (
+        CheckConstraint(
+            "status in ('planned', 'running', 'completed', 'halted', 'refused')",
+            name="ck_resource_rollback_runs_status",
+        ),
+        Index("idx_resource_rollback_runs_project_time", "project_id", "started_at"),
+    )
+
+    resource_rollback_run_id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    plan_json: Mapped[dict | None] = mapped_column(JSON)
+    result_json: Mapped[dict | None] = mapped_column(JSON)
+    command_execution_id: Mapped[str | None] = mapped_column(ForeignKey("command_executions.command_execution_id"))
+    started_at: Mapped[str] = mapped_column(String, nullable=False)
+    finished_at: Mapped[str | None] = mapped_column(String)
+
+
+class ResourceRollbackOutcomeRecord(Base):
+    __tablename__ = "resource_rollback_outcomes"
+    __table_args__ = (
+        CheckConstraint(
+            "status in ('pending', 'succeeded', 'failed', 'not_attempted')",
+            name="ck_resource_rollback_outcomes_status",
+        ),
+        Index("idx_resource_rollback_outcomes_run", "resource_rollback_run_id", "position"),
+    )
+
+    resource_rollback_outcome_id: Mapped[str] = mapped_column(String, primary_key=True)
+    resource_rollback_run_id: Mapped[str] = mapped_column(ForeignKey("resource_rollback_runs.resource_rollback_run_id"), nullable=False)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    resource_id: Mapped[str | None] = mapped_column(String)
+    resource_name: Mapped[str] = mapped_column(Text, nullable=False)
+    command_execution_id: Mapped[str | None] = mapped_column(String)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    outcome_json: Mapped[dict | None] = mapped_column(JSON)

@@ -8,10 +8,11 @@ from backend.api.schemas.resources import (
     RescanResourcesRequest,
     ResourceSourceRequest,
     ResponseEnvelope,
+    RollbackResourcesRequest,
     SetEnabledStateRequest,
     UpdateResourceRequest,
 )
-from backend.application.resources import InstallSource, ResourceApplicationError, ResourceLifecycleError
+from backend.application.resources import InstallSource, ResourceApplicationError, ResourceLifecycleError, ResourceRollbackError
 from backend.domain.shared_kernel import ProjectId
 from backend.infrastructure.di import ApplicationContainer
 
@@ -215,6 +216,40 @@ def delete_resource(project_id: str, resource_id: str, container: ApplicationCon
         return _lifecycle_failure(error)
 
 
+@router.post("/projects/{project_id}/resources/rollback-plan", response_model=ResponseEnvelope)
+def rollback_plan(project_id: str, request: RollbackResourcesRequest, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        preview = container.create_resource_rollback_service().preview_rollback_batch(
+            project_id=ProjectId(project_id),
+            resource_ids=request.resource_ids,
+            command_execution_ids=request.command_execution_ids,
+        )
+        return ResponseEnvelope(ok=preview.preview.get("ok", False), data=preview.preview, warnings=preview.warnings)
+    except ResourceRollbackError as error:
+        return _rollback_failure(error)
+
+
+@router.post("/projects/{project_id}/resources/rollback", response_model=ResponseEnvelope)
+def rollback_resources(project_id: str, request: RollbackResourcesRequest, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        result = container.create_resource_rollback_service().execute_rollback_batch(
+            project_id=ProjectId(project_id),
+            resource_ids=request.resource_ids,
+            command_execution_ids=request.command_execution_ids,
+        )
+        return _command_result(result)
+    except ResourceRollbackError as error:
+        return _rollback_failure(error)
+
+
+@router.get("/projects/{project_id}/resources/rollback-runs/{rollback_run_id}", response_model=ResponseEnvelope)
+def get_rollback_run(project_id: str, rollback_run_id: str, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        return _success(container.create_resource_rollback_service().get_rollback_run(ProjectId(project_id), rollback_run_id))
+    except ResourceRollbackError as error:
+        return _rollback_failure(error)
+
+
 def _success(data: dict | list[dict]) -> ResponseEnvelope:
     return ResponseEnvelope(ok=True, data=data)
 
@@ -224,6 +259,10 @@ def _failure(error: ResourceApplicationError) -> ResponseEnvelope:
 
 
 def _lifecycle_failure(error: ResourceLifecycleError) -> ResponseEnvelope:
+    return ResponseEnvelope(ok=False, error=ErrorPayload(code=error.code.value, message=str(error)))
+
+
+def _rollback_failure(error: ResourceRollbackError) -> ResponseEnvelope:
     return ResponseEnvelope(ok=False, error=ErrorPayload(code=error.code.value, message=str(error)))
 
 

@@ -37,6 +37,10 @@ Responsibility: resource inventory, dependency graph, install/update/enable/disa
 | `ResourceUpdated` | `project_id`, `resource_id`, version | Incident, Audit, Event bus (local-only) |
 | `ResourceEnabledStateChanged` | `project_id`, `resource_id`, state | Automation, Audit, Event bus (local-only) |
 | `ResourceDeleted` | `project_id`, `resource_id` | Incident, Audit, Event bus (local-only; never telemetry) |
+| `ResourceRolledBack` | `project_id`, `resource_id`, `rollback_run_id` | Audit, Event bus (local-only; never telemetry) |
+| `ResourceRollbackFailed` | `project_id`, `resource_id`, `rollback_run_id`, error | Audit, Event bus (local-only) |
+| `RollbackBatchCompleted` | `project_id`, `rollback_run_id`, counts | Audit, Event bus (local-only) |
+| `RollbackBatchHalted` | `project_id`, `rollback_run_id`, failed resource | Audit, Event bus (local-only) |
 
 ## Subscribed Events
 
@@ -76,6 +80,9 @@ Responsibility: resource inventory, dependency graph, install/update/enable/disa
 | `POST /api/v1/projects/{project_id}/resources/{resource_id}/enabled-state` | desired state | change summary |
 | `POST /api/v1/projects/{project_id}/resources/{resource_id}/delete-plan` | — | command plan |
 | `POST /api/v1/projects/{project_id}/resources/{resource_id}/delete` | — | deletion summary |
+| `POST /api/v1/projects/{project_id}/resources/rollback-plan` | resource or execution ids | ordered rollback plan |
+| `POST /api/v1/projects/{project_id}/resources/rollback` | resource or execution ids | rollback run result |
+| `GET /api/v1/projects/{project_id}/resources/rollback-runs/{rollback_run_id}` | — | persisted rollback run |
 
 ## Open Questions
 
