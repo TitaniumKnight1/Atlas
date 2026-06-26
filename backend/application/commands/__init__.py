@@ -1,3 +1,4 @@
+from backend.application.commands.compensation import CompositeCompensation, RestorePathFromSnapshotCompensation
 from backend.application.commands.contracts import (
     CommandContext,
     CommandExecutionResult,
@@ -14,7 +15,9 @@ __all__ = [
     "CommandExecutionResult",
     "CommandPreview",
     "CommandStatus",
+    "CompositeCompensation",
     "CompensatingAction",
+    "RestorePathFromSnapshotCompensation",
     "DryRunResult",
     "RiskLevel",
     "UndoPlan",

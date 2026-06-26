@@ -32,11 +32,11 @@ Responsibility: resource inventory, dependency graph, install/update/enable/disa
 | --- | --- | --- |
 | `ResourceInventoryChanged` | `project_id`, added/removed/changed counts | Audit, Event bus (local-only; never telemetry) |
 | `ResourceInstallPlanned` | `project_id`, source, target | Backup, Audit |
-| `ResourceInstalled` | `project_id`, `resource_id`, source | Git, Config, Incident, Audit |
+| `ResourceInstalled` | `project_id`, `resource_id`, source | Git, Config, Incident, Audit, Event bus (local-only; never telemetry) |
 | `ResourceUpdatePlanned` | `project_id`, `resource_id`, target version | Backup, Automation |
 | `ResourceUpdated` | `project_id`, `resource_id`, version | Incident, Audit, Event bus (local-only) |
 | `ResourceEnabledStateChanged` | `project_id`, `resource_id`, state | Automation, Audit, Event bus (local-only) |
-| `ResourceDeleted` | `project_id`, `resource_id` | Incident, Audit |
+| `ResourceDeleted` | `project_id`, `resource_id` | Incident, Audit, Event bus (local-only; never telemetry) |
 
 ## Subscribed Events
 
@@ -74,6 +74,8 @@ Responsibility: resource inventory, dependency graph, install/update/enable/disa
 | `POST /api/v1/projects/{project_id}/resources/install` | approved plan | resource/operation refs |
 | `POST /api/v1/projects/{project_id}/resources/{resource_id}/update-plan` | target version | command plan |
 | `POST /api/v1/projects/{project_id}/resources/{resource_id}/enabled-state` | desired state | change summary |
+| `POST /api/v1/projects/{project_id}/resources/{resource_id}/delete-plan` | — | command plan |
+| `POST /api/v1/projects/{project_id}/resources/{resource_id}/delete` | — | deletion summary |
 
 ## Open Questions
 

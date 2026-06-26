@@ -23,3 +23,19 @@ class ResponseEnvelope(BaseModel):
 
 class RescanResourcesRequest(BaseModel):
     path_filters: list[str] | None = None
+
+
+class ResourceSourceRequest(BaseModel):
+    source_type: str
+    source_uri: str
+    resource_name: str | None = None
+    enable: bool = True
+
+
+class UpdateResourceRequest(BaseModel):
+    source_type: str
+    source_uri: str
+
+
+class SetEnabledStateRequest(BaseModel):
+    enabled: bool

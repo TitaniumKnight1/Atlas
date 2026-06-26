@@ -82,6 +82,15 @@ class ApplicationContainer:
     def create_resource_service(self) -> ResourceApplicationService:
         return ResourceApplicationService(container=self, filesystem=self.setup_filesystem)
 
+    def create_resource_lifecycle_service(self) -> ResourceLifecycleService:
+        from backend.application.resources.lifecycle import ResourceLifecycleService
+
+        return ResourceLifecycleService(
+            container=self,
+            filesystem=self.setup_filesystem,
+            stream_publisher=self.stream_publisher,
+        )
+
     def create_setup_service(self) -> SetupApplicationService:
         service = SetupApplicationService(
             container=self,

@@ -28,3 +28,39 @@ def dependency_issue_detected(project_id: ProjectId, finding_type: str, nodes: l
         project_id=project_id,
         payload={"project_id": str(project_id), "finding_type": finding_type, "nodes": nodes},
     )
+
+
+def resource_installed(project_id: ProjectId, resource_id: str, resource_name: str) -> DomainEventEnvelope:
+    return DomainEventEnvelope.create(
+        event_type="ResourceInstalled",
+        aggregate_ref=AggregateRef("Resource", resource_id),
+        project_id=project_id,
+        payload={"project_id": str(project_id), "resource_id": resource_id, "resource_name": resource_name},
+    )
+
+
+def resource_updated(project_id: ProjectId, resource_id: str, version_label: str | None) -> DomainEventEnvelope:
+    return DomainEventEnvelope.create(
+        event_type="ResourceUpdated",
+        aggregate_ref=AggregateRef("Resource", resource_id),
+        project_id=project_id,
+        payload={"project_id": str(project_id), "resource_id": resource_id, "version_label": version_label},
+    )
+
+
+def resource_enabled_state_changed(project_id: ProjectId, resource_id: str, enabled_state: str) -> DomainEventEnvelope:
+    return DomainEventEnvelope.create(
+        event_type="ResourceEnabledStateChanged",
+        aggregate_ref=AggregateRef("Resource", resource_id),
+        project_id=project_id,
+        payload={"project_id": str(project_id), "resource_id": resource_id, "enabled_state": enabled_state},
+    )
+
+
+def resource_deleted(project_id: ProjectId, resource_id: str, resource_name: str) -> DomainEventEnvelope:
+    return DomainEventEnvelope.create(
+        event_type="ResourceDeleted",
+        aggregate_ref=AggregateRef("Resource", resource_id),
+        project_id=project_id,
+        payload={"project_id": str(project_id), "resource_id": resource_id, "resource_name": resource_name},
+    )

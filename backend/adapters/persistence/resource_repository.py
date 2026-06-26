@@ -10,6 +10,7 @@ from backend.adapters.persistence.models import (
     ResourceHealthSnapshotRecord,
     ResourceInstallSourceRecord,
     ResourceRecord,
+    ResourceStateChangeRecord,
     ResourceVersionRecord,
 )
 from backend.domain.shared_kernel import ProjectId, StableIdentifier
@@ -220,6 +221,44 @@ class ResourceRepository:
             .order_by(ResourceHealthSnapshotRecord.sampled_at.desc())
             .limit(1)
         ).scalar_one_or_none()
+
+    def add_state_change(
+        self,
+        *,
+        state_change_id: StableIdentifier,
+        resource_id: str,
+        change_type: str,
+        from_state: str | None,
+        to_state: str | None,
+        command_execution_id: str | None,
+        changed_at: datetime,
+        details: dict[str, Any] | None = None,
+    ) -> ResourceStateChangeRecord:
+        record = ResourceStateChangeRecord(
+            resource_state_change_id=str(state_change_id),
+            resource_id=resource_id,
+            change_type=change_type,
+            from_state=from_state,
+            to_state=to_state,
+            command_execution_id=command_execution_id,
+            audit_event_id=None,
+            changed_at=changed_at.isoformat(),
+            details_json=details or {},
+        )
+        self._session.add(record)
+        return record
+
+    def delete_resource(self, project_id: ProjectId, resource_id: str) -> None:
+        self._ensure_project_scope(project_id)
+        self._session.execute(delete(ResourceDependencyRecord).where(ResourceDependencyRecord.source_resource_id == resource_id))
+        self._session.execute(delete(ResourceDependencyRecord).where(ResourceDependencyRecord.target_resource_id == resource_id))
+        self._session.execute(delete(ResourceHealthSnapshotRecord).where(ResourceHealthSnapshotRecord.resource_id == resource_id))
+        self._session.execute(delete(ResourceInstallSourceRecord).where(ResourceInstallSourceRecord.resource_id == resource_id))
+        self._session.execute(delete(ResourceVersionRecord).where(ResourceVersionRecord.resource_id == resource_id))
+        self._session.execute(delete(ResourceStateChangeRecord).where(ResourceStateChangeRecord.resource_id == resource_id))
+        record = self._session.get(ResourceRecord, resource_id)
+        if record is not None and record.project_id == str(project_id):
+            self._session.delete(record)
 
     def _ensure_project_scope(self, project_id: ProjectId) -> None:
         if self._project_id is not None and self._project_id != project_id:
