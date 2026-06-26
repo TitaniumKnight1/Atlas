@@ -14,6 +14,7 @@ from backend.domain.setup import ProcessLaunchPlan, ServerProcessState, ServerPr
 
 
 OutputCallback = Callable[[str, int | None, bool, list[str], list[str]], None]
+LineCallback = Callable[[str, str, str, str], None]
 
 
 @dataclass(slots=True)
@@ -32,13 +33,17 @@ class _ManagedProcess:
 class LocalProcessSupervisor:
     """Supervises external server processes with full-tree cleanup discipline."""
 
-    def __init__(self, on_exit: OutputCallback | None = None) -> None:
+    def __init__(self, on_exit: OutputCallback | None = None, on_line: LineCallback | None = None) -> None:
         self._on_exit = on_exit
+        self._on_line = on_line
         self._lock = threading.RLock()
         self._processes: dict[str, _ManagedProcess] = {}
 
     def set_on_exit(self, on_exit: OutputCallback) -> None:
         self._on_exit = on_exit
+
+    def set_on_line(self, on_line: LineCallback) -> None:
+        self._on_line = on_line
 
     def start(self, process_run_id: str, project_id: str, plan: ProcessLaunchPlan) -> ServerProcessStatus:
         kwargs: dict[str, object] = {
@@ -114,9 +119,12 @@ class LocalProcessSupervisor:
         if stream is None:
             return
         for line in stream:
+            stripped = line.rstrip()
             with self._lock:
                 target = managed.stdout_tail if stream_name == "stdout" else managed.stderr_tail
-                target.append(line.rstrip())
+                target.append(stripped)
+            if self._on_line:
+                self._on_line(managed.process_run_id, managed.project_id, stream_name, stripped)
 
     def _watch_exit(self, managed: _ManagedProcess) -> None:
         code = managed.process.wait()

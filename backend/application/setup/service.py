@@ -8,6 +8,7 @@ from typing import Any
 
 from backend.adapters.persistence import AuditRepository, ProjectRepository, SetupRepository
 from backend.adapters.persistence.models import DependencyCheckRecord, SetupProcessRunRecord
+from backend.adapters.streams import StreamEventPublisher
 from backend.application.commands import CommandContext, CommandExecutionResult, CommandPreview, DryRunResult, RiskLevel, UndoPlan
 from backend.application.commands.recorder import CommandAuditRecorder
 from backend.domain.setup import (
@@ -134,12 +135,14 @@ class SetupApplicationService:
         filesystem: SetupFilesystemPort,
         process_port: ProcessPort,
         txadmin: TxAdminPort,
+        stream_publisher: StreamEventPublisher | None = None,
     ) -> None:
         self._container = container
         self._artifact_client = artifact_client
         self._filesystem = filesystem
         self._process_port = process_port
         self._txadmin = txadmin
+        self._stream_publisher = stream_publisher
         self._recorder = CommandAuditRecorder()
 
     def preview_refresh_artifact_catalog(self, platform: str, channel: str | None = None) -> CommandPreview:
@@ -264,9 +267,7 @@ class SetupApplicationService:
         downloaded = self._artifact_client.download(
             plan.artifact,
             plan.download_path,
-            progress=lambda item: progress.append(
-                {"operation_id": item.operation_id, "bytes_received": item.bytes_received, "total_bytes": item.total_bytes, "message": item.message}
-            ),
+            progress=lambda item: self._record_download_progress(project_id, item, progress),
             operation_id=operation_id,
         )
         extracted = self._filesystem.extract_zip(downloaded, plan.extract_path)
@@ -432,12 +433,16 @@ class SetupApplicationService:
         steps: list[dict[str, Any]] = []
         artifact = self.execute_install_artifact(project_id=project_id, build_number=build_number)
         steps.append(_step("install_artifact", artifact))
+        self._publish_setup_step_progress(project_id, str(setup_run_id), "install_artifact", "completed")
         config = self.execute_generate_server_cfg(project_id=project_id, server_data_path=server_data_path, options=options)
         steps.append(_step("generate_server_cfg", config))
+        self._publish_setup_step_progress(project_id, str(setup_run_id), "generate_server_cfg", "completed")
         checks = self.execute_run_dependency_checks(project_id=project_id, server_data_path=server_data_path)
         steps.append(_step("dependency_checks", checks))
+        self._publish_setup_step_progress(project_id, str(setup_run_id), "dependency_checks", "completed")
         database = self.execute_prepare_database(project_id=project_id, server_data_path=server_data_path)
         steps.append(_step("prepare_database", database))
+        self._publish_setup_step_progress(project_id, str(setup_run_id), "prepare_database", "completed")
         preview = CommandPreview(
             "RunServerSetup",
             "Run setup wizard steps",
@@ -762,6 +767,33 @@ class SetupApplicationService:
             arguments = ["+exec", "server.cfg"]
             mode = "direct"
         return ProcessLaunchPlan(executable_path=executable, working_directory=working_directory, arguments=arguments, mode=mode)
+
+    def _record_download_progress(self, project_id: ProjectId, item: Any, progress: list[dict[str, Any]]) -> None:
+        entry = {
+            "operation_id": item.operation_id,
+            "bytes_received": item.bytes_received,
+            "total_bytes": item.total_bytes,
+            "message": item.message,
+        }
+        progress.append(entry)
+        if self._stream_publisher is not None:
+            self._stream_publisher.publish_operation_progress(
+                project_id=project_id,
+                operation_id=item.operation_id,
+                message=item.message,
+                bytes_received=item.bytes_received,
+                total_bytes=item.total_bytes,
+            )
+
+    def _publish_setup_step_progress(self, project_id: ProjectId, setup_run_id: str, step_key: str, status: str) -> None:
+        if self._stream_publisher is None:
+            return
+        self._stream_publisher.publish_operation_progress(
+            project_id=project_id,
+            operation_id=setup_run_id,
+            message=f"Setup step {step_key} {status}",
+            step_key=step_key,
+        )
 
     def _dependency_checks(self, server_data_path: str, categories: list[str] | None) -> list[dict[str, Any]]:
         path = Path(server_data_path).expanduser().resolve()

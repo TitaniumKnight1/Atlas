@@ -11,6 +11,7 @@ from backend.adapters.filesystem import LocalProjectFilesystemInspector, LocalSe
 from backend.adapters.fivem import CfxArtifactClient
 from backend.adapters.persistence.schema import bootstrap_schema
 from backend.adapters.process import LocalProcessSupervisor
+from backend.adapters.streams import StreamEventBridge, StreamEventPublisher
 from backend.adapters.telemetry import DeterministicTelemetrySanitizer, LocalNoopTelemetryDelivery
 from backend.adapters.txadmin import LocalTxAdminDetector
 from backend.application.project.service import ProjectApplicationService
@@ -18,6 +19,7 @@ from backend.application.setup.service import SetupApplicationService
 from backend.application.telemetry.service import TelemetryApplicationService
 from backend.domain.shared_kernel.identifiers import ProjectId
 from backend.infrastructure.event_bus import InProcessEventBus
+from backend.infrastructure.streams import ProjectStreamHub
 from backend.infrastructure.unit_of_work import SingleWriterSQLiteUnitOfWork, create_session_factory, create_sqlite_engine
 
 
@@ -27,6 +29,9 @@ class ApplicationContainer:
     engine: Engine
     session_factory: sessionmaker[Session]
     event_bus: InProcessEventBus
+    stream_hub: ProjectStreamHub
+    stream_publisher: StreamEventPublisher
+    stream_bridge: StreamEventBridge
     filesystem_inspector: LocalProjectFilesystemInspector
     setup_filesystem: LocalSetupFilesystem
     artifact_client: CfxArtifactClient
@@ -61,9 +66,19 @@ class ApplicationContainer:
             filesystem=self.setup_filesystem,
             process_port=self.process_supervisor,
             txadmin=self.txadmin_detector,
+            stream_publisher=self.stream_publisher,
         )
         self.process_supervisor.set_on_exit(service.record_process_exit)
+        self.process_supervisor.set_on_line(self._publish_server_output_line)
         return service
+
+    def _publish_server_output_line(self, process_run_id: str, project_id: str, stream: str, line: str) -> None:
+        self.stream_publisher.publish_server_output_line(
+            project_id=ProjectId(project_id),
+            process_run_id=process_run_id,
+            stream=stream,
+            line=line,
+        )
 
     def close(self) -> None:
         self.engine.dispose()
@@ -72,11 +87,19 @@ class ApplicationContainer:
 def create_application_container(app_data_dir: Path) -> ApplicationContainer:
     engine = create_sqlite_engine(app_data_dir)
     bootstrap_schema(engine)
+    event_bus = InProcessEventBus()
+    stream_hub = ProjectStreamHub()
+    stream_publisher = StreamEventPublisher(event_bus)
+    stream_bridge = StreamEventBridge(stream_hub)
+    stream_bridge.register(event_bus)
     return ApplicationContainer(
         app_data_dir=app_data_dir,
         engine=engine,
         session_factory=create_session_factory(engine),
-        event_bus=InProcessEventBus(),
+        event_bus=event_bus,
+        stream_hub=stream_hub,
+        stream_publisher=stream_publisher,
+        stream_bridge=stream_bridge,
         filesystem_inspector=LocalProjectFilesystemInspector(),
         setup_filesystem=LocalSetupFilesystem(),
         artifact_client=CfxArtifactClient(),

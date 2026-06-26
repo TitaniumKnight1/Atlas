@@ -37,4 +37,4 @@ Automation (workflows, triggers, conditions, actions, APScheduler schedules, run
 Manifest validation, registration, capabilities/trust, contribution-point wiring, lifecycle, plugin-ui host. Last because contribution points expose seams from every prior module and must be stable before committing to an SDK contract. Gate before starting: resolve the open plugin-runtime decision (Python/JS/WASM). Risk: MEDIUM-HIGH — sandboxing, capability enforcement, API-stability commitment.
 
 ## Threaded throughout (not milestones)
-Developer-first transparency (from M1), the project_id isolation invariant (from M1, every scoped operation), testing per layer + Playwright E2E (from M0), and the CI bundle build (from M0).
+Developer-first transparency (from M1), the project_id isolation invariant (from M1, every scoped operation), testing per layer + Playwright E2E (from M0), the CI bundle build (from M0), and the multiplexed SSE streaming transport (from the cross-cutting streaming pass; pays down deferrals in data-flow, M3a setup progress, and M3b server output).

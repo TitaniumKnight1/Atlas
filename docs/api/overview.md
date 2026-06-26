@@ -71,6 +71,7 @@ Commands that may take time return one or more references:
 - `operation_id` for progress streams.
 - `idempotency_key` for retryable writes and scheduled actions.
 - `stream_topic` for progress events such as `operations/{operation_id}`, `projects/{project_id}/incidents`, or `projects/{project_id}/metrics`.
+- `GET /api/v1/projects/{project_id}/stream?topics=...` for multiplexed SSE progress/log/metric events.
 
 File and process mutations require preview-first contracts unless the operation is read-only or explicitly marked as safe.
 
@@ -117,15 +118,27 @@ Route intents use plural nouns for collections and command verbs where a noun en
 
 - Queries: `GET /api/v1/projects/{project_id}/resources`
 - Commands: `POST /api/v1/projects/{project_id}/resources/{resource_id}/commands/update-plan`
-- Streams: `GET /api/v1/projects/{project_id}/streams/incidents`
+- Streams: `GET /api/v1/projects/{project_id}/stream?topics=server-output,op-progress,process-lifecycle,metrics`
 
 These are route intents, not route handlers or OpenAPI definitions.
+
+## Streaming Convention
+
+Atlas exposes one multiplexed Server-Sent Events (SSE) stream per project over loopback HTTP:
+
+- Route intent: `GET /api/v1/projects/{project_id}/stream`
+- Query filter: `topics` comma list (`server-output`, `process-lifecycle`, `op-progress`, `metrics`)
+- Resume: standard `Last-Event-ID` request header with monotonic `sequence` ids in SSE `id:` fields
+- Payload shape: JSON with `sequence`, `topic`, `event_type`, `project_id`, `payload`, `occurred_at`
+- Delivery policy: loss-sensitive topics (`server-output`, `process-lifecycle`, `op-progress`) never silently drop; slow consumers are closed. High-frequency `metrics` coalesces under a bounded buffer for future M6 samples.
+- Privacy: server output, progress, and metrics are FiveM project data and remain on the local SSE transport only; they never enter telemetry.
+
+Consumers subscribe to topics over the single connection. Do not open one HTTP connection per topic.
 
 ## Open Questions
 
 - Whether Phase 7 should standardize route grouping by module or by `commands`/`queries`.
 - Whether domain events should be persisted synchronously with command execution as an outbox.
-- Whether stream topics are WebSocket, SSE, or Tauri IPC channels.
 
 ## Deviations
 

@@ -107,7 +107,7 @@ export function jsonRequest<TBody>(body: TBody, init?: RequestInit): RequestInit
   };
 }
 
-async function getBackendBaseUrl(): Promise<string> {
+export async function getBackendBaseUrl(): Promise<string> {
   backendBaseUrlPromise ??= resolveBackendBaseUrl();
   return backendBaseUrlPromise;
 }

@@ -20,6 +20,7 @@ import {
 import { CommandPanel } from "../../components/CommandPanel";
 import { EmptyState, ErrorState, LoadingState } from "../../components/StateViews";
 import { useAsyncTask } from "../../components/useAsyncTask";
+import { useProjectStream } from "../../components/useProjectStream";
 
 type ProjectWorkspace =
   | { state: "empty" }
@@ -94,6 +95,16 @@ export function ProjectView() {
   const selectedProject = useMemo(
     () => projects.find((project) => project.project_id === selectedProjectId) ?? null,
     [projects, selectedProjectId]
+  );
+  const { events: streamEvents, connected: streamConnected } = useProjectStream(selectedProjectId, ["server-output"]);
+  const serverLines = useMemo(
+    () =>
+      streamEvents
+        .filter((event) => event.topic === "server-output")
+        .map((event) => String(event.payload.line ?? ""))
+        .filter(Boolean)
+        .slice(-12),
+    [streamEvents]
   );
 
   return (
@@ -223,6 +234,18 @@ export function ProjectView() {
                   Update settings
                 </button>
                 <pre>{JSON.stringify(workspace.settings.settings, null, 2)}</pre>
+              </section>
+
+              <section className="workspace-panel">
+                <div className="section-heading">
+                  <h2>Live server output</h2>
+                  <p>{streamConnected ? "Listening on the multiplexed SSE stream." : "Waiting for the local stream connection."}</p>
+                </div>
+                {serverLines.length === 0 ? (
+                  <p className="muted-copy">Server stdout/stderr lines appear here when a supervised process is running.</p>
+                ) : (
+                  <pre className="live-stream-log">{serverLines.join("\n")}</pre>
+                )}
               </section>
 
               <section className="workspace-panel">
