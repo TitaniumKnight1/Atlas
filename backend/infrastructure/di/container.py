@@ -14,6 +14,7 @@ from backend.adapters.process import LocalProcessSupervisor
 from backend.adapters.streams import StreamEventBridge, StreamEventPublisher
 from backend.adapters.telemetry import DeterministicTelemetrySanitizer, LocalNoopTelemetryDelivery
 from backend.adapters.txadmin import LocalTxAdminDetector
+from backend.application.monitoring.service import MonitoringApplicationService
 from backend.application.project.service import ProjectApplicationService
 from backend.adapters.config import FiveMConfigValidator, LocalConfigSecretScanner
 from backend.adapters.git import GitPythonProvider
@@ -45,6 +46,7 @@ class ApplicationContainer:
     telemetry_sanitizer: DeterministicTelemetrySanitizer
     telemetry_delivery: LocalNoopTelemetryDelivery
     writer_lock: RLock = field(default_factory=RLock)
+    _monitoring_service: MonitoringApplicationService | None = field(default=None, repr=False)
 
     def create_unit_of_work(self, project_id: ProjectId | None = None) -> SingleWriterSQLiteUnitOfWork:
         return SingleWriterSQLiteUnitOfWork(
@@ -100,6 +102,15 @@ class ApplicationContainer:
             stream_publisher=self.stream_publisher,
         )
 
+    def create_monitoring_service(self) -> MonitoringApplicationService:
+        if self._monitoring_service is None:
+            self._monitoring_service = MonitoringApplicationService(
+                container=self,
+                process_port=self.process_supervisor,
+                stream_publisher=self.stream_publisher,
+            )
+        return self._monitoring_service
+
     def create_setup_service(self) -> SetupApplicationService:
         service = SetupApplicationService(
             container=self,
@@ -122,6 +133,8 @@ class ApplicationContainer:
         )
 
     def close(self) -> None:
+        if self._monitoring_service is not None:
+            self._monitoring_service.stop_all_collections()
         self.engine.dispose()
 
 

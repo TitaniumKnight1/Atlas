@@ -2,27 +2,53 @@
 
 Responsibility: metric sources, series, samples, rollups, alerts, alert events, health summaries, and streaming metrics.
 
-## Commands
+## Privacy Boundary
+
+FiveM server and system metrics (CPU, memory, disk, process state, resource health counts) are **local-only project data**. They are stored in SQLite, queried via loopback API, and streamed on the SSE `metrics` topic. They **never** enter the M2 telemetry pipeline.
+
+## M6a / M6b / M6c Scope
+
+| Slice | Tables / surface | Status |
+| --- | --- | --- |
+| **M6a** | `metric_sources`, `metric_series`, `metric_samples`; collection start/stop; `GET .../monitoring/sources`, `latest`, `samples`; live `MetricSample` on `metrics` topic | Implemented |
+| **M6b** | `metric_rollups`, retention/downsampling, time-window and aggregated queries | Deferred |
+| **M6c** | `monitoring_alerts`, `alert_events`, thresholds, notifications | Deferred |
+
+## Commands (M6a subset)
 
 | Name | Inputs | Outputs | Errors | Behavior | PRD trace |
 | --- | --- | --- | --- | --- | --- |
-| `RegisterMetricSource` | `project_id`, source type/ref, metadata | metric source id | `ProjectScopeViolation`, `ValidationFailed` | Usually internal or plugin-mediated. | Monitoring dashboard |
-| `IngestMetricSample` | `project_id`, series id, timestamp, value, quality | sample id or accepted count | `ProjectScopeViolation`, `ValidationFailed` | High-volume; short write transaction. | Historical graphs |
-| `ComputeMetricRollups` | `project_id`, series ids, time bucket | rollup summary | `ProjectScopeViolation`, `ExternalAdapterFailed` | Scheduled/background operation. | Historical graphs |
-| `CreateMonitoringAlert` | `project_id`, metric/condition/severity | alert id | `ValidationFailed`, `ProjectScopeViolation` | Audited write. | Alerts creating incidents |
-| `UpdateMonitoringAlert` | `project_id`, alert id, patch | updated alert | `NotFound`, `Conflict` | Audited write. | Monitoring alerts |
-| `RecordAlertEvent` | `project_id`, alert id, status, details | alert event id | `NotFound`, `ValidationFailed` | May publish incident-triggering event. | Alerts |
+| `StartMetricCollection` | `project_id`, optional interval | collection status | `ProjectScopeViolation`, `NotFound` | Starts in-process collector loop; not a command/undo module. | Monitoring dashboard |
+| `StopMetricCollection` | `project_id` | collection status | `ProjectScopeViolation` | Stops collector and flushes pending sample batch. | Monitoring dashboard |
 
-## Queries
+Commands below are **M6b/M6c** — not implemented in M6a:
+
+| Name | Slice |
+| --- | --- |
+| `RegisterMetricSource` | M6a internal via collector seam |
+| `IngestMetricSample` | M6a internal via collector batch flush |
+| `ComputeMetricRollups` | M6b |
+| `CreateMonitoringAlert` | M6c |
+| `UpdateMonitoringAlert` | M6c |
+| `RecordAlertEvent` | M6c |
+
+## Queries (M6a subset)
 
 | Name | Inputs | Outputs | Errors | PRD trace |
 | --- | --- | --- | --- | --- |
 | `ListMetricSources` | `project_id`, filters | sources | `ProjectScopeViolation` | Dashboard sources |
-| `ListMetricSeries` | `project_id`, source filters | series | `ProjectScopeViolation` | Dashboard charts |
-| `QueryMetricSamples` | `project_id`, series ids, time range, resolution | sample or rollup points | `ValidationFailed` | Historical graphs |
-| `GetProjectHealthSummary` | `project_id`, environment id | health summary | `ProjectScopeViolation` | Monitoring dashboard |
-| `ListMonitoringAlerts` | `project_id`, enabled/status filters | alerts | `ProjectScopeViolation` | Alert config |
-| `ListAlertEvents` | `project_id`, filters, pagination | alert event history | `ProjectScopeViolation` | Alert history |
+| `QueryLatestMetrics` | `project_id` | latest sample per series | `ProjectScopeViolation` | Dashboard gauges |
+| `QueryRecentMetricSamples` | `project_id`, limit | recent raw samples | `ProjectScopeViolation` | Live/historical preview |
+
+Queries below are **M6b/M6c** — deferred:
+
+| Name | Slice |
+| --- | --- |
+| `ListMetricSeries` | M6b |
+| `QueryMetricSamples` (time range, resolution) | M6b |
+| `GetProjectHealthSummary` | M6c |
+| `ListMonitoringAlerts` | M6c |
+| `ListAlertEvents` | M6c |
 
 ## Published Events
 
@@ -54,17 +80,18 @@ Responsibility: metric sources, series, samples, rollups, alerts, alert events, 
 | `PluginMetricsPort` | Receive approved plugin collectors | Requires capability grant and `project_id` | `plugin` |
 | `IncidentCreationPort` | Request incident from critical alert | Event or application call to Incident | application |
 
-## API Surface
+## API Surface (M6a)
 
 | Intent | Structural request | Structural response |
 | --- | --- | --- |
 | `GET /api/v1/projects/{project_id}/monitoring/sources` | filters | source list |
-| `GET /api/v1/projects/{project_id}/monitoring/series` | filters | series list |
-| `GET /api/v1/projects/{project_id}/monitoring/samples` | series ids, time range, resolution | chart points |
-| `GET /api/v1/projects/{project_id}/monitoring/health` | environment | health summary |
-| `GET /api/v1/projects/{project_id}/monitoring/alerts` | filters | alerts |
-| `POST /api/v1/projects/{project_id}/monitoring/alerts` | alert definition | alert id |
-| `GET /api/v1/projects/{project_id}/streams/metrics` | source/series filters | metric stream topic |
+| `GET /api/v1/projects/{project_id}/monitoring/latest` | — | latest sample per series |
+| `GET /api/v1/projects/{project_id}/monitoring/samples` | limit | recent raw samples |
+| `POST /api/v1/projects/{project_id}/monitoring/collection/start` | optional interval | collection status |
+| `POST /api/v1/projects/{project_id}/monitoring/collection/stop` | — | collection status |
+| `GET /api/v1/projects/{project_id}/stream?topics=metrics` | Last-Event-ID optional | SSE `MetricSample` events (coalesce policy) |
+
+M6b/M6c endpoints (`series`, time-range `samples`, `health`, `alerts`) remain deferred.
 
 ## Open Questions
 
@@ -72,4 +99,4 @@ Responsibility: metric sources, series, samples, rollups, alerts, alert events, 
 
 ## Deviations
 
-None.
+- M6a streams metrics on `GET /api/v1/projects/{project_id}/stream?topics=metrics` (ADR-0008 unified stream endpoint), not a separate `/streams/metrics` path documented earlier.

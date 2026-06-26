@@ -811,3 +811,58 @@ class ResourceRollbackOutcomeRecord(Base):
     status: Mapped[str] = mapped_column(String, nullable=False)
     error_message: Mapped[str | None] = mapped_column(Text)
     outcome_json: Mapped[dict | None] = mapped_column(JSON)
+
+
+class MetricSourceRecord(Base):
+    __tablename__ = "metric_sources"
+    __table_args__ = (
+        CheckConstraint(
+            "source_type in ('process', 'resource', 'database', 'network', 'disk', 'plugin', 'system', 'deferred')",
+            name="ck_metric_sources_type",
+        ),
+        UniqueConstraint("project_id", "source_type", "source_ref", name="uq_metric_sources_project_type_ref"),
+        Index("idx_metric_sources_project_enabled", "project_id", "is_enabled"),
+    )
+
+    metric_source_id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    environment_id: Mapped[str | None] = mapped_column(String)
+    source_type: Mapped[str] = mapped_column(String, nullable=False)
+    source_ref: Mapped[str | None] = mapped_column(Text)
+    display_name: Mapped[str] = mapped_column(Text, nullable=False)
+    is_enabled: Mapped[int] = mapped_column(Integer, nullable=False)
+    metadata_json: Mapped[dict | None] = mapped_column(JSON)
+
+
+class MetricSeriesRecord(Base):
+    __tablename__ = "metric_series"
+    __table_args__ = (
+        CheckConstraint("value_type in ('gauge', 'counter', 'status')", name="ck_metric_series_value_type"),
+        CheckConstraint("retention_class in ('high', 'standard', 'long')", name="ck_metric_series_retention"),
+        UniqueConstraint("metric_source_id", "metric_name", name="uq_metric_series_source_name"),
+        Index("idx_metric_series_name", "metric_name"),
+    )
+
+    metric_series_id: Mapped[str] = mapped_column(String, primary_key=True)
+    metric_source_id: Mapped[str] = mapped_column(ForeignKey("metric_sources.metric_source_id"), nullable=False)
+    metric_name: Mapped[str] = mapped_column(Text, nullable=False)
+    unit: Mapped[str] = mapped_column(Text, nullable=False)
+    value_type: Mapped[str] = mapped_column(String, nullable=False)
+    retention_class: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class MetricSampleRecord(Base):
+    __tablename__ = "metric_samples"
+    __table_args__ = (
+        CheckConstraint("quality in ('ok', 'estimated', 'missing')", name="ck_metric_samples_quality"),
+        UniqueConstraint("metric_series_id", "sampled_at", name="uq_metric_samples_series_time"),
+        Index("idx_metric_samples_series_time", "metric_series_id", "sampled_at"),
+    )
+
+    sample_id: Mapped[str] = mapped_column(String, primary_key=True)
+    metric_series_id: Mapped[str] = mapped_column(ForeignKey("metric_series.metric_series_id"), nullable=False)
+    sampled_at: Mapped[str] = mapped_column(String, nullable=False)
+    value_real: Mapped[float | None] = mapped_column(Float)
+    value_text: Mapped[str | None] = mapped_column(Text)
+    quality: Mapped[str] = mapped_column(String, nullable=False)
