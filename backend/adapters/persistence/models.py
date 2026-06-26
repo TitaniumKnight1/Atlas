@@ -866,3 +866,36 @@ class MetricSampleRecord(Base):
     value_real: Mapped[float | None] = mapped_column(Float)
     value_text: Mapped[str | None] = mapped_column(Text)
     quality: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class MetricRollupRecord(Base):
+    __tablename__ = "metric_rollups"
+    __table_args__ = (
+        UniqueConstraint("metric_series_id", "bucket_start", "bucket_size_seconds", name="uq_metric_rollups_series_bucket"),
+        Index("idx_metric_rollups_series_bucket", "metric_series_id", "bucket_size_seconds", "bucket_start"),
+        Index("idx_metric_rollups_project_bucket", "project_id", "bucket_size_seconds", "bucket_start"),
+    )
+
+    rollup_id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    metric_series_id: Mapped[str] = mapped_column(ForeignKey("metric_series.metric_series_id"), nullable=False)
+    bucket_start: Mapped[str] = mapped_column(String, nullable=False)
+    bucket_size_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    min_value: Mapped[float | None] = mapped_column(Float)
+    max_value: Mapped[float | None] = mapped_column(Float)
+    sum_value: Mapped[float | None] = mapped_column(Float)
+    avg_value: Mapped[float | None] = mapped_column(Float)
+    sample_count: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class MetricRollupWatermarkRecord(Base):
+    __tablename__ = "metric_rollup_watermarks"
+    __table_args__ = (
+        UniqueConstraint("project_id", "tier", name="uq_metric_rollup_watermarks_project_tier"),
+    )
+
+    watermark_id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    tier: Mapped[str] = mapped_column(String, nullable=False)
+    watermark_bucket_end: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)

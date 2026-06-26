@@ -1,11 +1,18 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
-from backend.adapters.persistence.models import MetricSampleRecord, MetricSeriesRecord, MetricSourceRecord
+from backend.adapters.persistence.models import (
+    MetricRollupRecord,
+    MetricRollupWatermarkRecord,
+    MetricSampleRecord,
+    MetricSeriesRecord,
+    MetricSourceRecord,
+)
+from backend.domain.monitoring.aggregation import HOUR_BUCKET_SECONDS, MINUTE_BUCKET_SECONDS, MetricAggregate, bucket_end
 from backend.domain.shared_kernel import ProjectId, StableIdentifier
 from backend.infrastructure.unit_of_work import ProjectScopeRequired, RepositoryContext
 
@@ -60,6 +67,17 @@ class MonitoringRepository:
                 select(MetricSourceRecord)
                 .where(MetricSourceRecord.project_id == str(project_id))
                 .order_by(MetricSourceRecord.display_name)
+            ).scalars()
+        )
+
+    def list_series(self, project_id: ProjectId) -> list[MetricSeriesRecord]:
+        self._ensure_project_scope(project_id)
+        return list(
+            self._session.execute(
+                select(MetricSeriesRecord)
+                .join(MetricSourceRecord, MetricSourceRecord.metric_source_id == MetricSeriesRecord.metric_source_id)
+                .where(MetricSourceRecord.project_id == str(project_id))
+                .order_by(MetricSeriesRecord.metric_name)
             ).scalars()
         )
 
@@ -167,6 +185,310 @@ class MonitoringRepository:
             }
         return list(latest.values())
 
+    def list_numeric_series_ids(self, project_id: ProjectId) -> list[str]:
+        self._ensure_project_scope(project_id)
+        rows = self._session.execute(
+            select(MetricSeriesRecord.metric_series_id)
+            .join(MetricSourceRecord, MetricSourceRecord.metric_source_id == MetricSeriesRecord.metric_source_id)
+            .where(
+                MetricSourceRecord.project_id == str(project_id),
+                MetricSeriesRecord.value_type.in_(("gauge", "counter")),
+            )
+        ).scalars()
+        return list(rows)
+
+    def list_raw_values_in_bucket(self, metric_series_id: str, bucket_start: datetime, bucket_size_seconds: int) -> list[float]:
+        start_iso = bucket_start.isoformat()
+        end_iso = bucket_end(bucket_start, bucket_size_seconds).isoformat()
+        rows = self._session.execute(
+            select(MetricSampleRecord.value_real).where(
+                MetricSampleRecord.metric_series_id == metric_series_id,
+                MetricSampleRecord.sampled_at >= start_iso,
+                MetricSampleRecord.sampled_at < end_iso,
+                MetricSampleRecord.quality.in_(("ok", "estimated")),
+                MetricSampleRecord.value_real.is_not(None),
+            )
+        ).scalars()
+        return [float(value) for value in rows if value is not None]
+
+    def upsert_rollup(
+        self,
+        *,
+        rollup_id: StableIdentifier,
+        metric_series_id: str,
+        project_id: ProjectId,
+        aggregate: MetricAggregate,
+        bucket_size_seconds: int,
+    ) -> MetricRollupRecord:
+        self._ensure_project_scope(project_id)
+        existing = self._session.execute(
+            select(MetricRollupRecord).where(
+                MetricRollupRecord.metric_series_id == metric_series_id,
+                MetricRollupRecord.bucket_start == aggregate.bucket_start.isoformat(),
+                MetricRollupRecord.bucket_size_seconds == bucket_size_seconds,
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            existing.min_value = aggregate.min_value
+            existing.max_value = aggregate.max_value
+            existing.sum_value = aggregate.sum_value
+            existing.avg_value = aggregate.avg_value
+            existing.sample_count = aggregate.sample_count
+            existing.project_id = str(project_id)
+            return existing
+        record = MetricRollupRecord(
+            rollup_id=str(rollup_id),
+            project_id=str(project_id),
+            metric_series_id=metric_series_id,
+            bucket_start=aggregate.bucket_start.isoformat(),
+            bucket_size_seconds=bucket_size_seconds,
+            min_value=aggregate.min_value,
+            max_value=aggregate.max_value,
+            sum_value=aggregate.sum_value,
+            avg_value=aggregate.avg_value,
+            sample_count=aggregate.sample_count,
+        )
+        self._session.add(record)
+        return record
+
+    def list_rollup_aggregates_in_window(
+        self,
+        metric_series_id: str,
+        window_start: datetime,
+        window_size_seconds: int,
+        source_bucket_size_seconds: int,
+    ) -> list[MetricAggregate]:
+        start_iso = window_start.isoformat()
+        end_iso = bucket_end(window_start, window_size_seconds).isoformat()
+        rows = self._session.execute(
+            select(MetricRollupRecord).where(
+                MetricRollupRecord.metric_series_id == metric_series_id,
+                MetricRollupRecord.bucket_size_seconds == source_bucket_size_seconds,
+                MetricRollupRecord.bucket_start >= start_iso,
+                MetricRollupRecord.bucket_start < end_iso,
+            )
+        ).scalars()
+        aggregates: list[MetricAggregate] = []
+        for row in rows:
+            start = datetime.fromisoformat(row.bucket_start)
+            aggregates.append(
+                MetricAggregate(
+                    min_value=row.min_value,
+                    max_value=row.max_value,
+                    sum_value=row.sum_value or 0.0,
+                    sample_count=row.sample_count,
+                    bucket_start=start,
+                    bucket_end=bucket_end(start, row.bucket_size_seconds),
+                )
+            )
+        return aggregates
+
+    def list_rollups_window(
+        self,
+        project_id: ProjectId,
+        series_ids: list[str],
+        bucket_size_seconds: int,
+        start_at: datetime,
+        end_at: datetime,
+    ) -> list[dict[str, Any]]:
+        self._ensure_project_scope(project_id)
+        if not series_ids:
+            return []
+        rows = self._session.execute(
+            select(MetricRollupRecord, MetricSeriesRecord)
+            .join(MetricSeriesRecord, MetricSeriesRecord.metric_series_id == MetricRollupRecord.metric_series_id)
+            .where(
+                MetricRollupRecord.project_id == str(project_id),
+                MetricRollupRecord.metric_series_id.in_(series_ids),
+                MetricRollupRecord.bucket_size_seconds == bucket_size_seconds,
+                MetricRollupRecord.bucket_start >= start_at.isoformat(),
+                MetricRollupRecord.bucket_start < end_at.isoformat(),
+            )
+            .order_by(MetricRollupRecord.bucket_start)
+        ).all()
+        return [
+            {
+                "rollup_id": rollup.rollup_id,
+                "metric_series_id": rollup.metric_series_id,
+                "metric_name": series.metric_name,
+                "bucket_start": rollup.bucket_start,
+                "bucket_end": bucket_end(datetime.fromisoformat(rollup.bucket_start), rollup.bucket_size_seconds).isoformat(),
+                "bucket_size_seconds": rollup.bucket_size_seconds,
+                "min_value": rollup.min_value,
+                "max_value": rollup.max_value,
+                "avg_value": rollup.avg_value,
+                "sum_value": rollup.sum_value,
+                "sample_count": rollup.sample_count,
+            }
+            for rollup, series in rows
+        ]
+
+    def list_raw_samples_window(
+        self,
+        project_id: ProjectId,
+        series_ids: list[str],
+        start_at: datetime,
+        end_at: datetime,
+    ) -> list[dict[str, Any]]:
+        self._ensure_project_scope(project_id)
+        if not series_ids:
+            return []
+        rows = self._session.execute(
+            select(MetricSampleRecord, MetricSeriesRecord)
+            .join(MetricSeriesRecord, MetricSeriesRecord.metric_series_id == MetricSampleRecord.metric_series_id)
+            .where(
+                MetricSampleRecord.metric_series_id.in_(series_ids),
+                MetricSampleRecord.sampled_at >= start_at.isoformat(),
+                MetricSampleRecord.sampled_at < end_at.isoformat(),
+            )
+            .order_by(MetricSampleRecord.sampled_at)
+        ).all()
+        return [
+            {
+                "sample_id": sample.sample_id,
+                "metric_series_id": sample.metric_series_id,
+                "metric_name": series.metric_name,
+                "value_real": sample.value_real,
+                "value_text": sample.value_text,
+                "quality": sample.quality,
+                "sampled_at": sample.sampled_at,
+            }
+            for sample, series in rows
+        ]
+
+    def get_watermark(self, project_id: ProjectId, tier: str) -> datetime | None:
+        self._ensure_project_scope(project_id)
+        record = self._session.execute(
+            select(MetricRollupWatermarkRecord).where(
+                MetricRollupWatermarkRecord.project_id == str(project_id),
+                MetricRollupWatermarkRecord.tier == tier,
+            )
+        ).scalar_one_or_none()
+        if record is None:
+            return None
+        return datetime.fromisoformat(record.watermark_bucket_end)
+
+    def set_watermark(self, project_id: ProjectId, tier: str, bucket_end_at: datetime) -> None:
+        self._ensure_project_scope(project_id)
+        now = datetime.now(UTC).isoformat()
+        record = self._session.execute(
+            select(MetricRollupWatermarkRecord).where(
+                MetricRollupWatermarkRecord.project_id == str(project_id),
+                MetricRollupWatermarkRecord.tier == tier,
+            )
+        ).scalar_one_or_none()
+        if record is None:
+            self._session.add(
+                MetricRollupWatermarkRecord(
+                    watermark_id=str(StableIdentifier.new()),
+                    project_id=str(project_id),
+                    tier=tier,
+                    watermark_bucket_end=bucket_end_at.isoformat(),
+                    updated_at=now,
+                )
+            )
+            self._session.flush()
+            return
+        record.watermark_bucket_end = bucket_end_at.isoformat()
+        record.updated_at = now
+
+    def oldest_raw_sample_at(self, project_id: ProjectId) -> datetime | None:
+        self._ensure_project_scope(project_id)
+        value = self._session.execute(
+            select(MetricSampleRecord.sampled_at)
+            .join(MetricSeriesRecord, MetricSeriesRecord.metric_series_id == MetricSampleRecord.metric_series_id)
+            .join(MetricSourceRecord, MetricSourceRecord.metric_source_id == MetricSeriesRecord.metric_source_id)
+            .where(MetricSourceRecord.project_id == str(project_id))
+            .order_by(MetricSampleRecord.sampled_at)
+            .limit(1)
+        ).scalar_one_or_none()
+        return datetime.fromisoformat(value) if value else None
+
+    def oldest_rollup_at(self, project_id: ProjectId, bucket_size_seconds: int) -> datetime | None:
+        self._ensure_project_scope(project_id)
+        value = self._session.execute(
+            select(MetricRollupRecord.bucket_start)
+            .where(
+                MetricRollupRecord.project_id == str(project_id),
+                MetricRollupRecord.bucket_size_seconds == bucket_size_seconds,
+            )
+            .order_by(MetricRollupRecord.bucket_start)
+            .limit(1)
+        ).scalar_one_or_none()
+        return datetime.fromisoformat(value) if value else None
+
+    def delete_raw_samples_before_rollup(self, project_id: ProjectId, cutoff: datetime) -> int:
+        self._ensure_project_scope(project_id)
+        cutoff_iso = cutoff.isoformat()
+        rolled_buckets = select(MetricRollupRecord.metric_series_id, MetricRollupRecord.bucket_start).where(
+            MetricRollupRecord.project_id == str(project_id),
+            MetricRollupRecord.bucket_size_seconds == MINUTE_BUCKET_SECONDS,
+        )
+        rows = self._session.execute(rolled_buckets).all()
+        deleted = 0
+        for series_id, bucket_start in rows:
+            bucket_start_dt = datetime.fromisoformat(bucket_start)
+            bucket_end_dt = bucket_end(bucket_start_dt, MINUTE_BUCKET_SECONDS)
+            if bucket_end_dt > cutoff:
+                continue
+            result = self._session.execute(
+                delete(MetricSampleRecord).where(
+                    MetricSampleRecord.metric_series_id == series_id,
+                    MetricSampleRecord.sampled_at >= bucket_start,
+                    MetricSampleRecord.sampled_at < bucket_end_dt.isoformat(),
+                )
+            )
+            deleted += int(result.rowcount or 0)
+        return deleted
+
+    def delete_minute_rollups_before(self, project_id: ProjectId, cutoff: datetime) -> int:
+        self._ensure_project_scope(project_id)
+        covered_hours = {
+            floor_to_hour(datetime.fromisoformat(row))
+            for row in self._session.execute(
+                select(MetricRollupRecord.bucket_start).where(
+                    MetricRollupRecord.project_id == str(project_id),
+                    MetricRollupRecord.bucket_size_seconds == HOUR_BUCKET_SECONDS,
+                )
+            ).scalars()
+        }
+        rows = self._session.execute(
+            select(MetricRollupRecord.rollup_id, MetricRollupRecord.bucket_start).where(
+                MetricRollupRecord.project_id == str(project_id),
+                MetricRollupRecord.bucket_size_seconds == MINUTE_BUCKET_SECONDS,
+                MetricRollupRecord.bucket_start < cutoff.isoformat(),
+            )
+        ).all()
+        rollup_ids = [
+            rollup_id
+            for rollup_id, bucket_start in rows
+            if floor_to_hour(datetime.fromisoformat(bucket_start)) in covered_hours
+        ]
+        if not rollup_ids:
+            return 0
+        result = self._session.execute(delete(MetricRollupRecord).where(MetricRollupRecord.rollup_id.in_(rollup_ids)))
+        return int(result.rowcount or 0)
+
+    def delete_hour_rollups_before(self, project_id: ProjectId, cutoff: datetime) -> int:
+        self._ensure_project_scope(project_id)
+        result = self._session.execute(
+            delete(MetricRollupRecord).where(
+                MetricRollupRecord.project_id == str(project_id),
+                MetricRollupRecord.bucket_size_seconds == HOUR_BUCKET_SECONDS,
+                MetricRollupRecord.bucket_start < cutoff.isoformat(),
+            )
+        )
+        return int(result.rowcount or 0)
+
+    def list_projects_with_metric_data(self) -> list[ProjectId]:
+        rows = self._session.execute(select(MetricSourceRecord.project_id).distinct()).scalars()
+        return [ProjectId(value) for value in rows]
+
     def _ensure_project_scope(self, project_id: ProjectId) -> None:
         if self._project_id is not None and self._project_id != project_id:
             raise ProjectScopeRequired("Repository project_id does not match requested project_id")
+
+
+def floor_to_hour(timestamp: datetime) -> datetime:
+    normalized = timestamp.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
+    return normalized

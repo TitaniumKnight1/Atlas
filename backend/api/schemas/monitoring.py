@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -17,3 +19,10 @@ class ResponseEnvelope(BaseModel):
 
 class StartCollectionRequest(BaseModel):
     interval_seconds: float | None = None
+
+
+class HistoryQueryParams(BaseModel):
+    start_at: datetime
+    end_at: datetime
+    metric_series_id: str | None = None
+    resolution: str | None = None

@@ -14,6 +14,7 @@ from backend.adapters.process import LocalProcessSupervisor
 from backend.adapters.streams import StreamEventBridge, StreamEventPublisher
 from backend.adapters.telemetry import DeterministicTelemetrySanitizer, LocalNoopTelemetryDelivery
 from backend.adapters.txadmin import LocalTxAdminDetector
+from backend.application.monitoring.retention import MonitoringRetentionService
 from backend.application.monitoring.service import MonitoringApplicationService
 from backend.application.project.service import ProjectApplicationService
 from backend.adapters.config import FiveMConfigValidator, LocalConfigSecretScanner
@@ -47,6 +48,7 @@ class ApplicationContainer:
     telemetry_delivery: LocalNoopTelemetryDelivery
     writer_lock: RLock = field(default_factory=RLock)
     _monitoring_service: MonitoringApplicationService | None = field(default=None, repr=False)
+    _monitoring_retention_service: MonitoringRetentionService | None = field(default=None, repr=False)
 
     def create_unit_of_work(self, project_id: ProjectId | None = None) -> SingleWriterSQLiteUnitOfWork:
         return SingleWriterSQLiteUnitOfWork(
@@ -102,6 +104,11 @@ class ApplicationContainer:
             stream_publisher=self.stream_publisher,
         )
 
+    def create_monitoring_retention_service(self) -> MonitoringRetentionService:
+        if self._monitoring_retention_service is None:
+            self._monitoring_retention_service = MonitoringRetentionService(container=self)
+        return self._monitoring_retention_service
+
     def create_monitoring_service(self) -> MonitoringApplicationService:
         if self._monitoring_service is None:
             self._monitoring_service = MonitoringApplicationService(
@@ -133,6 +140,8 @@ class ApplicationContainer:
         )
 
     def close(self) -> None:
+        if self._monitoring_retention_service is not None:
+            self._monitoring_retention_service.stop_rollup_scheduler()
         if self._monitoring_service is not None:
             self._monitoring_service.stop_all_collections()
         self.engine.dispose()

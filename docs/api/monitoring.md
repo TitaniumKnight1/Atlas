@@ -11,7 +11,7 @@ FiveM server and system metrics (CPU, memory, disk, process state, resource heal
 | Slice | Tables / surface | Status |
 | --- | --- | --- |
 | **M6a** | `metric_sources`, `metric_series`, `metric_samples`; collection start/stop; `GET .../monitoring/sources`, `latest`, `samples`; live `MetricSample` on `metrics` topic | Implemented |
-| **M6b** | `metric_rollups`, retention/downsampling, time-window and aggregated queries | Deferred |
+| **M6b** | `metric_rollups`, `metric_rollup_watermarks`, retention/downsampling, time-window and aggregated queries | Implemented |
 | **M6c** | `monitoring_alerts`, `alert_events`, thresholds, notifications | Deferred |
 
 ## Commands (M6a subset)
@@ -27,7 +27,7 @@ Commands below are **M6b/M6c** — not implemented in M6a:
 | --- | --- |
 | `RegisterMetricSource` | M6a internal via collector seam |
 | `IngestMetricSample` | M6a internal via collector batch flush |
-| `ComputeMetricRollups` | M6b |
+| `ComputeMetricRollups` | M6b — internal via rollup scheduler / `POST .../rollup/run` |
 | `CreateMonitoringAlert` | M6c |
 | `UpdateMonitoringAlert` | M6c |
 | `RecordAlertEvent` | M6c |
@@ -44,8 +44,8 @@ Queries below are **M6b/M6c** — deferred:
 
 | Name | Slice |
 | --- | --- |
-| `ListMetricSeries` | M6b |
-| `QueryMetricSamples` (time range, resolution) | M6b |
+| `ListMetricSeries` | M6b — `GET .../monitoring/series` |
+| `QueryMetricSamples` (time range, resolution) | M6b — `GET .../monitoring/history` |
 | `GetProjectHealthSummary` | M6c |
 | `ListMonitoringAlerts` | M6c |
 | `ListAlertEvents` | M6c |
@@ -80,18 +80,21 @@ Queries below are **M6b/M6c** — deferred:
 | `PluginMetricsPort` | Receive approved plugin collectors | Requires capability grant and `project_id` | `plugin` |
 | `IncidentCreationPort` | Request incident from critical alert | Event or application call to Incident | application |
 
-## API Surface (M6a)
+## API Surface (M6a + M6b)
 
 | Intent | Structural request | Structural response |
 | --- | --- | --- |
 | `GET /api/v1/projects/{project_id}/monitoring/sources` | filters | source list |
+| `GET /api/v1/projects/{project_id}/monitoring/series` | — | metric series list |
 | `GET /api/v1/projects/{project_id}/monitoring/latest` | — | latest sample per series |
 | `GET /api/v1/projects/{project_id}/monitoring/samples` | limit | recent raw samples |
+| `GET /api/v1/projects/{project_id}/monitoring/history` | start_at, end_at, series id, resolution | spike-preserving rollup/raw points |
+| `POST /api/v1/projects/{project_id}/monitoring/rollup/run` | — | rollup cycle summary |
 | `POST /api/v1/projects/{project_id}/monitoring/collection/start` | optional interval | collection status |
 | `POST /api/v1/projects/{project_id}/monitoring/collection/stop` | — | collection status |
 | `GET /api/v1/projects/{project_id}/stream?topics=metrics` | Last-Event-ID optional | SSE `MetricSample` events (coalesce policy) |
 
-M6b/M6c endpoints (`series`, time-range `samples`, `health`, `alerts`) remain deferred.
+M6c endpoints (`health`, `alerts`) remain deferred.
 
 ## Open Questions
 
