@@ -1289,3 +1289,45 @@ class AutomationSettingRecord(Base):
     setting_key: Mapped[str] = mapped_column(String, primary_key=True)
     setting_value_json: Mapped[dict] = mapped_column(JSON, nullable=False)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class AutomationApprovalRecord(Base):
+    __tablename__ = "automation_approvals"
+    __table_args__ = (
+        CheckConstraint(
+            "approval_state in ('pending', 'approved', 'denied', 'expired')",
+            name="ck_automation_approvals_state",
+        ),
+        Index("idx_automation_approvals_pending", "approval_state", "requested_at"),
+        Index("idx_automation_approvals_run", "automation_run_id"),
+    )
+
+    automation_approval_id: Mapped[str] = mapped_column(String, primary_key=True)
+    automation_run_id: Mapped[str] = mapped_column(ForeignKey("automation_runs.automation_run_id"), nullable=False)
+    automation_run_step_id: Mapped[str] = mapped_column(ForeignKey("automation_run_steps.automation_run_step_id"), nullable=False)
+    automation_action_id: Mapped[str] = mapped_column(ForeignKey("automation_actions.automation_action_id"), nullable=False)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    approval_state: Mapped[str] = mapped_column(String, nullable=False)
+    preview_json: Mapped[dict | None] = mapped_column(JSON)
+    requested_at: Mapped[str] = mapped_column(String, nullable=False)
+    decided_at: Mapped[str | None] = mapped_column(String)
+    decided_by: Mapped[str | None] = mapped_column(String)
+    approval_reason: Mapped[str | None] = mapped_column(Text)
+    expires_at: Mapped[str | None] = mapped_column(String)
+
+
+class AutomationRecipeInstanceRecord(Base):
+    __tablename__ = "automation_recipe_instances"
+    __table_args__ = (
+        UniqueConstraint("project_id", "recipe_key", name="uq_automation_recipe_instances_project_key"),
+        Index("idx_automation_recipe_instances_project", "project_id"),
+    )
+
+    automation_recipe_instance_id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    recipe_key: Mapped[str] = mapped_column(String, nullable=False)
+    automation_workflow_id: Mapped[str] = mapped_column(ForeignKey("automation_workflows.automation_workflow_id"), nullable=False)
+    params_json: Mapped[dict | None] = mapped_column(JSON)
+    instance_status: Mapped[str] = mapped_column(String, nullable=False)
+    deferred_capabilities_json: Mapped[list | None] = mapped_column(JSON)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)

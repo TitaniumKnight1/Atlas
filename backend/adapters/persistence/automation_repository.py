@@ -7,8 +7,10 @@ from sqlalchemy import select
 
 from backend.adapters.persistence.models import (
     AutomationActionRecord,
+    AutomationApprovalRecord,
     AutomationConditionRecord,
     AutomationIdempotencyKeyRecord,
+    AutomationRecipeInstanceRecord,
     AutomationRunRecord,
     AutomationRunStepRecord,
     AutomationScheduleRecord,
@@ -402,6 +404,124 @@ class AutomationRepository:
             select(AutomationRunStepRecord).where(
                 AutomationRunStepRecord.project_id == str(project_id),
                 AutomationRunStepRecord.automation_run_step_id == step_id,
+            )
+        ).scalar_one_or_none()
+
+    def create_approval(
+        self,
+        *,
+        approval_id: StableIdentifier,
+        run_id: str,
+        step_id: str,
+        action_id: str,
+        project_id: ProjectId,
+        preview_json: dict[str, Any],
+        requested_at: datetime,
+        expires_at: datetime | None = None,
+    ) -> AutomationApprovalRecord:
+        self._ensure_project_scope(project_id)
+        record = AutomationApprovalRecord(
+            automation_approval_id=str(approval_id),
+            automation_run_id=run_id,
+            automation_run_step_id=step_id,
+            automation_action_id=action_id,
+            project_id=str(project_id),
+            approval_state="pending",
+            preview_json=preview_json,
+            requested_at=requested_at.isoformat(),
+            expires_at=expires_at.isoformat() if expires_at else None,
+        )
+        self._session.add(record)
+        return record
+
+    def get_approval(self, project_id: ProjectId, approval_id: str) -> AutomationApprovalRecord | None:
+        self._ensure_project_scope(project_id)
+        return self._session.execute(
+            select(AutomationApprovalRecord).where(
+                AutomationApprovalRecord.project_id == str(project_id),
+                AutomationApprovalRecord.automation_approval_id == approval_id,
+            )
+        ).scalar_one_or_none()
+
+    def list_pending_approvals(self, project_id: ProjectId) -> list[AutomationApprovalRecord]:
+        self._ensure_project_scope(project_id)
+        return list(
+            self._session.execute(
+                select(AutomationApprovalRecord)
+                .where(
+                    AutomationApprovalRecord.project_id == str(project_id),
+                    AutomationApprovalRecord.approval_state == "pending",
+                )
+                .order_by(AutomationApprovalRecord.requested_at.desc())
+            ).scalars()
+        )
+
+    def list_approvals_for_run(self, run_id: str) -> list[AutomationApprovalRecord]:
+        return list(
+            self._session.execute(
+                select(AutomationApprovalRecord)
+                .where(AutomationApprovalRecord.automation_run_id == run_id)
+                .order_by(AutomationApprovalRecord.requested_at)
+            ).scalars()
+        )
+
+    def decide_approval(
+        self,
+        approval: AutomationApprovalRecord,
+        *,
+        state: str,
+        decided_at: datetime,
+        decided_by: str | None = None,
+        reason: str | None = None,
+    ) -> None:
+        approval.approval_state = state
+        approval.decided_at = decided_at.isoformat()
+        approval.decided_by = decided_by
+        if reason is not None:
+            approval.approval_reason = reason
+
+    def create_recipe_instance(
+        self,
+        *,
+        instance_id: StableIdentifier,
+        project_id: ProjectId,
+        recipe_key: str,
+        workflow_id: str,
+        params_json: dict[str, Any] | None,
+        instance_status: str,
+        deferred_capabilities: list[str] | None,
+        created_at: datetime,
+    ) -> AutomationRecipeInstanceRecord:
+        self._ensure_project_scope(project_id)
+        record = AutomationRecipeInstanceRecord(
+            automation_recipe_instance_id=str(instance_id),
+            project_id=str(project_id),
+            recipe_key=recipe_key,
+            automation_workflow_id=workflow_id,
+            params_json=params_json or {},
+            instance_status=instance_status,
+            deferred_capabilities_json=deferred_capabilities or [],
+            created_at=created_at.isoformat(),
+        )
+        self._session.add(record)
+        return record
+
+    def list_recipe_instances(self, project_id: ProjectId) -> list[AutomationRecipeInstanceRecord]:
+        self._ensure_project_scope(project_id)
+        return list(
+            self._session.execute(
+                select(AutomationRecipeInstanceRecord)
+                .where(AutomationRecipeInstanceRecord.project_id == str(project_id))
+                .order_by(AutomationRecipeInstanceRecord.created_at.desc())
+            ).scalars()
+        )
+
+    def get_recipe_instance(self, project_id: ProjectId, instance_id: str) -> AutomationRecipeInstanceRecord | None:
+        self._ensure_project_scope(project_id)
+        return self._session.execute(
+            select(AutomationRecipeInstanceRecord).where(
+                AutomationRecipeInstanceRecord.project_id == str(project_id),
+                AutomationRecipeInstanceRecord.automation_recipe_instance_id == instance_id,
             )
         ).scalar_one_or_none()
 

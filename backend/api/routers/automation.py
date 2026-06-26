@@ -4,8 +4,10 @@ from fastapi import APIRouter, Depends, Query
 
 from backend.api.dependencies import get_container
 from backend.api.schemas.automation import (
+    ApprovalDecisionRequest,
     CreateAutomationWorkflowRequest,
     ErrorPayload,
+    InstantiateRecipeRequest,
     ResponseEnvelope,
     RunAutomationRequest,
     SetAutomationEnabledRequest,
@@ -130,6 +132,83 @@ def undo_automation_run_step(
 ) -> ResponseEnvelope:
     try:
         return _success(container.create_automation_service().undo_run_step(ProjectId(project_id), step_id))
+    except AutomationApplicationError as error:
+        return _failure(error)
+
+
+@router.get("/automation/recipes", response_model=ResponseEnvelope)
+def list_automation_recipes(container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    return _success(container.create_automation_service().list_recipes())
+
+
+@router.post("/projects/{project_id}/automation/recipes/{recipe_key}", response_model=ResponseEnvelope)
+def instantiate_automation_recipe(
+    project_id: str,
+    recipe_key: str,
+    request: InstantiateRecipeRequest,
+    container: ApplicationContainer = Depends(get_container),
+) -> ResponseEnvelope:
+    try:
+        return _success(
+            container.create_automation_service().instantiate_recipe(
+                ProjectId(project_id),
+                recipe_key,
+                params=request.params,
+                is_enabled=request.is_enabled,
+            )
+        )
+    except AutomationApplicationError as error:
+        return _failure(error)
+
+
+@router.get("/projects/{project_id}/automation/recipe-instances", response_model=ResponseEnvelope)
+def list_recipe_instances(project_id: str, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        return _success(container.create_automation_service().list_recipe_instances(ProjectId(project_id)))
+    except AutomationApplicationError as error:
+        return _failure(error)
+
+
+@router.get("/projects/{project_id}/automation/approvals/pending", response_model=ResponseEnvelope)
+def list_pending_approvals(project_id: str, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        return _success(container.create_automation_service().list_pending_approvals(ProjectId(project_id)))
+    except AutomationApplicationError as error:
+        return _failure(error)
+
+
+@router.post("/projects/{project_id}/automation/runs/{run_id}/approvals/{approval_id}/approve", response_model=ResponseEnvelope)
+def approve_automation_run(
+    project_id: str,
+    run_id: str,
+    approval_id: str,
+    request: ApprovalDecisionRequest,
+    container: ApplicationContainer = Depends(get_container),
+) -> ResponseEnvelope:
+    try:
+        return _success(
+            container.create_automation_service().approve_run(
+                ProjectId(project_id), run_id, approval_id, decided_by=request.decided_by
+            )
+        )
+    except AutomationApplicationError as error:
+        return _failure(error)
+
+
+@router.post("/projects/{project_id}/automation/runs/{run_id}/approvals/{approval_id}/reject", response_model=ResponseEnvelope)
+def reject_automation_run(
+    project_id: str,
+    run_id: str,
+    approval_id: str,
+    request: ApprovalDecisionRequest,
+    container: ApplicationContainer = Depends(get_container),
+) -> ResponseEnvelope:
+    try:
+        return _success(
+            container.create_automation_service().reject_run(
+                ProjectId(project_id), run_id, approval_id, reason=request.reason, decided_by=request.decided_by
+            )
+        )
     except AutomationApplicationError as error:
         return _failure(error)
 

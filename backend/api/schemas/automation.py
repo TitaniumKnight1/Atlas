@@ -47,3 +47,13 @@ class SetGlobalAutomationRequest(BaseModel):
 
 class RunAutomationRequest(BaseModel):
     idempotency_key: str | None = None
+
+
+class InstantiateRecipeRequest(BaseModel):
+    params: dict | None = None
+    is_enabled: bool = True
+
+
+class ApprovalDecisionRequest(BaseModel):
+    reason: str | None = None
+    decided_by: str | None = None

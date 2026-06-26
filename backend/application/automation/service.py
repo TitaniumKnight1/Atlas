@@ -39,6 +39,7 @@ class AutomationApplicationService:
         bus = self._container.event_bus
         bus.register("AlertFired", self._on_domain_event)
         bus.register("ServerCrashed", self._on_domain_event)
+        bus.register("GitOperationCompleted", self._on_domain_event)
         self._subscribers_registered = True
 
     def start_scheduler(self) -> dict[str, Any]:
@@ -180,7 +181,7 @@ class AutomationApplicationService:
 
             repository = AutomationRepository(RepositoryContext(session=session, project_id=project_id))
             runs = repository.list_runs(project_id, limit=limit)
-            return [_run_summary(run, repository.list_run_steps(run.automation_run_id)) for run in runs]
+            return [_run_summary(run, repository.list_run_steps(run.automation_run_id), repository.list_approvals_for_run(run.automation_run_id)) for run in runs]
 
     def get_run(self, project_id: ProjectId, run_id: str) -> dict[str, Any]:
         with self._container.session_factory() as session:
@@ -190,7 +191,7 @@ class AutomationApplicationService:
             run = repository.get_run(project_id, run_id)
             if run is None:
                 raise AutomationApplicationError(ErrorCode.NOT_FOUND, f"Run not found: {run_id}")
-            return _run_summary(run, repository.list_run_steps(run_id))
+            return _run_summary(run, repository.list_run_steps(run_id), repository.list_approvals_for_run(run_id))
 
     def run_now(self, project_id: ProjectId, workflow_id: str, *, idempotency_key: str | None = None) -> dict[str, Any]:
         try:
@@ -201,6 +202,71 @@ class AutomationApplicationService:
     def undo_run_step(self, project_id: ProjectId, step_id: str) -> dict[str, Any]:
         try:
             return self._engine.undo_run_step(project_id, step_id)
+        except AutomationEngineError as error:
+            raise AutomationApplicationError(error.code, str(error)) from error
+
+    def list_recipes(self) -> list[dict[str, Any]]:
+        from backend.application.automation.recipes import list_available_recipes
+
+        return list_available_recipes()
+
+    def instantiate_recipe(
+        self,
+        project_id: ProjectId,
+        recipe_key: str,
+        *,
+        params: dict[str, Any] | None = None,
+        is_enabled: bool = True,
+    ) -> dict[str, Any]:
+        from backend.application.automation.recipes import RecipeInstantiationError, instantiate_recipe
+
+        try:
+            return instantiate_recipe(self, project_id, recipe_key, params=params, is_enabled=is_enabled)
+        except RecipeInstantiationError as error:
+            raise AutomationApplicationError(error.code, str(error)) from error
+
+    def list_recipe_instances(self, project_id: ProjectId) -> list[dict[str, Any]]:
+        with self._container.session_factory() as session:
+            from backend.infrastructure.unit_of_work import RepositoryContext
+
+            records = AutomationRepository(RepositoryContext(session=session, project_id=project_id)).list_recipe_instances(project_id)
+        return [
+            {
+                "automation_recipe_instance_id": record.automation_recipe_instance_id,
+                "recipe_key": record.recipe_key,
+                "automation_workflow_id": record.automation_workflow_id,
+                "instance_status": record.instance_status,
+                "deferred_capabilities": record.deferred_capabilities_json or [],
+                "params": record.params_json or {},
+                "created_at": record.created_at,
+            }
+            for record in records
+        ]
+
+    def list_pending_approvals(self, project_id: ProjectId) -> list[dict[str, Any]]:
+        with self._container.session_factory() as session:
+            from backend.infrastructure.unit_of_work import RepositoryContext
+
+            approvals = AutomationRepository(RepositoryContext(session=session, project_id=project_id)).list_pending_approvals(project_id)
+        return [_approval_data(approval) for approval in approvals]
+
+    def approve_run(self, project_id: ProjectId, run_id: str, approval_id: str, *, decided_by: str | None = None) -> dict[str, Any]:
+        try:
+            return self._engine.approve_run(project_id, run_id, approval_id, decided_by=decided_by)
+        except AutomationEngineError as error:
+            raise AutomationApplicationError(error.code, str(error)) from error
+
+    def reject_run(
+        self,
+        project_id: ProjectId,
+        run_id: str,
+        approval_id: str,
+        *,
+        reason: str | None = None,
+        decided_by: str | None = None,
+    ) -> dict[str, Any]:
+        try:
+            return self._engine.reject_run(project_id, run_id, approval_id, reason=reason, decided_by=decided_by)
         except AutomationEngineError as error:
             raise AutomationApplicationError(error.code, str(error)) from error
 
@@ -222,7 +288,7 @@ def _workflow_data(record: Any) -> dict[str, Any]:
     }
 
 
-def _run_summary(run: Any, steps: list[Any]) -> dict[str, Any]:
+def _run_summary(run: Any, steps: list[Any], approvals: list[Any] | None = None) -> dict[str, Any]:
     return {
         "automation_run_id": run.automation_run_id,
         "automation_workflow_id": run.automation_workflow_id,
@@ -244,4 +310,19 @@ def _run_summary(run: Any, steps: list[Any]) -> dict[str, Any]:
             }
             for step in steps
         ],
+        "approvals": [_approval_data(approval) for approval in (approvals or [])],
+    }
+
+
+def _approval_data(approval: Any) -> dict[str, Any]:
+    return {
+        "automation_approval_id": approval.automation_approval_id,
+        "automation_run_id": approval.automation_run_id,
+        "automation_run_step_id": approval.automation_run_step_id,
+        "approval_state": approval.approval_state,
+        "preview_json": approval.preview_json,
+        "requested_at": approval.requested_at,
+        "decided_at": approval.decided_at,
+        "decided_by": approval.decided_by,
+        "approval_reason": approval.approval_reason,
     }
