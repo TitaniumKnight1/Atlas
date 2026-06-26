@@ -1,5 +1,21 @@
 :root {
   color-scheme: dark;
+  --atlas-void: #090d16;
+  --atlas-panel: #111827;
+  --atlas-panel-2: #172033;
+  --atlas-line: #2a364f;
+  --atlas-blueprint: #5b8cff;
+  --atlas-teal: #58d5c9;
+  --atlas-amber: #d7a65f;
+  --atlas-text: #e7edf8;
+  --atlas-muted: #8fa0bc;
+  --atlas-danger: #ff6b7a;
+  --font-display: "Space Grotesk", "Aptos Display", ui-sans-serif, system-ui, sans-serif;
+  --font-body: Inter, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", ui-monospace, SFMono-Regular, monospace;
+  --radius-sm: 0.45rem;
+  --radius-md: 0.85rem;
+  --radius-lg: 1.4rem;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -12,4 +28,19 @@
 
 body {
   margin: 0;
+  min-width: 320px;
+  color: var(--atlas-text);
+  background: var(--atlas-void);
+  font-family: var(--font-body);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--atlas-teal);
+  outline-offset: 3px;
 }

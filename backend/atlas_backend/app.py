@@ -5,11 +5,14 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from backend.adapters.persistence.sqlite_smoke import SqliteSmokeStore
 from backend.api.routers.health import router as health_router
+from backend.api.routers.project import router as project_router
+from backend.api.routers.telemetry import router as telemetry_router
 from backend.infrastructure.di import create_application_container
 
 
@@ -39,10 +42,27 @@ def create_app(app_data_dir: Path | None = None) -> FastAPI:
             "https://tauri.localhost",
             "tauri://localhost",
         ],
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "PATCH"],
         allow_headers=["*"],
     )
     app.include_router(health_router)
+    app.include_router(project_router)
+    app.include_router(telemetry_router)
+
+    @app.exception_handler(Exception)
+    async def capture_unhandled_backend_error(request: Request, error: Exception) -> JSONResponse:
+        container = getattr(request.app.state, "container", None)
+        if container is not None:
+            container.create_telemetry_service().capture_backend_exception(error)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "ok": False,
+                "error": {"code": "ExternalAdapterFailed", "message": "Unhandled Atlas backend error"},
+                "warnings": [],
+            },
+        )
+
     return app
 
 

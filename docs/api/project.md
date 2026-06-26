@@ -13,6 +13,7 @@ Responsibility: project import, discovery, paths, environment profiles, settings
 | `UpdateEnvironmentProfile` | `project_id`, `environment_id`, settings patch | updated profile | `NotFound`, `ProjectScopeViolation`, `Conflict` | Audited write. | Environment profiles |
 | `RecordWorkspaceTrustDecision` | `project_id`, scope, scope ref, trust state, reason | trust decision id | `ProjectScopeViolation`, `ValidationFailed` | Audited security decision. | Workspace trust |
 | `ArchiveProject` | `project_id`, reason | archived project summary | `ProjectScopeViolation`, `Conflict` | Soft-delete; does not delete user files. | Workspace management |
+| `UndoImportProject` | `command_execution_id` (prior import execution) | undo execution id, archived project summary | `NotFound`, `PreconditionFailed`, `Conflict` | Rehydrates compensation from the stored audit record for the referenced execution; archives imported metadata. | Project import/discovery |
 
 ## Queries
 
@@ -58,6 +59,7 @@ Responsibility: project import, discovery, paths, environment profiles, settings
 | `GET /api/v1/projects` | filters, pagination | project summaries |
 | `POST /api/v1/projects/import-plan` | root path, template hint | plan, warnings, detected paths |
 | `POST /api/v1/projects/import` | approved plan, idempotency key | project id, command execution id |
+| `POST /api/v1/projects/undo` | prior `command_execution_id` | undo execution id, audit ref |
 | `GET /api/v1/projects/{project_id}` | path project id | project detail |
 | `PATCH /api/v1/projects/{project_id}/settings` | settings patch, expected version | updated settings |
 | `POST /api/v1/projects/{project_id}/environments` | profile request | environment id |
