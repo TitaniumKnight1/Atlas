@@ -1,0 +1,35 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Atlas",
+  "version": "0.0.0",
+  "identifier": "dev.atlas.desktop",
+  "build": {
+    "beforeDevCommand": {
+      "script": "npm run dev",
+      "cwd": "../frontend"
+    },
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": {
+      "script": "npm run build && python ../scripts/build_backend_sidecar.py",
+      "cwd": "../frontend"
+    },
+    "frontendDist": "../frontend/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Atlas",
+        "width": 1100,
+        "height": 720
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:* http://localhost:* ipc: http://ipc.localhost; script-src 'self'; style-src 'self' 'unsafe-inline'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "nsis",
+    "externalBin": ["binaries/atlas-backend"]
+  }
+}

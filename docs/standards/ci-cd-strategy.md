@@ -68,9 +68,32 @@ When GitHub Actions workflows are added:
 
 ## Explicitly Deferred
 
-- `.github/workflows/*.yml`
 - Code signing certificates and notarization steps
 - Auto-update channel configuration (Tauri updater)
+
+## M0a CI Verification (Implemented)
+
+The `.github/workflows/ci.yml` Windows job currently:
+
+1. Installs Python, Node, and Rust toolchains.
+2. Runs the pytest API smoke test (`tests/integration/api/test_health_smoke.py`).
+3. Builds the Tauri desktop bundle (`npm run tauri:build`), which also builds the frontend and PyInstaller sidecar via `beforeBuildCommand` with `TAURI_TARGET_TRIPLE`.
+4. Runs `scripts/ci_sidecar_health_check.py` against the packaged `binaries/atlas-backend-<target-triple>` executable to assert the readiness handshake, `GET /api/v1/health`, graceful stdin shutdown, and loopback port release.
+
+### Verified In CI
+
+- Backend health route and SQLite WAL smoke (pytest, in-process Uvicorn).
+- Frontend production bundle (Vite build inside Tauri `beforeBuildCommand`).
+- PyInstaller sidecar naming for the CI target triple.
+- Packaged sidecar health round-trip over loopback HTTP.
+
+### Requires Manual Runtime Verification
+
+- Launching the full bundled Tauri desktop app with WebView and confirming the React shell renders backend health from the managed sidecar.
+- Windows Job Object + `taskkill /T /F` cleanup when the desktop app is closed normally or force-terminated (headless GitHub runners do not exercise the Tauri shell process lifecycle).
+- PyInstaller one-file bootloader/orphan behavior inside the installed NSIS bundle after repeated open/close cycles.
+
+Playwright E2E against the packaged app remains deferred until M0b/full M0 test maturity.
 
 ## Open Questions
 

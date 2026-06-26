@@ -12,6 +12,7 @@ env/
 !.env.example
 *.egg-info/
 .eggs/
+atlas-backend.spec
 dist/
 build/
 .pytest_cache/
@@ -40,6 +41,7 @@ frontend/.vite/
 # Tauri / Rust
 src-tauri/target/
 src-tauri/gen/
+src-tauri/binaries/atlas-backend-*
 
 # OS
 .DS_Store

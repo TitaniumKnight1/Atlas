@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  windows-bundle:
+    name: Windows desktop bundle
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Ensure Rust stable toolchain
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Generate Tauri placeholder icons
+        run: python scripts/generate_tauri_icons.py
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements-dev.txt
+
+      - name: Install root JavaScript dependencies
+        run: npm install
+
+      - name: Install frontend JavaScript dependencies
+        run: npm install --prefix frontend
+
+      - name: Run backend API smoke tests
+        run: npm run backend:test
+
+      - name: Build Tauri desktop bundle
+        run: npm run tauri:build
+
+      - name: Assert packaged sidecar health round-trip
+        run: python scripts/ci_sidecar_health_check.py
+
+      - name: Upload desktop bundle artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: atlas-windows-bundle
+          path: src-tauri/target/release/bundle/**
+          if-no-files-found: error

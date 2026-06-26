@@ -1,0 +1,16 @@
+{
+  "name": "atlas",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "backend:test": "python -m pytest",
+    "frontend:build": "npm --prefix frontend run build",
+    "sidecar:build": "python scripts/build_backend_sidecar.py",
+    "tauri:dev": "npm run sidecar:build && tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "latest"
+  }
+}

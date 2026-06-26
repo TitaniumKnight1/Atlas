@@ -1,0 +1,112 @@
+from __future__ import annotations
+
+import os
+import platform
+import shutil
+import stat
+import subprocess
+import sys
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SPEC_FILE = ROOT / "scripts" / "atlas-backend.spec"
+BINARIES_DIR = ROOT / "src-tauri" / "binaries"
+STALE_ROOT_SPEC = ROOT / "atlas-backend.spec"
+
+
+def resolve_target_triple() -> str:
+    """Return the Tauri/Cargo target triple for the sidecar being bundled."""
+    for env_var in ("TAURI_TARGET_TRIPLE", "CARGO_BUILD_TARGET"):
+        value = os.environ.get(env_var, "").strip()
+        if value:
+            return value
+
+    try:
+        completed = subprocess.run(
+            ["rustc", "--print", "host-tuple"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return completed.stdout.strip()
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return _fallback_host_triple()
+
+
+def sidecar_binary_path(target_triple: str | None = None) -> Path:
+    triple = target_triple or resolve_target_triple()
+    extension = ".exe" if sys.platform == "win32" else ""
+    return BINARIES_DIR / f"atlas-backend-{triple}{extension}"
+
+
+def _install_sidecar_for_local_targets(built_binary: Path) -> None:
+    """Mirror the sidecar next to local Cargo outputs for `tauri dev`."""
+    extension = ".exe" if sys.platform == "win32" else ""
+    target_root = ROOT / "src-tauri" / "target"
+    if not target_root.is_dir():
+        return
+
+    for profile in ("debug", "release"):
+        profile_dir = target_root / profile
+        if not profile_dir.is_dir():
+            continue
+        dest_dir = profile_dir / "binaries"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(built_binary, dest_dir / f"atlas-backend{extension}")
+
+
+def main() -> None:
+    if not SPEC_FILE.is_file():
+        raise RuntimeError(f"Missing PyInstaller spec: {SPEC_FILE}")
+
+    target_triple = resolve_target_triple()
+    output_path = sidecar_binary_path(target_triple)
+
+    BINARIES_DIR.mkdir(parents=True, exist_ok=True)
+    if STALE_ROOT_SPEC.exists():
+        STALE_ROOT_SPEC.unlink()
+
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(ROOT)
+
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "PyInstaller",
+            "--noconfirm",
+            "--clean",
+            str(SPEC_FILE),
+        ],
+        cwd=ROOT,
+        env=env,
+        check=True,
+    )
+
+    built_binary = ROOT / "dist" / f"atlas-backend{'.exe' if sys.platform == 'win32' else ''}"
+    shutil.copy2(built_binary, output_path)
+    _install_sidecar_for_local_targets(built_binary)
+    if sys.platform != "win32":
+        output_path.chmod(output_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+    print(f"Built backend sidecar for {target_triple}: {output_path}")
+
+
+def _fallback_host_triple() -> str:
+    machine = platform.machine().lower()
+    is_arm64 = machine in {"arm64", "aarch64"}
+
+    if sys.platform == "win32":
+        return "aarch64-pc-windows-msvc" if is_arm64 else "x86_64-pc-windows-msvc"
+    if sys.platform == "darwin":
+        return "aarch64-apple-darwin" if is_arm64 else "x86_64-apple-darwin"
+    if sys.platform.startswith("linux"):
+        return "aarch64-unknown-linux-gnu" if is_arm64 else "x86_64-unknown-linux-gnu"
+
+    raise RuntimeError("Unable to infer Tauri sidecar target triple")
+
+
+if __name__ == "__main__":
+    main()
