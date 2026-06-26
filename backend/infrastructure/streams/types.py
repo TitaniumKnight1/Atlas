@@ -10,6 +10,7 @@ class StreamTopic(StrEnum):
     PROCESS_LIFECYCLE = "process-lifecycle"
     OP_PROGRESS = "op-progress"
     METRICS = "metrics"
+    ALERTS = "alerts"
     SYSTEM = "system"
 
 
@@ -23,6 +24,7 @@ TOPIC_DELIVERY_POLICIES: dict[str, DeliveryPolicy] = {
     StreamTopic.PROCESS_LIFECYCLE: DeliveryPolicy.GUARANTEED,
     StreamTopic.OP_PROGRESS: DeliveryPolicy.GUARANTEED,
     StreamTopic.METRICS: DeliveryPolicy.COALESCE,
+    StreamTopic.ALERTS: DeliveryPolicy.GUARANTEED,
     StreamTopic.SYSTEM: DeliveryPolicy.GUARANTEED,
 }
 
@@ -64,4 +66,6 @@ STREAM_EVENT_TYPES: dict[str, str] = {
     "GitOperationStarted": StreamTopic.OP_PROGRESS,
     "GitOperationCompleted": StreamTopic.OP_PROGRESS,
     "MetricSample": StreamTopic.METRICS,
+    "AlertFired": StreamTopic.ALERTS,
+    "AlertResolved": StreamTopic.ALERTS,
 }

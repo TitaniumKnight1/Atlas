@@ -69,6 +69,9 @@ class StreamEventPublisher:
     def publish_metric_sample(self, *, project_id: ProjectId, sample: dict[str, Any]) -> None:
         self.publish(event_type="MetricSample", project_id=project_id, payload=sample)
 
+    def publish_alert_event(self, *, project_id: ProjectId, event_type: str, payload: dict[str, Any]) -> None:
+        self.publish(event_type=event_type, project_id=project_id, payload=payload)
+
 
 class StreamEventBridge:
     """Maps committed domain facts and stream notifications onto the SSE hub."""

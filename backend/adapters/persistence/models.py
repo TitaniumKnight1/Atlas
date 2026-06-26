@@ -899,3 +899,42 @@ class MetricRollupWatermarkRecord(Base):
     tier: Mapped[str] = mapped_column(String, nullable=False)
     watermark_bucket_end: Mapped[str] = mapped_column(String, nullable=False)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class MonitoringAlertRecord(Base):
+    __tablename__ = "monitoring_alerts"
+    __table_args__ = (
+        UniqueConstraint("project_id", "name", name="uq_monitoring_alerts_project_name"),
+        CheckConstraint("runtime_state in ('ok', 'pending', 'firing')", name="ck_monitoring_alerts_runtime_state"),
+        Index("idx_monitoring_alerts_enabled", "project_id", "is_enabled"),
+    )
+
+    monitoring_alert_id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    metric_series_id: Mapped[str | None] = mapped_column(ForeignKey("metric_series.metric_series_id"))
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    severity: Mapped[str] = mapped_column(String, nullable=False)
+    condition_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    is_enabled: Mapped[int] = mapped_column(Integer, nullable=False)
+    runtime_state: Mapped[str] = mapped_column(String, nullable=False, default="ok")
+    pending_since: Mapped[str | None] = mapped_column(String)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class MonitoringAlertEventRecord(Base):
+    __tablename__ = "monitoring_alert_events"
+    __table_args__ = (
+        CheckConstraint("status in ('triggered', 'resolved', 'suppressed')", name="ck_monitoring_alert_events_status"),
+        Index("idx_monitoring_alert_events_project_time", "project_id", "triggered_at"),
+        Index("idx_monitoring_alert_events_status", "status"),
+    )
+
+    alert_event_id: Mapped[str] = mapped_column(String, primary_key=True)
+    monitoring_alert_id: Mapped[str] = mapped_column(ForeignKey("monitoring_alerts.monitoring_alert_id"), nullable=False)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    triggered_at: Mapped[str] = mapped_column(String, nullable=False)
+    resolved_at: Mapped[str | None] = mapped_column(String)
+    incident_group_id: Mapped[str | None] = mapped_column(String)
+    details_json: Mapped[dict | None] = mapped_column(JSON)

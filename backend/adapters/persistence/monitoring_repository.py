@@ -11,6 +11,8 @@ from backend.adapters.persistence.models import (
     MetricSampleRecord,
     MetricSeriesRecord,
     MetricSourceRecord,
+    MonitoringAlertEventRecord,
+    MonitoringAlertRecord,
 )
 from backend.domain.monitoring.aggregation import HOUR_BUCKET_SECONDS, MINUTE_BUCKET_SECONDS, MetricAggregate, bucket_end
 from backend.domain.shared_kernel import ProjectId, StableIdentifier
@@ -483,6 +485,202 @@ class MonitoringRepository:
     def list_projects_with_metric_data(self) -> list[ProjectId]:
         rows = self._session.execute(select(MetricSourceRecord.project_id).distinct()).scalars()
         return [ProjectId(value) for value in rows]
+
+    def create_alert(
+        self,
+        *,
+        monitoring_alert_id: StableIdentifier,
+        project_id: ProjectId,
+        name: str,
+        severity: str,
+        condition_json: dict[str, Any],
+        metric_series_id: str | None,
+        is_enabled: bool,
+        created_at: datetime,
+    ) -> MonitoringAlertRecord:
+        self._ensure_project_scope(project_id)
+        record = MonitoringAlertRecord(
+            monitoring_alert_id=str(monitoring_alert_id),
+            project_id=str(project_id),
+            metric_series_id=metric_series_id,
+            name=name,
+            severity=severity,
+            condition_json=condition_json,
+            is_enabled=1 if is_enabled else 0,
+            runtime_state="ok",
+            pending_since=None,
+            created_at=created_at.isoformat(),
+            updated_at=created_at.isoformat(),
+        )
+        self._session.add(record)
+        return record
+
+    def update_alert(
+        self,
+        *,
+        project_id: ProjectId,
+        monitoring_alert_id: str,
+        name: str | None = None,
+        severity: str | None = None,
+        condition_json: dict[str, Any] | None = None,
+        metric_series_id: str | None = None,
+        is_enabled: bool | None = None,
+        updated_at: datetime,
+    ) -> MonitoringAlertRecord | None:
+        self._ensure_project_scope(project_id)
+        record = self._session.execute(
+            select(MonitoringAlertRecord).where(
+                MonitoringAlertRecord.project_id == str(project_id),
+                MonitoringAlertRecord.monitoring_alert_id == monitoring_alert_id,
+            )
+        ).scalar_one_or_none()
+        if record is None:
+            return None
+        if name is not None:
+            record.name = name
+        if severity is not None:
+            record.severity = severity
+        if condition_json is not None:
+            record.condition_json = condition_json
+        if metric_series_id is not None:
+            record.metric_series_id = metric_series_id
+        if is_enabled is not None:
+            record.is_enabled = 1 if is_enabled else 0
+        record.updated_at = updated_at.isoformat()
+        return record
+
+    def delete_alert(self, project_id: ProjectId, monitoring_alert_id: str) -> bool:
+        self._ensure_project_scope(project_id)
+        record = self._session.execute(
+            select(MonitoringAlertRecord).where(
+                MonitoringAlertRecord.project_id == str(project_id),
+                MonitoringAlertRecord.monitoring_alert_id == monitoring_alert_id,
+            )
+        ).scalar_one_or_none()
+        if record is None:
+            return False
+        self._session.delete(record)
+        return True
+
+    def get_alert(self, project_id: ProjectId, monitoring_alert_id: str) -> MonitoringAlertRecord | None:
+        self._ensure_project_scope(project_id)
+        return self._session.execute(
+            select(MonitoringAlertRecord).where(
+                MonitoringAlertRecord.project_id == str(project_id),
+                MonitoringAlertRecord.monitoring_alert_id == monitoring_alert_id,
+            )
+        ).scalar_one_or_none()
+
+    def list_alerts(self, project_id: ProjectId, *, enabled_only: bool = False) -> list[MonitoringAlertRecord]:
+        self._ensure_project_scope(project_id)
+        query = select(MonitoringAlertRecord).where(MonitoringAlertRecord.project_id == str(project_id))
+        if enabled_only:
+            query = query.where(MonitoringAlertRecord.is_enabled == 1)
+        return list(self._session.execute(query.order_by(MonitoringAlertRecord.name)).scalars())
+
+    def list_enabled_alerts(self, project_id: ProjectId | None = None) -> list[MonitoringAlertRecord]:
+        query = select(MonitoringAlertRecord).where(MonitoringAlertRecord.is_enabled == 1)
+        if project_id is not None:
+            self._ensure_project_scope(project_id)
+            query = query.where(MonitoringAlertRecord.project_id == str(project_id))
+        return list(self._session.execute(query).scalars())
+
+    def update_alert_runtime(
+        self,
+        *,
+        monitoring_alert_id: str,
+        runtime_state: str,
+        pending_since: datetime | None,
+        updated_at: datetime,
+    ) -> None:
+        record = self._session.execute(
+            select(MonitoringAlertRecord).where(MonitoringAlertRecord.monitoring_alert_id == monitoring_alert_id)
+        ).scalar_one_or_none()
+        if record is None:
+            return
+        record.runtime_state = runtime_state
+        record.pending_since = pending_since.isoformat() if pending_since else None
+        record.updated_at = updated_at.isoformat()
+
+    def add_alert_event(
+        self,
+        *,
+        alert_event_id: StableIdentifier,
+        monitoring_alert_id: str,
+        project_id: ProjectId,
+        status: str,
+        triggered_at: datetime,
+        resolved_at: datetime | None,
+        details_json: dict[str, Any] | None,
+    ) -> MonitoringAlertEventRecord:
+        self._ensure_project_scope(project_id)
+        record = MonitoringAlertEventRecord(
+            alert_event_id=str(alert_event_id),
+            monitoring_alert_id=monitoring_alert_id,
+            project_id=str(project_id),
+            status=status,
+            triggered_at=triggered_at.isoformat(),
+            resolved_at=resolved_at.isoformat() if resolved_at else None,
+            incident_group_id=None,
+            details_json=details_json or {},
+        )
+        self._session.add(record)
+        return record
+
+    def list_alert_events(self, project_id: ProjectId, *, limit: int = 100) -> list[dict[str, Any]]:
+        self._ensure_project_scope(project_id)
+        rows = self._session.execute(
+            select(MonitoringAlertEventRecord, MonitoringAlertRecord)
+            .join(MonitoringAlertRecord, MonitoringAlertRecord.monitoring_alert_id == MonitoringAlertEventRecord.monitoring_alert_id)
+            .where(MonitoringAlertEventRecord.project_id == str(project_id))
+            .order_by(MonitoringAlertEventRecord.triggered_at.desc())
+            .limit(limit)
+        ).all()
+        return [
+            {
+                "alert_event_id": event.alert_event_id,
+                "monitoring_alert_id": event.monitoring_alert_id,
+                "alert_name": alert.name,
+                "severity": alert.severity,
+                "status": event.status,
+                "triggered_at": event.triggered_at,
+                "resolved_at": event.resolved_at,
+                "details": event.details_json or {},
+            }
+            for event, alert in rows
+        ]
+
+    def latest_sample_value(self, metric_series_id: str) -> float | None:
+        value = self._session.execute(
+            select(MetricSampleRecord.value_real)
+            .where(
+                MetricSampleRecord.metric_series_id == metric_series_id,
+                MetricSampleRecord.quality.in_(("ok", "estimated")),
+                MetricSampleRecord.value_real.is_not(None),
+            )
+            .order_by(MetricSampleRecord.sampled_at.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+        return float(value) if value is not None else None
+
+    def recent_numeric_samples(
+        self,
+        metric_series_id: str,
+        *,
+        start_at: datetime,
+        end_at: datetime,
+    ) -> list[tuple[datetime, float]]:
+        rows = self._session.execute(
+            select(MetricSampleRecord.sampled_at, MetricSampleRecord.value_real).where(
+                MetricSampleRecord.metric_series_id == metric_series_id,
+                MetricSampleRecord.sampled_at >= start_at.isoformat(),
+                MetricSampleRecord.sampled_at <= end_at.isoformat(),
+                MetricSampleRecord.quality.in_(("ok", "estimated")),
+                MetricSampleRecord.value_real.is_not(None),
+            )
+            .order_by(MetricSampleRecord.sampled_at)
+        ).all()
+        return [(datetime.fromisoformat(sampled_at), float(value)) for sampled_at, value in rows if value is not None]
 
     def _ensure_project_scope(self, project_id: ProjectId) -> None:
         if self._project_id is not None and self._project_id != project_id:

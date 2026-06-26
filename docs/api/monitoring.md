@@ -12,7 +12,7 @@ FiveM server and system metrics (CPU, memory, disk, process state, resource heal
 | --- | --- | --- |
 | **M6a** | `metric_sources`, `metric_series`, `metric_samples`; collection start/stop; `GET .../monitoring/sources`, `latest`, `samples`; live `MetricSample` on `metrics` topic | Implemented |
 | **M6b** | `metric_rollups`, `metric_rollup_watermarks`, retention/downsampling, time-window and aggregated queries | Implemented |
-| **M6c** | `monitoring_alerts`, `alert_events`, thresholds, notifications | Deferred |
+| **M6c** | `monitoring_alerts`, `monitoring_alert_events`; alert-rule CRUD; evaluation; `AlertFired`/`AlertResolved` on `alerts` topic | Implemented |
 
 ## Commands (M6a subset)
 
@@ -28,9 +28,9 @@ Commands below are **M6b/M6c** — not implemented in M6a:
 | `RegisterMetricSource` | M6a internal via collector seam |
 | `IngestMetricSample` | M6a internal via collector batch flush |
 | `ComputeMetricRollups` | M6b — internal via rollup scheduler / `POST .../rollup/run` |
-| `CreateMonitoringAlert` | M6c |
-| `UpdateMonitoringAlert` | M6c |
-| `RecordAlertEvent` | M6c |
+| `CreateMonitoringAlert` | M6c — `POST .../monitoring/alerts` |
+| `UpdateMonitoringAlert` | M6c — `PATCH .../monitoring/alerts/{id}` |
+| `RecordAlertEvent` | M6c internal on state transition |
 
 ## Queries (M6a subset)
 
@@ -46,9 +46,9 @@ Queries below are **M6b/M6c** — deferred:
 | --- | --- |
 | `ListMetricSeries` | M6b — `GET .../monitoring/series` |
 | `QueryMetricSamples` (time range, resolution) | M6b — `GET .../monitoring/history` |
-| `GetProjectHealthSummary` | M6c |
-| `ListMonitoringAlerts` | M6c |
-| `ListAlertEvents` | M6c |
+| `GetProjectHealthSummary` | M6c — deferred (dashboard slice) |
+| `ListMonitoringAlerts` | M6c — `GET .../monitoring/alerts` |
+| `ListAlertEvents` | M6c — `GET .../monitoring/alert-events` |
 
 ## Published Events
 
@@ -80,7 +80,7 @@ Queries below are **M6b/M6c** — deferred:
 | `PluginMetricsPort` | Receive approved plugin collectors | Requires capability grant and `project_id` | `plugin` |
 | `IncidentCreationPort` | Request incident from critical alert | Event or application call to Incident | application |
 
-## API Surface (M6a + M6b)
+## API Surface (M6a + M6b + M6c)
 
 | Intent | Structural request | Structural response |
 | --- | --- | --- |
@@ -90,11 +90,18 @@ Queries below are **M6b/M6c** — deferred:
 | `GET /api/v1/projects/{project_id}/monitoring/samples` | limit | recent raw samples |
 | `GET /api/v1/projects/{project_id}/monitoring/history` | start_at, end_at, series id, resolution | spike-preserving rollup/raw points |
 | `POST /api/v1/projects/{project_id}/monitoring/rollup/run` | — | rollup cycle summary |
+| `GET /api/v1/projects/{project_id}/monitoring/alerts` | — | alert rules |
+| `POST /api/v1/projects/{project_id}/monitoring/alerts` | rule definition | alert id |
+| `PATCH /api/v1/projects/{project_id}/monitoring/alerts/{id}` | patch | updated rule |
+| `DELETE /api/v1/projects/{project_id}/monitoring/alerts/{id}` | — | deleted |
+| `GET /api/v1/projects/{project_id}/monitoring/alert-events` | limit | alert event history |
+| `POST /api/v1/projects/{project_id}/monitoring/alerts/evaluate` | — | evaluation summary |
 | `POST /api/v1/projects/{project_id}/monitoring/collection/start` | optional interval | collection status |
 | `POST /api/v1/projects/{project_id}/monitoring/collection/stop` | — | collection status |
 | `GET /api/v1/projects/{project_id}/stream?topics=metrics` | Last-Event-ID optional | SSE `MetricSample` events (coalesce policy) |
+| `GET /api/v1/projects/{project_id}/stream?topics=alerts` | Last-Event-ID optional | SSE `AlertFired`/`AlertResolved` (guaranteed policy) |
 
-M6c endpoints (`health`, `alerts`) remain deferred.
+M6c emits events only — action execution is M8 automation.
 
 ## Open Questions
 
@@ -103,3 +110,4 @@ M6c endpoints (`health`, `alerts`) remain deferred.
 ## Deviations
 
 - M6a streams metrics on `GET /api/v1/projects/{project_id}/stream?topics=metrics` (ADR-0008 unified stream endpoint), not a separate `/streams/metrics` path documented earlier.
+- M6c added `alerts` topic with Guaranteed delivery (ADR-0016); not in original ADR-0008 table.
