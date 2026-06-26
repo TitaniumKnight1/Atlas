@@ -15,6 +15,8 @@ from backend.adapters.streams import StreamEventBridge, StreamEventPublisher
 from backend.adapters.telemetry import DeterministicTelemetrySanitizer, LocalNoopTelemetryDelivery
 from backend.adapters.txadmin import LocalTxAdminDetector
 from backend.application.project.service import ProjectApplicationService
+from backend.adapters.config import FiveMConfigValidator, LocalConfigSecretScanner
+from backend.application.config.service import ConfigApplicationService
 from backend.application.setup.service import SetupApplicationService
 from backend.application.telemetry.service import TelemetryApplicationService
 from backend.domain.shared_kernel.identifiers import ProjectId
@@ -57,6 +59,14 @@ class ApplicationContainer:
             container=self,
             sanitizer=self.telemetry_sanitizer,
             delivery=self.telemetry_delivery,
+        )
+
+    def create_config_service(self) -> ConfigApplicationService:
+        return ConfigApplicationService(
+            container=self,
+            filesystem=self.setup_filesystem,
+            validator=FiveMConfigValidator(),
+            secret_scanner=LocalConfigSecretScanner(),
         )
 
     def create_setup_service(self) -> SetupApplicationService:

@@ -435,3 +435,108 @@ class SetupProcessRunRecord(Base):
     exit_code: Mapped[int | None] = mapped_column(Integer)
     stdout_tail_json: Mapped[list | None] = mapped_column(JSON)
     stderr_tail_json: Mapped[list | None] = mapped_column(JSON)
+
+
+class ConfigFileRecord(Base):
+    __tablename__ = "config_files"
+    __table_args__ = (
+        UniqueConstraint("project_id", "environment_id", "path", name="uq_config_files_project_env_path"),
+        CheckConstraint("config_type in ('server_cfg', 'resource', 'txadmin', 'database', 'unknown')", name="ck_config_files_type"),
+        Index("idx_config_files_project_type", "project_id", "config_type"),
+    )
+
+    config_file_id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    environment_id: Mapped[str | None] = mapped_column(ForeignKey("environment_profiles.environment_id"))
+    path: Mapped[str] = mapped_column(Text, nullable=False)
+    config_type: Mapped[str] = mapped_column(String, nullable=False)
+    parser_kind: Mapped[str | None] = mapped_column(String)
+    content_hash: Mapped[str | None] = mapped_column(String)
+    last_scanned_at: Mapped[str | None] = mapped_column(String)
+
+
+class ConfigSnapshotRecord(Base):
+    __tablename__ = "config_snapshots"
+    __table_args__ = (
+        CheckConstraint("snapshot_kind in ('before', 'after', 'manual', 'validation')", name="ck_config_snapshots_kind"),
+        Index("idx_config_snapshots_file_time", "config_file_id", "captured_at"),
+    )
+
+    config_snapshot_id: Mapped[str] = mapped_column(String, primary_key=True)
+    config_file_id: Mapped[str] = mapped_column(ForeignKey("config_files.config_file_id"), nullable=False)
+    snapshot_kind: Mapped[str] = mapped_column(String, nullable=False)
+    content_hash: Mapped[str] = mapped_column(String, nullable=False)
+    local_file_id: Mapped[str | None] = mapped_column(String)
+    captured_at: Mapped[str] = mapped_column(String, nullable=False)
+    metadata_json: Mapped[dict | None] = mapped_column(JSON)
+
+
+class ConfigChangeSetRecord(Base):
+    __tablename__ = "config_change_sets"
+    __table_args__ = (
+        CheckConstraint("status in ('planned', 'applied', 'reverted', 'failed')", name="ck_config_change_sets_status"),
+        Index("idx_config_change_sets_project_time", "project_id", "created_at"),
+    )
+
+    config_change_set_id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    command_execution_id: Mapped[str | None] = mapped_column(ForeignKey("command_executions.command_execution_id"))
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    summary: Mapped[str | None] = mapped_column(Text)
+    before_snapshot_id: Mapped[str | None] = mapped_column(ForeignKey("config_snapshots.config_snapshot_id"))
+    after_snapshot_id: Mapped[str | None] = mapped_column(ForeignKey("config_snapshots.config_snapshot_id"))
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    applied_at: Mapped[str | None] = mapped_column(String)
+
+
+class ConfigValidationRunRecord(Base):
+    __tablename__ = "config_validation_runs"
+    __table_args__ = (
+        CheckConstraint("status in ('pass', 'warning', 'fail', 'error')", name="ck_config_validation_runs_status"),
+        Index("idx_config_validation_project_time", "project_id", "started_at"),
+        Index("idx_config_validation_status", "status"),
+    )
+
+    config_validation_run_id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    config_file_id: Mapped[str | None] = mapped_column(ForeignKey("config_files.config_file_id"))
+    validator_id: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    started_at: Mapped[str] = mapped_column(String, nullable=False)
+    finished_at: Mapped[str | None] = mapped_column(String)
+    summary_json: Mapped[dict | None] = mapped_column(JSON)
+
+
+class ConfigValidationFindingRecord(Base):
+    __tablename__ = "config_validation_findings"
+    __table_args__ = (Index("idx_config_findings_run_severity", "config_validation_run_id", "severity"),)
+
+    finding_id: Mapped[str] = mapped_column(String, primary_key=True)
+    config_validation_run_id: Mapped[str] = mapped_column(ForeignKey("config_validation_runs.config_validation_run_id"), nullable=False)
+    severity: Mapped[str] = mapped_column(String, nullable=False)
+    rule_id: Mapped[str] = mapped_column(String, nullable=False)
+    path: Mapped[str | None] = mapped_column(Text)
+    line: Mapped[int | None] = mapped_column(Integer)
+    column: Mapped[int | None] = mapped_column(Integer)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    details_json: Mapped[dict | None] = mapped_column(JSON)
+
+
+class SecretScanFindingRecord(Base):
+    __tablename__ = "secret_scan_findings"
+    __table_args__ = (
+        CheckConstraint("status in ('open', 'ignored', 'resolved')", name="ck_secret_scan_findings_status"),
+        Index("idx_secret_findings_project_status", "project_id", "status"),
+    )
+
+    secret_finding_id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    config_file_id: Mapped[str | None] = mapped_column(ForeignKey("config_files.config_file_id"))
+    detector_id: Mapped[str] = mapped_column(String, nullable=False)
+    severity: Mapped[str] = mapped_column(String, nullable=False)
+    path: Mapped[str | None] = mapped_column(Text)
+    line: Mapped[int | None] = mapped_column(Integer)
+    redacted_preview: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    detected_at: Mapped[str] = mapped_column(String, nullable=False)
+    metadata_json: Mapped[dict | None] = mapped_column(JSON)
