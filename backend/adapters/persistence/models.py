@@ -1142,3 +1142,150 @@ class IncidentExportRecord(Base):
     content_hash: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     warning_json: Mapped[dict | None] = mapped_column(JSON)
+
+
+class AutomationWorkflowRecord(Base):
+    __tablename__ = "automation_workflows"
+    __table_args__ = (
+        UniqueConstraint("project_id", "name", name="uq_automation_workflows_project_name"),
+        Index("idx_automation_workflows_project_enabled", "project_id", "is_enabled"),
+    )
+
+    automation_workflow_id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    is_enabled: Mapped[int] = mapped_column(Integer, nullable=False)
+    current_version_id: Mapped[str | None] = mapped_column(String)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class AutomationWorkflowVersionRecord(Base):
+    __tablename__ = "automation_workflow_versions"
+    __table_args__ = (
+        UniqueConstraint("automation_workflow_id", "version_number", name="uq_automation_versions_workflow_number"),
+        Index("idx_automation_versions_workflow", "automation_workflow_id"),
+    )
+
+    automation_workflow_version_id: Mapped[str] = mapped_column(String, primary_key=True)
+    automation_workflow_id: Mapped[str] = mapped_column(ForeignKey("automation_workflows.automation_workflow_id"), nullable=False)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class AutomationTriggerRecord(Base):
+    __tablename__ = "automation_triggers"
+    __table_args__ = (Index("idx_automation_triggers_version", "automation_workflow_version_id"),)
+
+    automation_trigger_id: Mapped[str] = mapped_column(String, primary_key=True)
+    automation_workflow_version_id: Mapped[str] = mapped_column(
+        ForeignKey("automation_workflow_versions.automation_workflow_version_id"), nullable=False
+    )
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    trigger_type: Mapped[str] = mapped_column(String, nullable=False)
+    config_json: Mapped[dict | None] = mapped_column(JSON)
+
+
+class AutomationConditionRecord(Base):
+    __tablename__ = "automation_conditions"
+    __table_args__ = (Index("idx_automation_conditions_version", "automation_workflow_version_id", "position"),)
+
+    automation_condition_id: Mapped[str] = mapped_column(String, primary_key=True)
+    automation_workflow_version_id: Mapped[str] = mapped_column(
+        ForeignKey("automation_workflow_versions.automation_workflow_version_id"), nullable=False
+    )
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    condition_type: Mapped[str] = mapped_column(String, nullable=False)
+    config_json: Mapped[dict | None] = mapped_column(JSON)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class AutomationActionRecord(Base):
+    __tablename__ = "automation_actions"
+    __table_args__ = (Index("idx_automation_actions_version", "automation_workflow_version_id", "position"),)
+
+    automation_action_id: Mapped[str] = mapped_column(String, primary_key=True)
+    automation_workflow_version_id: Mapped[str] = mapped_column(
+        ForeignKey("automation_workflow_versions.automation_workflow_version_id"), nullable=False
+    )
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    action_type: Mapped[str] = mapped_column(String, nullable=False)
+    safety_class: Mapped[str] = mapped_column(String, nullable=False)
+    config_json: Mapped[dict | None] = mapped_column(JSON)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class AutomationScheduleRecord(Base):
+    __tablename__ = "automation_schedules"
+    __table_args__ = (Index("idx_automation_schedules_due", "is_enabled", "next_run_at"),)
+
+    automation_schedule_id: Mapped[str] = mapped_column(String, primary_key=True)
+    automation_workflow_id: Mapped[str] = mapped_column(ForeignKey("automation_workflows.automation_workflow_id"), nullable=False)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    schedule_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    next_run_at: Mapped[str] = mapped_column(String, nullable=False)
+    last_run_at: Mapped[str | None] = mapped_column(String)
+    is_enabled: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class AutomationRunRecord(Base):
+    __tablename__ = "automation_runs"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_automation_runs_idempotency"),
+        CheckConstraint(
+            "status in ('queued', 'running', 'waiting_approval', 'succeeded', 'failed', 'cancelled', 'skipped')",
+            name="ck_automation_runs_status",
+        ),
+        Index("idx_automation_runs_project_time", "project_id", "started_at"),
+        Index("idx_automation_runs_workflow", "automation_workflow_id"),
+    )
+
+    automation_run_id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    automation_workflow_id: Mapped[str] = mapped_column(ForeignKey("automation_workflows.automation_workflow_id"), nullable=False)
+    automation_workflow_version_id: Mapped[str] = mapped_column(
+        ForeignKey("automation_workflow_versions.automation_workflow_version_id"), nullable=False
+    )
+    trigger_type: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String, nullable=False)
+    trigger_payload_json: Mapped[dict | None] = mapped_column(JSON)
+    started_at: Mapped[str] = mapped_column(String, nullable=False)
+    finished_at: Mapped[str | None] = mapped_column(String)
+    summary: Mapped[str | None] = mapped_column(Text)
+
+
+class AutomationRunStepRecord(Base):
+    __tablename__ = "automation_run_steps"
+    __table_args__ = (Index("idx_automation_run_steps_run", "automation_run_id", "position"),)
+
+    automation_run_step_id: Mapped[str] = mapped_column(String, primary_key=True)
+    automation_run_id: Mapped[str] = mapped_column(ForeignKey("automation_runs.automation_run_id"), nullable=False)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    automation_action_id: Mapped[str] = mapped_column(ForeignKey("automation_actions.automation_action_id"), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    result_json: Mapped[dict | None] = mapped_column(JSON)
+    undo_plan_json: Mapped[dict | None] = mapped_column(JSON)
+    command_execution_id: Mapped[str | None] = mapped_column(ForeignKey("command_executions.command_execution_id"))
+
+
+class AutomationIdempotencyKeyRecord(Base):
+    __tablename__ = "automation_idempotency_keys"
+    __table_args__ = (UniqueConstraint("idempotency_key", name="uq_automation_idempotency_keys_key"),)
+
+    automation_idempotency_key_id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String, nullable=False)
+    automation_run_id: Mapped[str] = mapped_column(ForeignKey("automation_runs.automation_run_id"), nullable=False)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class AutomationSettingRecord(Base):
+    __tablename__ = "automation_settings"
+
+    setting_key: Mapped[str] = mapped_column(String, primary_key=True)
+    setting_value_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)

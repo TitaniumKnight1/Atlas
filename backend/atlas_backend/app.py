@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.adapters.persistence.sqlite_smoke import SqliteSmokeStore
+from backend.api.routers.automation import router as automation_router
 from backend.api.routers.config import router as config_router
 from backend.api.routers.git import router as git_router
 from backend.api.routers.health import router as health_router
@@ -59,6 +60,7 @@ def create_app(app_data_dir: Path | None = None) -> FastAPI:
     app.include_router(resources_router)
     app.include_router(monitoring_router)
     app.include_router(incident_router)
+    app.include_router(automation_router)
     app.include_router(setup_router)
     app.include_router(streams_router)
     app.include_router(telemetry_router)

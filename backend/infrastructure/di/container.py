@@ -14,6 +14,7 @@ from backend.adapters.process import LocalProcessSupervisor
 from backend.adapters.streams import StreamEventBridge, StreamEventPublisher
 from backend.adapters.telemetry import DeterministicTelemetrySanitizer, LocalNoopTelemetryDelivery
 from backend.adapters.txadmin import LocalTxAdminDetector
+from backend.application.automation.service import AutomationApplicationService
 from backend.application.incident.service import IncidentApplicationService
 from backend.application.monitoring.alerts import MonitoringAlertService
 from backend.application.monitoring.retention import MonitoringRetentionService
@@ -53,6 +54,7 @@ class ApplicationContainer:
     _monitoring_retention_service: MonitoringRetentionService | None = field(default=None, repr=False)
     _monitoring_alert_service: MonitoringAlertService | None = field(default=None, repr=False)
     _incident_service: IncidentApplicationService | None = field(default=None, repr=False)
+    _automation_service: AutomationApplicationService | None = field(default=None, repr=False)
 
     def create_unit_of_work(self, project_id: ProjectId | None = None) -> SingleWriterSQLiteUnitOfWork:
         return SingleWriterSQLiteUnitOfWork(
@@ -108,6 +110,13 @@ class ApplicationContainer:
             stream_publisher=self.stream_publisher,
         )
 
+    def create_automation_service(self) -> AutomationApplicationService:
+        if self._automation_service is None:
+            self._automation_service = AutomationApplicationService(container=self)
+            self._automation_service.register_event_subscribers()
+            self._automation_service.start_scheduler()
+        return self._automation_service
+
     def create_incident_service(self) -> IncidentApplicationService:
         if self._incident_service is None:
             self._incident_service = IncidentApplicationService(container=self)
@@ -158,6 +167,8 @@ class ApplicationContainer:
         )
 
     def close(self) -> None:
+        if self._automation_service is not None:
+            self._automation_service.stop_scheduler()
         if self._monitoring_alert_service is not None:
             self._monitoring_alert_service.stop_evaluation()
         if self._monitoring_retention_service is not None:
@@ -192,4 +203,5 @@ def create_application_container(app_data_dir: Path) -> ApplicationContainer:
         telemetry_delivery=LocalNoopTelemetryDelivery(),
     )
     container.create_incident_service()
+    container.create_automation_service()
     return container
