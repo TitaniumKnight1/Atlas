@@ -45,3 +45,30 @@ def setup_run_completed(project_id: ProjectId, setup_run_id: str, status: str) -
         project_id=project_id,
         payload={"project_id": str(project_id), "setup_run_id": setup_run_id, "status": status},
     )
+
+
+def server_started(project_id: ProjectId, process_run_id: str, pid: int) -> DomainEventEnvelope:
+    return DomainEventEnvelope.create(
+        event_type="ServerStarted",
+        aggregate_ref=AggregateRef("ServerProcess", process_run_id),
+        project_id=project_id,
+        payload={"project_id": str(project_id), "process_run_id": process_run_id, "pid": pid},
+    )
+
+
+def server_stopped(project_id: ProjectId, process_run_id: str, exit_code: int | None) -> DomainEventEnvelope:
+    return DomainEventEnvelope.create(
+        event_type="ServerStopped",
+        aggregate_ref=AggregateRef("ServerProcess", process_run_id),
+        project_id=project_id,
+        payload={"project_id": str(project_id), "process_run_id": process_run_id, "exit_code": exit_code},
+    )
+
+
+def server_crashed(project_id: ProjectId, process_run_id: str, exit_code: int | None) -> DomainEventEnvelope:
+    return DomainEventEnvelope.create(
+        event_type="ServerCrashed",
+        aggregate_ref=AggregateRef("ServerProcess", process_run_id),
+        project_id=project_id,
+        payload={"project_id": str(project_id), "process_run_id": process_run_id, "exit_code": exit_code},
+    )

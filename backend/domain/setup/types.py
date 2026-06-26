@@ -41,6 +41,14 @@ class DependencyStatus(StrEnum):
     SKIPPED = "skipped"
 
 
+class ServerProcessState(StrEnum):
+    STARTING = "starting"
+    RUNNING = "running"
+    STOPPING = "stopping"
+    STOPPED = "stopped"
+    CRASHED = "crashed"
+
+
 @dataclass(frozen=True, slots=True)
 class ArtifactVersion:
     artifact_version_id: str
@@ -77,3 +85,24 @@ class ServerConfigPlan:
     content: str
     prior_content: str | None
     warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
+class ProcessLaunchPlan:
+    executable_path: Path
+    working_directory: Path
+    arguments: list[str]
+    mode: str
+
+
+@dataclass(frozen=True, slots=True)
+class ServerProcessStatus:
+    process_run_id: str
+    project_id: str
+    state: ServerProcessState
+    pid: int | None
+    started_at: str | None
+    stopped_at: str | None
+    exit_code: int | None
+    stdout_tail: list[str] = field(default_factory=list)
+    stderr_tail: list[str] = field(default_factory=list)

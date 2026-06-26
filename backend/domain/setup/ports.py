@@ -4,7 +4,14 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
-from backend.domain.setup.types import ArtifactChannel, ArtifactPlatform, ArtifactVersion, DownloadProgress
+from backend.domain.setup.types import (
+    ArtifactChannel,
+    ArtifactPlatform,
+    ArtifactVersion,
+    DownloadProgress,
+    ProcessLaunchPlan,
+    ServerProcessStatus,
+)
 
 
 class FiveMArtifactPort(Protocol):
@@ -44,3 +51,14 @@ class SetupFilesystemPort(Protocol):
 class TxAdminPort(Protocol):
     def detect(self, server_data_path: Path) -> dict[str, object] | None:
         """Read local txAdmin metadata without contacting a process."""
+
+
+class ProcessPort(Protocol):
+    def start(self, process_run_id: str, project_id: str, plan: ProcessLaunchPlan) -> ServerProcessStatus:
+        """Start a supervised setup-related process."""
+
+    def stop(self, process_run_id: str, timeout_seconds: float = 5.0) -> ServerProcessStatus:
+        """Stop a process and its full child tree."""
+
+    def status(self, process_run_id: str) -> ServerProcessStatus | None:
+        """Return current process status when known."""

@@ -6,8 +6,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from backend.adapters.persistence import ProjectRepository, SetupRepository
-from backend.adapters.persistence.models import DependencyCheckRecord
+from backend.adapters.persistence import AuditRepository, ProjectRepository, SetupRepository
+from backend.adapters.persistence.models import DependencyCheckRecord, SetupProcessRunRecord
 from backend.application.commands import CommandContext, CommandExecutionResult, CommandPreview, DryRunResult, RiskLevel, UndoPlan
 from backend.application.commands.recorder import CommandAuditRecorder
 from backend.domain.setup import (
@@ -18,12 +18,18 @@ from backend.domain.setup import (
     DependencyCategory,
     DependencyStatus,
     FiveMArtifactPort,
+    ProcessLaunchPlan,
+    ProcessPort,
+    ServerProcessState,
     SetupFilesystemPort,
     TxAdminPort,
     artifact_catalog_refreshed,
     artifact_installed,
     artifact_version_pinned,
     server_config_written,
+    server_crashed,
+    server_started,
+    server_stopped,
     setup_run_completed,
 )
 from backend.domain.shared_kernel import ErrorCode, ProjectId, StableIdentifier
@@ -95,6 +101,30 @@ class DeleteDependencyChecksCompensation:
         return {"deleted_dependency_checks": deleted}
 
 
+@dataclass(frozen=True, slots=True)
+class StopServerProcessCompensation:
+    process_port: ProcessPort
+    project_id: ProjectId
+    process_run_id: str
+    action_type: str = "stop_server_process"
+
+    def describe(self) -> dict[str, Any]:
+        return {"action_type": self.action_type, "process_run_id": self.process_run_id}
+
+    def apply(self, context: CommandContext) -> dict[str, Any]:
+        status = self.process_port.stop(self.process_run_id)
+        context.uow.repository(SetupRepository).update_process_run(
+            project_id=self.project_id,
+            process_run_id=StableIdentifier(self.process_run_id),
+            state=ServerProcessState.STOPPED.value,
+            stopped_at=datetime.now(UTC),
+            exit_code=status.exit_code,
+            stdout_tail=status.stdout_tail,
+            stderr_tail=status.stderr_tail,
+        )
+        return _process_status_data(status)
+
+
 class SetupApplicationService:
     def __init__(
         self,
@@ -102,11 +132,13 @@ class SetupApplicationService:
         container: Any,
         artifact_client: FiveMArtifactPort,
         filesystem: SetupFilesystemPort,
+        process_port: ProcessPort,
         txadmin: TxAdminPort,
     ) -> None:
         self._container = container
         self._artifact_client = artifact_client
         self._filesystem = filesystem
+        self._process_port = process_port
         self._txadmin = txadmin
         self._recorder = CommandAuditRecorder()
 
@@ -452,6 +484,215 @@ class SetupApplicationService:
             uow.commit()
             return result
 
+    def preview_start_server(
+        self,
+        *,
+        project_id: ProjectId,
+        fxserver_path: str,
+        server_data_path: str,
+        txadmin_mode: bool = False,
+        extra_args: list[str] | None = None,
+    ) -> CommandPreview:
+        plan = self._process_launch_plan(fxserver_path, server_data_path, txadmin_mode, extra_args)
+        return CommandPreview(
+            "StartServerProcess",
+            "Start supervised FXServer process",
+            {
+                "project_id": str(project_id),
+                "executable_path": str(plan.executable_path),
+                "working_directory": str(plan.working_directory),
+                "arguments": plan.arguments,
+                "mode": plan.mode,
+            },
+            warnings=["Stop uses terminate followed by full process-tree kill; stdin shutdown is not reliable for FXServer."],
+            risk_level=RiskLevel.HIGH,
+        )
+
+    def dry_run_start_server(self, **kwargs: Any) -> DryRunResult:
+        preview = self.preview_start_server(**kwargs)
+        return DryRunResult(preview.command_type, True, preview.preview, preview.warnings)
+
+    def execute_start_server(
+        self,
+        *,
+        project_id: ProjectId,
+        fxserver_path: str,
+        server_data_path: str,
+        txadmin_mode: bool = False,
+        extra_args: list[str] | None = None,
+    ) -> CommandExecutionResult:
+        preview = self.preview_start_server(
+            project_id=project_id,
+            fxserver_path=fxserver_path,
+            server_data_path=server_data_path,
+            txadmin_mode=txadmin_mode,
+            extra_args=extra_args,
+        )
+        plan = self._process_launch_plan(fxserver_path, server_data_path, txadmin_mode, extra_args)
+        process_run_id = StableIdentifier.new()
+        status = self._process_port.start(str(process_run_id), str(project_id), plan)
+        with self._container.create_unit_of_work(project_id) as uow:
+            uow.begin()
+            self._require_project(uow.repository(ProjectRepository), project_id)
+            uow.repository(SetupRepository).add_process_run(
+                process_run_id=process_run_id,
+                project_id=project_id,
+                pid=int(status.pid or 0),
+                state=status.state.value,
+                launch={
+                    "executable_path": str(plan.executable_path),
+                    "working_directory": str(plan.working_directory),
+                    "arguments": plan.arguments,
+                    "mode": plan.mode,
+                },
+                started_at=datetime.now(UTC),
+                stdout_tail=status.stdout_tail,
+                stderr_tail=status.stderr_tail,
+            )
+            result = self._recorder.record_success(
+                uow=uow,
+                preview=preview,
+                project_id=project_id,
+                entity_type="ServerProcess",
+                entity_id=str(process_run_id),
+                summary="Started supervised FXServer process",
+                result=_process_status_data(status),
+                events=[server_started(project_id, str(process_run_id), int(status.pid or 0))],
+                undo_plan=UndoPlan(
+                    "UndoStartServerProcess",
+                    "Stop supervised server process",
+                    StopServerProcessCompensation(self._process_port, project_id, str(process_run_id)),
+                    {"action_type": "stop_server_process", "project_id": str(project_id), "process_run_id": str(process_run_id)},
+                ),
+            )
+            uow.commit()
+            return result
+
+    def preview_stop_server(self, *, project_id: ProjectId, process_run_id: str) -> CommandPreview:
+        return CommandPreview(
+            "StopServerProcess",
+            "Stop supervised FXServer process",
+            {"project_id": str(project_id), "process_run_id": process_run_id, "termination": "terminate then full-tree kill"},
+            risk_level=RiskLevel.HIGH,
+        )
+
+    def dry_run_stop_server(self, **kwargs: Any) -> DryRunResult:
+        preview = self.preview_stop_server(**kwargs)
+        return DryRunResult(preview.command_type, True, preview.preview, preview.warnings)
+
+    def execute_stop_server(self, *, project_id: ProjectId, process_run_id: str) -> CommandExecutionResult:
+        preview = self.preview_stop_server(project_id=project_id, process_run_id=process_run_id)
+        with self._container.session_factory() as session:
+            repository = SetupRepository(RepositoryContext(session=session, project_id=project_id))
+            if repository.get_process_run(project_id, StableIdentifier(process_run_id)) is None:
+                raise SetupApplicationError(ErrorCode.NOT_FOUND, f"Process run not found: {process_run_id}")
+        status = self._process_port.stop(process_run_id)
+        with self._container.create_unit_of_work(project_id) as uow:
+            uow.begin()
+            repository = uow.repository(SetupRepository)
+            repository.update_process_run(
+                project_id=project_id,
+                process_run_id=StableIdentifier(process_run_id),
+                state=ServerProcessState.STOPPED.value,
+                stopped_at=datetime.now(UTC),
+                exit_code=status.exit_code,
+                stdout_tail=status.stdout_tail,
+                stderr_tail=status.stderr_tail,
+            )
+            result = self._recorder.record_success(
+                uow=uow,
+                preview=preview,
+                project_id=project_id,
+                entity_type="ServerProcess",
+                entity_id=process_run_id,
+                summary="Stopped supervised FXServer process",
+                result=_process_status_data(status),
+                events=[server_stopped(project_id, process_run_id, status.exit_code)],
+            )
+            uow.commit()
+            return result
+
+    def execute_restart_server(
+        self,
+        *,
+        project_id: ProjectId,
+        process_run_id: str,
+        fxserver_path: str,
+        server_data_path: str,
+        txadmin_mode: bool = False,
+        extra_args: list[str] | None = None,
+    ) -> CommandExecutionResult:
+        preview = CommandPreview(
+            "RestartServerProcess",
+            "Restart supervised FXServer process",
+            {"project_id": str(project_id), "stopped_process_run_id": process_run_id},
+            risk_level=RiskLevel.HIGH,
+        )
+        stopped = self.execute_stop_server(project_id=project_id, process_run_id=process_run_id)
+        started = self.execute_start_server(
+            project_id=project_id,
+            fxserver_path=fxserver_path,
+            server_data_path=server_data_path,
+            txadmin_mode=txadmin_mode,
+            extra_args=extra_args,
+        )
+        with self._container.create_unit_of_work(project_id) as uow:
+            uow.begin()
+            result = self._recorder.record_success(
+                uow=uow,
+                preview=preview,
+                project_id=project_id,
+                entity_type="ServerProcess",
+                entity_id=str(started.result["process_run_id"]),
+                summary="Restarted supervised FXServer process",
+                result={
+                    "project_id": str(project_id),
+                    "process_run_id": started.result["process_run_id"],
+                    "state": started.result["state"],
+                    "pid": started.result["pid"],
+                    "stopped_process_run_id": process_run_id,
+                    "started_process_run_id": started.result["process_run_id"],
+                    "stopped_command_execution_id": str(stopped.command_execution_id),
+                    "started_command_execution_id": str(started.command_execution_id),
+                },
+                events=[],
+            )
+            uow.commit()
+            return result
+
+    def get_process_status(self, project_id: ProjectId, process_run_id: str) -> dict[str, Any]:
+        status = self._process_port.status(process_run_id)
+        with self._container.session_factory() as session:
+            repository = SetupRepository(RepositoryContext(session=session, project_id=project_id))
+            record = repository.get_process_run(project_id, StableIdentifier(process_run_id))
+            if record is None:
+                raise SetupApplicationError(ErrorCode.NOT_FOUND, f"Process run not found: {process_run_id}")
+            return _process_status_data(status) if status else _process_record_data(record)
+
+    def record_process_exit(self, process_run_id: str, exit_code: int | None, expected: bool, stdout_tail: list[str], stderr_tail: list[str]) -> None:
+        with self._container.create_unit_of_work() as uow:
+            uow.begin()
+            record = uow.session.get(SetupProcessRunRecord, process_run_id)
+            if record is None:
+                uow.rollback()
+                return
+            project_id = ProjectId(record.project_id)
+            state = ServerProcessState.STOPPED if expected else ServerProcessState.CRASHED
+            uow.repository(SetupRepository).update_process_run(
+                project_id=project_id,
+                process_run_id=StableIdentifier(process_run_id),
+                state=state.value,
+                stopped_at=datetime.now(UTC),
+                exit_code=exit_code,
+                stdout_tail=stdout_tail,
+                stderr_tail=stderr_tail,
+            )
+            if not expected:
+                event = server_crashed(project_id, process_run_id, exit_code)
+                uow.repository(AuditRepository).record_domain_event(event, published_at=datetime.now(UTC))
+                uow.collect_event(event)
+            uow.commit()
+
     def undo(self, undo_plan: UndoPlan) -> CommandExecutionResult:
         project_id_value = undo_plan.payload.get("project_id")
         project_id = ProjectId(str(project_id_value)) if project_id_value else None
@@ -501,6 +742,26 @@ class SetupApplicationService:
         content = _server_cfg_content(options)
         warnings = ["Existing server.cfg will be snapshotted and can be restored by undo."] if prior is not None else []
         return type("ServerConfigPlan", (), {"server_data_path": path, "server_cfg_path": cfg, "prior_content": prior, "content": content, "warnings": warnings})()
+
+    def _process_launch_plan(
+        self,
+        fxserver_path: str,
+        server_data_path: str,
+        txadmin_mode: bool,
+        extra_args: list[str] | None,
+    ) -> ProcessLaunchPlan:
+        executable = Path(fxserver_path).expanduser().resolve()
+        working_directory = Path(server_data_path).expanduser().resolve()
+        if extra_args is not None:
+            arguments = extra_args
+            mode = "custom"
+        elif txadmin_mode:
+            arguments = []
+            mode = "txadmin"
+        else:
+            arguments = ["+exec", "server.cfg"]
+            mode = "direct"
+        return ProcessLaunchPlan(executable_path=executable, working_directory=working_directory, arguments=arguments, mode=mode)
 
     def _dependency_checks(self, server_data_path: str, categories: list[str] | None) -> list[dict[str, Any]]:
         path = Path(server_data_path).expanduser().resolve()
@@ -600,4 +861,32 @@ def _dependency_record_data(record: Any) -> dict[str, Any]:
         "status": record.status,
         "message": record.message,
         "details": record.details_json or {},
+    }
+
+
+def _process_status_data(status: Any) -> dict[str, Any]:
+    return {
+        "process_run_id": status.process_run_id,
+        "project_id": status.project_id,
+        "state": status.state.value if hasattr(status.state, "value") else status.state,
+        "pid": status.pid,
+        "started_at": status.started_at,
+        "stopped_at": status.stopped_at,
+        "exit_code": status.exit_code,
+        "stdout_tail": status.stdout_tail,
+        "stderr_tail": status.stderr_tail,
+    }
+
+
+def _process_record_data(record: Any) -> dict[str, Any]:
+    return {
+        "process_run_id": record.process_run_id,
+        "project_id": record.project_id,
+        "state": record.state,
+        "pid": record.pid,
+        "started_at": record.started_at,
+        "stopped_at": record.stopped_at,
+        "exit_code": record.exit_code,
+        "stdout_tail": record.stdout_tail_json or [],
+        "stderr_tail": record.stderr_tail_json or [],
     }

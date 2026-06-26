@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from backend.adapters.filesystem import LocalProjectFilesystemInspector, LocalSetupFilesystem
 from backend.adapters.fivem import CfxArtifactClient
 from backend.adapters.persistence.schema import bootstrap_schema
+from backend.adapters.process import LocalProcessSupervisor
 from backend.adapters.telemetry import DeterministicTelemetrySanitizer, LocalNoopTelemetryDelivery
 from backend.adapters.txadmin import LocalTxAdminDetector
 from backend.application.project.service import ProjectApplicationService
@@ -29,6 +30,7 @@ class ApplicationContainer:
     filesystem_inspector: LocalProjectFilesystemInspector
     setup_filesystem: LocalSetupFilesystem
     artifact_client: CfxArtifactClient
+    process_supervisor: LocalProcessSupervisor
     txadmin_detector: LocalTxAdminDetector
     telemetry_sanitizer: DeterministicTelemetrySanitizer
     telemetry_delivery: LocalNoopTelemetryDelivery
@@ -53,12 +55,15 @@ class ApplicationContainer:
         )
 
     def create_setup_service(self) -> SetupApplicationService:
-        return SetupApplicationService(
+        service = SetupApplicationService(
             container=self,
             artifact_client=self.artifact_client,
             filesystem=self.setup_filesystem,
+            process_port=self.process_supervisor,
             txadmin=self.txadmin_detector,
         )
+        self.process_supervisor.set_on_exit(service.record_process_exit)
+        return service
 
     def close(self) -> None:
         self.engine.dispose()
@@ -75,6 +80,7 @@ def create_application_container(app_data_dir: Path) -> ApplicationContainer:
         filesystem_inspector=LocalProjectFilesystemInspector(),
         setup_filesystem=LocalSetupFilesystem(),
         artifact_client=CfxArtifactClient(),
+        process_supervisor=LocalProcessSupervisor(),
         txadmin_detector=LocalTxAdminDetector(),
         telemetry_sanitizer=DeterministicTelemetrySanitizer(),
         telemetry_delivery=LocalNoopTelemetryDelivery(),

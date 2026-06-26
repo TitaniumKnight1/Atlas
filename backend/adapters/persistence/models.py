@@ -415,3 +415,23 @@ class TxAdminInstanceRecord(Base):
     detected_version: Mapped[str | None] = mapped_column(String)
     last_seen_at: Mapped[str | None] = mapped_column(String)
     metadata_json: Mapped[dict | None] = mapped_column(JSON)
+
+
+class SetupProcessRunRecord(Base):
+    __tablename__ = "setup_process_runs"
+    __table_args__ = (
+        CheckConstraint("state in ('starting', 'running', 'stopping', 'stopped', 'crashed')", name="ck_setup_process_runs_state"),
+        Index("idx_setup_process_runs_project_time", "project_id", "started_at"),
+        Index("idx_setup_process_runs_state", "state"),
+    )
+
+    process_run_id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    pid: Mapped[int | None] = mapped_column(Integer)
+    state: Mapped[str] = mapped_column(String, nullable=False)
+    launch_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    started_at: Mapped[str | None] = mapped_column(String)
+    stopped_at: Mapped[str | None] = mapped_column(String)
+    exit_code: Mapped[int | None] = mapped_column(Integer)
+    stdout_tail_json: Mapped[list | None] = mapped_column(JSON)
+    stderr_tail_json: Mapped[list | None] = mapped_column(JSON)

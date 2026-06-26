@@ -61,3 +61,18 @@ class RunSetupRequest(BaseModel):
     build_number: str
     options: dict[str, Any] = Field(default_factory=dict)
     idempotency_key: str | None = None
+
+
+class StartServerProcessRequest(BaseModel):
+    fxserver_path: str
+    server_data_path: str
+    txadmin_mode: bool = False
+    extra_args: list[str] | None = None
+
+
+class StopServerProcessRequest(BaseModel):
+    process_run_id: str
+
+
+class RestartServerProcessRequest(StartServerProcessRequest):
+    process_run_id: str

@@ -10,6 +10,7 @@ from backend.adapters.persistence.models import (
     DependencyCheckRecord,
     ProjectArtifactPinRecord,
     SetupRecipeRecord,
+    SetupProcessRunRecord,
     SetupRunRecord,
     SetupRunStepRecord,
     TxAdminInstanceRecord,
@@ -265,6 +266,78 @@ class SetupRepository:
         self._ensure_project_scope(project_id)
         return self._session.execute(
             select(TxAdminInstanceRecord).where(TxAdminInstanceRecord.project_id == str(project_id))
+        ).scalar_one_or_none()
+
+    def add_process_run(
+        self,
+        *,
+        process_run_id: StableIdentifier,
+        project_id: ProjectId,
+        pid: int,
+        state: str,
+        launch: dict[str, Any],
+        started_at: datetime,
+        stdout_tail: list[str] | None = None,
+        stderr_tail: list[str] | None = None,
+    ) -> SetupProcessRunRecord:
+        self._ensure_project_scope(project_id)
+        record = SetupProcessRunRecord(
+            process_run_id=str(process_run_id),
+            project_id=str(project_id),
+            pid=pid,
+            state=state,
+            launch_json=launch,
+            started_at=started_at.isoformat(),
+            stopped_at=None,
+            exit_code=None,
+            stdout_tail_json=stdout_tail or [],
+            stderr_tail_json=stderr_tail or [],
+        )
+        self._session.add(record)
+        return record
+
+    def update_process_run(
+        self,
+        *,
+        project_id: ProjectId,
+        process_run_id: StableIdentifier,
+        state: str,
+        stopped_at: datetime | None = None,
+        exit_code: int | None = None,
+        stdout_tail: list[str] | None = None,
+        stderr_tail: list[str] | None = None,
+    ) -> SetupProcessRunRecord | None:
+        self._ensure_project_scope(project_id)
+        record = self._session.get(SetupProcessRunRecord, str(process_run_id))
+        if record is None or record.project_id != str(project_id):
+            return None
+        record.state = state
+        if stopped_at is not None:
+            record.stopped_at = stopped_at.isoformat()
+        if exit_code is not None:
+            record.exit_code = exit_code
+        if stdout_tail is not None:
+            record.stdout_tail_json = stdout_tail
+        if stderr_tail is not None:
+            record.stderr_tail_json = stderr_tail
+        return record
+
+    def get_process_run(self, project_id: ProjectId, process_run_id: StableIdentifier) -> SetupProcessRunRecord | None:
+        self._ensure_project_scope(project_id)
+        record = self._session.get(SetupProcessRunRecord, str(process_run_id))
+        if record is None or record.project_id != str(project_id):
+            return None
+        return record
+
+    def current_process_run(self, project_id: ProjectId) -> SetupProcessRunRecord | None:
+        self._ensure_project_scope(project_id)
+        return self._session.execute(
+            select(SetupProcessRunRecord)
+            .where(
+                SetupProcessRunRecord.project_id == str(project_id),
+                SetupProcessRunRecord.state.in_(["starting", "running", "stopping"]),
+            )
+            .order_by(SetupProcessRunRecord.started_at.desc())
         ).scalar_one_or_none()
 
     def _ensure_project_scope(self, project_id: ProjectId) -> None:

@@ -3,9 +3,12 @@ from backend.domain.setup.events import (
     artifact_installed,
     artifact_version_pinned,
     server_config_written,
+    server_crashed,
+    server_started,
+    server_stopped,
     setup_run_completed,
 )
-from backend.domain.setup.ports import FiveMArtifactPort, SetupFilesystemPort, TxAdminPort
+from backend.domain.setup.ports import FiveMArtifactPort, ProcessPort, SetupFilesystemPort, TxAdminPort
 from backend.domain.setup.types import (
     ArtifactChannel,
     ArtifactInstallPlan,
@@ -14,7 +17,10 @@ from backend.domain.setup.types import (
     DependencyCategory,
     DependencyStatus,
     DownloadProgress,
+    ProcessLaunchPlan,
     ServerConfigPlan,
+    ServerProcessState,
+    ServerProcessStatus,
     SetupRunStatus,
 )
 
@@ -27,7 +33,11 @@ __all__ = [
     "DependencyStatus",
     "DownloadProgress",
     "FiveMArtifactPort",
+    "ProcessLaunchPlan",
+    "ProcessPort",
     "ServerConfigPlan",
+    "ServerProcessState",
+    "ServerProcessStatus",
     "SetupFilesystemPort",
     "SetupRunStatus",
     "TxAdminPort",
@@ -35,5 +45,8 @@ __all__ = [
     "artifact_installed",
     "artifact_version_pinned",
     "server_config_written",
+    "server_crashed",
+    "server_started",
+    "server_stopped",
     "setup_run_completed",
 ]

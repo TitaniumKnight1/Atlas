@@ -12,8 +12,11 @@ from backend.api.schemas.setup import (
     PrepareDatabaseRequest,
     RefreshArtifactCatalogRequest,
     ResponseEnvelope,
+    RestartServerProcessRequest,
     RunSetupRequest,
     ServerConfigRequest,
+    StartServerProcessRequest,
+    StopServerProcessRequest,
 )
 from backend.application.commands import CommandExecutionResult, CommandPreview, DryRunResult, RiskLevel
 from backend.application.setup import SetupApplicationError
@@ -184,6 +187,67 @@ def run_server_setup(project_id: str, request: RunSetupRequest, container: Appli
 def get_setup_run(project_id: str, setup_run_id: str, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
     try:
         return _success(container.create_setup_service().get_setup_run(ProjectId(project_id), StableIdentifier(setup_run_id)))
+    except SetupApplicationError as error:
+        return _failure(error)
+
+
+@router.post("/projects/{project_id}/process/start-plan", response_model=ResponseEnvelope)
+def start_process_plan(project_id: str, request: StartServerProcessRequest, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    preview = container.create_setup_service().preview_start_server(
+        project_id=ProjectId(project_id),
+        fxserver_path=request.fxserver_path,
+        server_data_path=request.server_data_path,
+        txadmin_mode=request.txadmin_mode,
+        extra_args=request.extra_args,
+    )
+    return _success(_preview_data(preview), warnings=preview.warnings)
+
+
+@router.post("/projects/{project_id}/process/start", response_model=ResponseEnvelope)
+def start_process(project_id: str, request: StartServerProcessRequest, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        return _command_success(
+            container.create_setup_service().execute_start_server(
+                project_id=ProjectId(project_id),
+                fxserver_path=request.fxserver_path,
+                server_data_path=request.server_data_path,
+                txadmin_mode=request.txadmin_mode,
+                extra_args=request.extra_args,
+            )
+        )
+    except (SetupApplicationError, OSError, KeyError) as error:
+        return _failure(_setup_error(error))
+
+
+@router.post("/projects/{project_id}/process/stop", response_model=ResponseEnvelope)
+def stop_process(project_id: str, request: StopServerProcessRequest, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        return _command_success(container.create_setup_service().execute_stop_server(project_id=ProjectId(project_id), process_run_id=request.process_run_id))
+    except (SetupApplicationError, KeyError) as error:
+        return _failure(_setup_error(error))
+
+
+@router.post("/projects/{project_id}/process/restart", response_model=ResponseEnvelope)
+def restart_process(project_id: str, request: RestartServerProcessRequest, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        return _command_success(
+            container.create_setup_service().execute_restart_server(
+                project_id=ProjectId(project_id),
+                process_run_id=request.process_run_id,
+                fxserver_path=request.fxserver_path,
+                server_data_path=request.server_data_path,
+                txadmin_mode=request.txadmin_mode,
+                extra_args=request.extra_args,
+            )
+        )
+    except (SetupApplicationError, OSError, KeyError) as error:
+        return _failure(_setup_error(error))
+
+
+@router.get("/projects/{project_id}/process/{process_run_id}", response_model=ResponseEnvelope)
+def process_status(project_id: str, process_run_id: str, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        return _success(container.create_setup_service().get_process_status(ProjectId(project_id), process_run_id))
     except SetupApplicationError as error:
         return _failure(error)
 
