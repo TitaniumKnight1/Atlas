@@ -186,16 +186,16 @@ def test_kill_switch_blocks_approve(tmp_path: Path) -> None:
         container.close()
 
 
-def test_nightly_maintenance_defers_backup_capability(tmp_path: Path) -> None:
+def test_nightly_maintenance_includes_backup_step(tmp_path: Path) -> None:
     container, project_id = _fixture(tmp_path)
     automation = container.create_automation_service()
     try:
         recipes = automation.list_recipes()
         nightly = next(item for item in recipes if item["recipe_key"] == RecipeKey.NIGHTLY_MAINTENANCE.value)
-        assert "backup" in nightly["deferred_capabilities"]
+        assert nightly["deferred_capabilities"] == []
         instance = automation.instantiate_recipe(project_id, RecipeKey.NIGHTLY_MAINTENANCE.value, params=_recipe_params(tmp_path))
-        assert instance["deferred_capabilities"] == ["backup"]
-        assert instance["resolved_action_count"] == 2
+        assert instance["deferred_capabilities"] == []
+        assert instance["resolved_action_count"] == 3
     finally:
         container.close()
 

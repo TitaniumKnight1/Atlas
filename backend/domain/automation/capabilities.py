@@ -19,11 +19,7 @@ def inventory_capabilities() -> dict[str, CapabilityStatus]:
         "resource_rescan": CapabilityStatus("resource_rescan", True),
         "resource_lifecycle": CapabilityStatus("resource_lifecycle", True),
         "resource_rollback": CapabilityStatus("resource_rollback", True),
-        "backup": CapabilityStatus(
-            "backup",
-            False,
-            reason="Backup application module not built; nightly backup step deferred",
-        ),
+        "backup": CapabilityStatus("backup", True),
     }
 
 

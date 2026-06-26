@@ -32,7 +32,7 @@ class AutomationActionExecutor:
         if self._should_skip_action(action_type, config, trigger_payload):
             return {"skipped": True, "reason": "conditions_not_met"}
         if action_type == ActionType.CREATE_BACKUP.value:
-            raise ActionDeferredError("Backup capability is not available")
+            return {"action_type": action_type, "summary": "Create local project backup", "preview": {"scope": "full"}}
         if action_type == ActionType.RESTART_SERVER.value:
             process_run_id = trigger_payload.get("process_run_id") or config.get("process_run_id")
             return {
@@ -129,7 +129,14 @@ class AutomationActionExecutor:
                 "command_execution_id": str(execution.command_execution_id),
             }
         if action_type == ActionType.CREATE_BACKUP.value:
-            raise ActionDeferredError("Backup capability is not available")
+            from backend.domain.backup.types import BackupTriggerType
+
+            result = self._container.create_backup_service().execute_run_backup(
+                project_id=project_id,
+                trigger_type=BackupTriggerType.AUTOMATION.value,
+                idempotency_key=idempotency_key,
+            )
+            return {"backup": result}
         raise ValueError(f"Unsupported automation action: {action_type}")
 
     def undo_step(self, *, uow: SingleWriterSQLiteUnitOfWork, undo_plan_json: dict[str, Any]) -> dict[str, Any]:

@@ -99,7 +99,7 @@ _BUILTIN_RECIPES: tuple[RecipeTemplate, ...] = (
     RecipeTemplate(
         recipe_key=RecipeKey.NIGHTLY_MAINTENANCE.value,
         name="Nightly maintenance",
-        description="Scheduled validation and git status; backup deferred until backup module exists.",
+        description="Scheduled validation, git status, and local project backup.",
         trigger_type=TriggerType.SCHEDULE.value,
         trigger_config={"interval_seconds": 86400},
         schedule_interval_seconds=86400,
@@ -119,8 +119,8 @@ _BUILTIN_RECIPES: tuple[RecipeTemplate, ...] = (
             ),
             RecipeActionTemplate(
                 action_type=ActionType.CREATE_BACKUP.value,
-                execution_tier=ExecutionTier.APPROVAL_GATED.value,
-                safety_class="destructive",
+                execution_tier=ExecutionTier.AUTO.value,
+                safety_class="read_only",
                 capability_id="backup",
             ),
         ),

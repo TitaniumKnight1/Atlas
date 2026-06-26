@@ -1,5 +1,6 @@
 from backend.adapters.persistence.automation_repository import AutomationRepository
 from backend.adapters.persistence.audit_repository import AuditRepository
+from backend.adapters.persistence.backup_repository import BackupRepository
 from backend.adapters.persistence.config_repository import ConfigRepository
 from backend.adapters.persistence.git_repository import GitRepository
 from backend.adapters.persistence.resource_repository import ResourceRepository
@@ -13,6 +14,7 @@ from backend.adapters.persistence.telemetry_repository import TelemetryRepositor
 __all__ = [
     "AuditRepository",
     "AutomationRepository",
+    "BackupRepository",
     "ConfigRepository",
     "GitRepository",
     "ResourceRepository",

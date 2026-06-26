@@ -1331,3 +1331,113 @@ class AutomationRecipeInstanceRecord(Base):
     instance_status: Mapped[str] = mapped_column(String, nullable=False)
     deferred_capabilities_json: Mapped[list | None] = mapped_column(JSON)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class BackupPlanRecord(Base):
+    __tablename__ = "backup_plans"
+    __table_args__ = (
+        UniqueConstraint("project_id", "name", name="uq_backup_plans_project_name"),
+        CheckConstraint("backup_scope in ('config', 'resources', 'database', 'full', 'custom')", name="ck_backup_plans_scope"),
+        Index("idx_backup_plans_project_enabled", "project_id", "is_enabled"),
+        Index("idx_backup_plans_due", "is_enabled", "next_run_at"),
+    )
+
+    backup_plan_id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    environment_id: Mapped[str | None] = mapped_column(String)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    backup_scope: Mapped[str] = mapped_column(String, nullable=False)
+    schedule_id: Mapped[str | None] = mapped_column(String)
+    retention_policy_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    schedule_interval_seconds: Mapped[int | None] = mapped_column(Integer)
+    next_run_at: Mapped[str | None] = mapped_column(String)
+    last_run_at: Mapped[str | None] = mapped_column(String)
+    is_enabled: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class BackupRunRecord(Base):
+    __tablename__ = "backup_runs"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_backup_runs_idempotency"),
+        CheckConstraint(
+            "status in ('planned', 'running', 'succeeded', 'failed', 'cancelled', 'pruned')",
+            name="ck_backup_runs_status",
+        ),
+        CheckConstraint(
+            "trigger_type in ('manual', 'scheduled', 'pre_change', 'automation')",
+            name="ck_backup_runs_trigger_type",
+        ),
+        Index("idx_backup_runs_project_time", "project_id", "started_at"),
+        Index("idx_backup_runs_status", "status"),
+    )
+
+    backup_run_id: Mapped[str] = mapped_column(String, primary_key=True)
+    backup_plan_id: Mapped[str | None] = mapped_column(ForeignKey("backup_plans.backup_plan_id"))
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    trigger_type: Mapped[str] = mapped_column(String, nullable=False)
+    idempotency_key: Mapped[str | None] = mapped_column(String)
+    artifact_version_id: Mapped[str | None] = mapped_column(String)
+    git_status_snapshot_id: Mapped[str | None] = mapped_column(String)
+    started_at: Mapped[str | None] = mapped_column(String)
+    finished_at: Mapped[str | None] = mapped_column(String)
+    total_bytes: Mapped[int | None] = mapped_column(Integer)
+    archive_path: Mapped[str | None] = mapped_column(Text)
+    content_hash: Mapped[str | None] = mapped_column(Text)
+    manifest_json: Mapped[dict | None] = mapped_column(JSON)
+
+
+class BackupItemRecord(Base):
+    __tablename__ = "backup_items"
+    __table_args__ = (Index("idx_backup_items_run_type", "backup_run_id", "item_type"),)
+
+    backup_item_id: Mapped[str] = mapped_column(String, primary_key=True)
+    backup_run_id: Mapped[str] = mapped_column(ForeignKey("backup_runs.backup_run_id"), nullable=False)
+    item_type: Mapped[str] = mapped_column(String, nullable=False)
+    source_path: Mapped[str | None] = mapped_column(Text)
+    local_file_id: Mapped[str | None] = mapped_column(String)
+    content_hash: Mapped[str | None] = mapped_column(Text)
+    size_bytes: Mapped[int | None] = mapped_column(Integer)
+    metadata_json: Mapped[dict | None] = mapped_column(JSON)
+
+
+class BackupRestoreRunRecord(Base):
+    __tablename__ = "backup_restore_runs"
+    __table_args__ = (
+        CheckConstraint(
+            "status in ('planned', 'running', 'succeeded', 'failed', 'cancelled')",
+            name="ck_backup_restore_runs_status",
+        ),
+        Index("idx_backup_restore_project_time", "project_id", "started_at"),
+    )
+
+    restore_run_id: Mapped[str] = mapped_column(String, primary_key=True)
+    backup_run_id: Mapped[str] = mapped_column(ForeignKey("backup_runs.backup_run_id"), nullable=False)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    dry_run: Mapped[int] = mapped_column(Integer, nullable=False)
+    command_execution_id: Mapped[str | None] = mapped_column(ForeignKey("command_executions.command_execution_id"))
+    started_at: Mapped[str | None] = mapped_column(String)
+    finished_at: Mapped[str | None] = mapped_column(String)
+    restore_plan_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    pre_restore_snapshot_path: Mapped[str | None] = mapped_column(Text)
+    undo_plan_json: Mapped[dict | None] = mapped_column(JSON)
+
+
+class BackupRetentionEventRecord(Base):
+    __tablename__ = "backup_retention_events"
+    __table_args__ = (
+        CheckConstraint("event_type in ('evaluated', 'pruned', 'skipped', 'failed')", name="ck_backup_retention_event_type"),
+        Index("idx_backup_retention_project_time", "project_id", "occurred_at"),
+    )
+
+    retention_event_id: Mapped[str] = mapped_column(String, primary_key=True)
+    backup_plan_id: Mapped[str | None] = mapped_column(ForeignKey("backup_plans.backup_plan_id"))
+    backup_run_id: Mapped[str | None] = mapped_column(ForeignKey("backup_runs.backup_run_id"))
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    event_type: Mapped[str] = mapped_column(String, nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+    occurred_at: Mapped[str] = mapped_column(String, nullable=False)
+    details_json: Mapped[dict | None] = mapped_column(JSON)

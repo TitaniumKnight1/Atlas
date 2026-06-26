@@ -15,6 +15,7 @@ from backend.adapters.streams import StreamEventBridge, StreamEventPublisher
 from backend.adapters.telemetry import DeterministicTelemetrySanitizer, LocalNoopTelemetryDelivery
 from backend.adapters.txadmin import LocalTxAdminDetector
 from backend.application.automation.service import AutomationApplicationService
+from backend.application.backup import BackupApplicationService, BackupSchedulerService
 from backend.application.incident.service import IncidentApplicationService
 from backend.application.monitoring.alerts import MonitoringAlertService
 from backend.application.monitoring.retention import MonitoringRetentionService
@@ -55,6 +56,8 @@ class ApplicationContainer:
     _monitoring_alert_service: MonitoringAlertService | None = field(default=None, repr=False)
     _incident_service: IncidentApplicationService | None = field(default=None, repr=False)
     _automation_service: AutomationApplicationService | None = field(default=None, repr=False)
+    _backup_service: BackupApplicationService | None = field(default=None, repr=False)
+    _backup_scheduler_service: BackupSchedulerService | None = field(default=None, repr=False)
 
     def create_unit_of_work(self, project_id: ProjectId | None = None) -> SingleWriterSQLiteUnitOfWork:
         return SingleWriterSQLiteUnitOfWork(
@@ -117,6 +120,20 @@ class ApplicationContainer:
             self._automation_service.start_scheduler()
         return self._automation_service
 
+    def create_backup_service(self) -> BackupApplicationService:
+        if self._backup_service is None:
+            self._backup_service = BackupApplicationService(container=self)
+        return self._backup_service
+
+    def create_backup_scheduler_service(self) -> BackupSchedulerService:
+        if self._backup_scheduler_service is None:
+            self._backup_scheduler_service = BackupSchedulerService(
+                container=self,
+                backup_service=self.create_backup_service(),
+            )
+            self._backup_scheduler_service.start()
+        return self._backup_scheduler_service
+
     def create_incident_service(self) -> IncidentApplicationService:
         if self._incident_service is None:
             self._incident_service = IncidentApplicationService(container=self)
@@ -167,6 +184,8 @@ class ApplicationContainer:
         )
 
     def close(self) -> None:
+        if self._backup_scheduler_service is not None:
+            self._backup_scheduler_service.stop()
         if self._automation_service is not None:
             self._automation_service.stop_scheduler()
         if self._monitoring_alert_service is not None:
@@ -204,4 +223,5 @@ def create_application_container(app_data_dir: Path) -> ApplicationContainer:
     )
     container.create_incident_service()
     container.create_automation_service()
+    container.create_backup_scheduler_service()
     return container
