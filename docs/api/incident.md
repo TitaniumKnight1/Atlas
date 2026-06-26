@@ -2,11 +2,33 @@
 
 Responsibility: local incident ingestion, fingerprinting, grouping, occurrence append, breadcrumbs, context snapshots, stack traces, related groups, rules, notes, compare, and Markdown export.
 
+## M7 slice ownership
+
+| Slice | Scope | M7a status |
+| --- | --- | --- |
+| **M7a** | Crash-triggered capture, occurrence write, environment snapshot assembly, breadcrumbs, local queries, `IncidentCaptured` event | **Implemented** |
+| **M7b** | Fingerprinting, deduplication, grouping, related incidents, rules, compare | Deferred |
+| **M7c** | Markdown export, export sanitization, export history | Deferred |
+
+M7a implements a subset of the commands/queries below. Deferred items remain specified for future slices.
+
+## Privacy boundary
+
+Incident data is **local-only project data** and must never flow to telemetry (ADR-0005, `telemetry-and-privacy.md`). M7a:
+
+- Persists incidents only in local SQLite project storage.
+- Creates **no** telemetry enqueue path and **no** export/outbound path.
+- Redacts git remotes in environment snapshots (M4b `redact_remote_url`).
+- Includes config secret **finding metadata** only (M4a); never widens secret values into snapshots.
+- Emits `IncidentCaptured` on the local in-process bus only (no SSE incidents topic in M7a).
+
+M7c export is the deliberate outbound path and requires sanitization; it is out of scope for M7a.
+
 ## Commands
 
 | Name | Inputs | Outputs | Errors | Behavior | PRD trace |
 | --- | --- | --- | --- | --- | --- |
-| `IngestIncident` | `project_id`, source, severity, category, message, context refs, `idempotency_key` | incident group id, occurrence id | `ValidationFailed`, `ProjectScopeViolation` | Normalizes, fingerprints, dedupes. | Local incident capture |
+| `CaptureServerCrash` | `project_id`, `process_run_id`, `exit_code` | group id, occurrence id | `NotFound`, `ProjectScopeViolation` | M7a: assembles environment snapshot from M3b/M4/M5/M6 reads; auto-triggered on `ServerCrashed`. No preview/undo. | Local crash capture |
 | `AppendIncidentOccurrence` | `project_id`, group id, occurrence payload | occurrence id | `NotFound`, `ProjectScopeViolation` | Adds occurrence to existing group. | Deduplication/history |
 | `AttachBreadcrumbs` | `project_id`, occurrence id, breadcrumbs | accepted count | `NotFound`, `ValidationFailed` | Local-only timeline write. | Timeline/breadcrumbs |
 | `AttachIncidentContextSnapshot` | `project_id`, occurrence id, context type, snapshot/local file ref | context snapshot id | `NotFound`, `ValidationFailed` | Stores local debugging context. | Environment/config/log snapshots |
@@ -33,6 +55,7 @@ Responsibility: local incident ingestion, fingerprinting, grouping, occurrence a
 
 | Event | Payload summary | Consumers |
 | --- | --- | --- |
+| `IncidentCaptured` | `project_id`, group id, occurrence id, severity, category | Audit (local bus only in M7a) |
 | `IncidentCreated` | `project_id`, group id, occurrence id, severity | Automation, Monitoring, Audit |
 | `IncidentOccurrenceAppended` | `project_id`, group id, occurrence id | Automation, Audit |
 | `IncidentStatusChanged` | `project_id`, group id, status | Automation, Audit |
@@ -43,6 +66,7 @@ Responsibility: local incident ingestion, fingerprinting, grouping, occurrence a
 
 | Source event | Reaction | Reason |
 | --- | --- | --- |
+| `ServerCrashed` | Trigger M7a `CaptureServerCrash` via event subscriber | M3b unexpected process exit. |
 | `DependencyCheckFailed` | Create validation/setup incident if severe | Setup failures. |
 | `ConfigValidationFailed` | Create or update validation incident | Config errors. |
 | `BackupFailed` | Create backup incident | Backup failures. |
@@ -68,8 +92,10 @@ Responsibility: local incident ingestion, fingerprinting, grouping, occurrence a
 | Intent | Structural request | Structural response |
 | --- | --- | --- |
 | `GET /api/v1/projects/{project_id}/incidents` | filters, pagination | incident groups |
-| `POST /api/v1/projects/{project_id}/incidents/ingest` | incident payload | group/occurrence refs |
+| `POST /api/v1/projects/{project_id}/incidents/capture/crash` | `process_run_id`, `exit_code` | group/occurrence refs (M7a explicit capture) |
 | `GET /api/v1/projects/{project_id}/incidents/{group_id}` | ids | incident detail |
+| `GET /api/v1/projects/{project_id}/incidents/occurrences/{occurrence_id}/timeline` | occurrence id | breadcrumbs, context snapshots, stack trace (M7a) |
+| `POST /api/v1/projects/{project_id}/incidents/ingest` | incident payload | group/occurrence refs (M7b+) |
 | `GET /api/v1/projects/{project_id}/incidents/{group_id}/timeline` | occurrence/time filters | timeline |
 | `POST /api/v1/projects/{project_id}/incidents/{group_id}/status` | status/reason | group summary |
 | `POST /api/v1/projects/{project_id}/incidents/compare` | group/occurrence ids | comparison report |
@@ -82,4 +108,5 @@ Responsibility: local incident ingestion, fingerprinting, grouping, occurrence a
 
 ## Deviations
 
-None.
+- M7a uses placeholder per-capture fingerprints (`capture:{occurrence_id}`) instead of M7b deduplication fingerprints.
+- M7a API surface is a subset of this contract; ingest, status, compare, export, and incidents SSE stream are deferred to M7b/M7c.

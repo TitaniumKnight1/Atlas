@@ -90,7 +90,10 @@ def test_unexpected_exit_records_local_crash_without_telemetry(tmp_path: Path) -
 
         assert status["state"] == "crashed"
         assert status["exit_code"] == 7
-        assert _domain_event_types(container)[-1] == "ServerCrashed"
+        event_types = _domain_event_types(container)
+        assert "ServerCrashed" in event_types
+        assert "IncidentCaptured" in event_types
+        assert event_types[-1] == "IncidentCaptured"
         assert _count(container, TelemetryQueueRecord) == 0
         assert _count(container, TelemetryRejectionRecord) == 0
     finally:

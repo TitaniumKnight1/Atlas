@@ -14,6 +14,7 @@ from backend.adapters.process import LocalProcessSupervisor
 from backend.adapters.streams import StreamEventBridge, StreamEventPublisher
 from backend.adapters.telemetry import DeterministicTelemetrySanitizer, LocalNoopTelemetryDelivery
 from backend.adapters.txadmin import LocalTxAdminDetector
+from backend.application.incident.service import IncidentApplicationService
 from backend.application.monitoring.alerts import MonitoringAlertService
 from backend.application.monitoring.retention import MonitoringRetentionService
 from backend.application.monitoring.service import MonitoringApplicationService
@@ -51,6 +52,7 @@ class ApplicationContainer:
     _monitoring_service: MonitoringApplicationService | None = field(default=None, repr=False)
     _monitoring_retention_service: MonitoringRetentionService | None = field(default=None, repr=False)
     _monitoring_alert_service: MonitoringAlertService | None = field(default=None, repr=False)
+    _incident_service: IncidentApplicationService | None = field(default=None, repr=False)
 
     def create_unit_of_work(self, project_id: ProjectId | None = None) -> SingleWriterSQLiteUnitOfWork:
         return SingleWriterSQLiteUnitOfWork(
@@ -105,6 +107,12 @@ class ApplicationContainer:
             filesystem=self.setup_filesystem,
             stream_publisher=self.stream_publisher,
         )
+
+    def create_incident_service(self) -> IncidentApplicationService:
+        if self._incident_service is None:
+            self._incident_service = IncidentApplicationService(container=self)
+            self._incident_service.register_crash_subscriber()
+        return self._incident_service
 
     def create_monitoring_alert_service(self) -> MonitoringAlertService:
         if self._monitoring_alert_service is None:
@@ -167,7 +175,7 @@ def create_application_container(app_data_dir: Path) -> ApplicationContainer:
     stream_publisher = StreamEventPublisher(event_bus)
     stream_bridge = StreamEventBridge(stream_hub)
     stream_bridge.register(event_bus)
-    return ApplicationContainer(
+    container = ApplicationContainer(
         app_data_dir=app_data_dir,
         engine=engine,
         session_factory=create_session_factory(engine),
@@ -183,3 +191,5 @@ def create_application_container(app_data_dir: Path) -> ApplicationContainer:
         telemetry_sanitizer=DeterministicTelemetrySanitizer(),
         telemetry_delivery=LocalNoopTelemetryDelivery(),
     )
+    container.create_incident_service()
+    return container

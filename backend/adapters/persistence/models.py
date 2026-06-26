@@ -938,3 +938,114 @@ class MonitoringAlertEventRecord(Base):
     resolved_at: Mapped[str | None] = mapped_column(String)
     incident_group_id: Mapped[str | None] = mapped_column(String)
     details_json: Mapped[dict | None] = mapped_column(JSON)
+
+
+class IncidentGroupRecord(Base):
+    __tablename__ = "incident_groups"
+    __table_args__ = (
+        UniqueConstraint("project_id", "fingerprint", name="uq_incident_groups_project_fingerprint"),
+        CheckConstraint("severity in ('debug', 'info', 'warning', 'error', 'fatal')", name="ck_incident_groups_severity"),
+        CheckConstraint(
+            "category in ('crash', 'startup', 'resource', 'validation', 'database', 'automation', 'plugin', 'atlas')",
+            name="ck_incident_groups_category",
+        ),
+        CheckConstraint("status in ('unresolved', 'resolved', 'ignored', 'muted')", name="ck_incident_groups_status"),
+        Index("idx_incident_groups_project_status_last_seen", "project_id", "status", "last_seen_at"),
+        Index("idx_incident_groups_severity", "severity"),
+    )
+
+    incident_group_id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    fingerprint: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    severity: Mapped[str] = mapped_column(String, nullable=False)
+    category: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    first_seen_at: Mapped[str] = mapped_column(String, nullable=False)
+    last_seen_at: Mapped[str] = mapped_column(String, nullable=False)
+    occurrence_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    assigned_to: Mapped[str | None] = mapped_column(String)
+
+
+class IncidentOccurrenceRecord(Base):
+    __tablename__ = "incident_occurrences"
+    __table_args__ = (
+        CheckConstraint(
+            "source_type in ('log', 'process', 'validation', 'automation', 'plugin', 'manual')",
+            name="ck_incident_occurrences_source_type",
+        ),
+        Index("idx_incident_occurrences_group_time", "incident_group_id", "occurred_at"),
+        Index("idx_incident_occurrences_project_time", "project_id", "occurred_at"),
+    )
+
+    occurrence_id: Mapped[str] = mapped_column(String, primary_key=True)
+    incident_group_id: Mapped[str] = mapped_column(ForeignKey("incident_groups.incident_group_id"), nullable=False)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    environment_id: Mapped[str | None] = mapped_column(String)
+    occurred_at: Mapped[str] = mapped_column(String, nullable=False)
+    source_type: Mapped[str] = mapped_column(String, nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    raw_message_hash: Mapped[str | None] = mapped_column(Text)
+    artifact_version_id: Mapped[str | None] = mapped_column(String)
+    git_status_snapshot_id: Mapped[str | None] = mapped_column(String)
+    automation_run_id: Mapped[str | None] = mapped_column(String)
+    resource_id: Mapped[str | None] = mapped_column(String)
+
+
+class IncidentBreadcrumbRecord(Base):
+    __tablename__ = "incident_breadcrumbs"
+    __table_args__ = (
+        CheckConstraint(
+            "category in ('server', 'resource', 'git', 'config', 'automation', 'process', 'log')",
+            name="ck_incident_breadcrumbs_category",
+        ),
+        CheckConstraint("level in ('debug', 'info', 'warning', 'error', 'fatal')", name="ck_incident_breadcrumbs_level"),
+        UniqueConstraint("occurrence_id", "sort_order", name="uq_incident_breadcrumbs_occurrence_order"),
+        Index("idx_incident_breadcrumbs_occurrence_time", "occurrence_id", "timestamp"),
+    )
+
+    breadcrumb_id: Mapped[str] = mapped_column(String, primary_key=True)
+    occurrence_id: Mapped[str] = mapped_column(ForeignKey("incident_occurrences.occurrence_id"), nullable=False)
+    timestamp: Mapped[str] = mapped_column(String, nullable=False)
+    category: Mapped[str] = mapped_column(String, nullable=False)
+    level: Mapped[str] = mapped_column(String, nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    data_json: Mapped[dict | None] = mapped_column(JSON)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class IncidentContextSnapshotRecord(Base):
+    __tablename__ = "incident_context_snapshots"
+    __table_args__ = (
+        CheckConstraint(
+            "context_type in ('environment', 'runtime', 'resources', 'startup_order', 'config_excerpt', 'logs', 'database', 'system')",
+            name="ck_incident_context_type",
+        ),
+        CheckConstraint(
+            "redaction_state in ('raw_local', 'redacted', 'export_safe', 'blocked')",
+            name="ck_incident_context_redaction_state",
+        ),
+        Index("idx_incident_context_occurrence_type", "occurrence_id", "context_type"),
+    )
+
+    context_snapshot_id: Mapped[str] = mapped_column(String, primary_key=True)
+    occurrence_id: Mapped[str] = mapped_column(ForeignKey("incident_occurrences.occurrence_id"), nullable=False)
+    context_type: Mapped[str] = mapped_column(String, nullable=False)
+    content_hash: Mapped[str | None] = mapped_column(Text)
+    local_file_id: Mapped[str | None] = mapped_column(String)
+    snapshot_json: Mapped[dict | None] = mapped_column(JSON)
+    redaction_state: Mapped[str] = mapped_column(String, nullable=False)
+    captured_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class IncidentStackTraceRecord(Base):
+    __tablename__ = "incident_stack_traces"
+    __table_args__ = (Index("idx_incident_stack_traces_occurrence", "occurrence_id"),)
+
+    stack_trace_id: Mapped[str] = mapped_column(String, primary_key=True)
+    occurrence_id: Mapped[str] = mapped_column(ForeignKey("incident_occurrences.occurrence_id"), nullable=False)
+    exception_type: Mapped[str | None] = mapped_column(Text)
+    exception_value: Mapped[str | None] = mapped_column(Text)
+    language: Mapped[str | None] = mapped_column(String)
+    thread_name: Mapped[str | None] = mapped_column(Text)
+    is_primary: Mapped[int] = mapped_column(Integer, nullable=False)
