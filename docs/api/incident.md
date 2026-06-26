@@ -8,9 +8,9 @@ Responsibility: local incident ingestion, fingerprinting, grouping, occurrence a
 | --- | --- | --- |
 | **M7a** | Crash-triggered capture, occurrence write, environment snapshot assembly, breadcrumbs, local queries, `IncidentCaptured` event | **Implemented** |
 | **M7b** | Fingerprinting, deduplication, grouping, timeline, related groups, compare | **Implemented** |
-| **M7c** | Markdown export, export sanitization, export history | Deferred |
+| **M7c** | Markdown export, export sanitization, export history | **Implemented** |
 
-M7a implements capture and snapshot assembly. M7b implements fingerprinting, deduplication, grouping, group timeline, related groups, compare, and placeholder migration. Deferred items remain specified for future slices.
+M7a implements capture and snapshot assembly. M7b implements fingerprinting, deduplication, grouping, group timeline, related groups, compare, and placeholder migration. M7c implements the single always-sanitized Markdown export path and export history.
 
 ## Privacy boundary
 
@@ -22,7 +22,7 @@ Incident data is **local-only project data** and must never flow to telemetry (A
 - Includes config secret **finding metadata** only (M4a); never widens secret values into snapshots.
 - Emits `IncidentCaptured` on the local in-process bus only (no SSE incidents topic in M7a).
 
-M7c export is the deliberate outbound path and requires sanitization; it is out of scope for M7a.
+M7c export is the **only sanctioned deliberate outbound artifact**. It always passes through the export sanitizer; there is no raw export bypass. Incident capture/grouping data remains local-only until the user explicitly exports and copies Markdown manually.
 
 ## Commands
 
@@ -38,7 +38,7 @@ M7c export is the deliberate outbound path and requires sanitization; it is out 
 | `UpdateIncidentGroupStatus` | `project_id`, group id, status, reason | group summary | `NotFound`, `Conflict` | Audited triage action. | Incident history |
 | `CreateIncidentGroupRule` | `project_id`, rule type, match/action | rule id | `ValidationFailed` | Local grouping customization. | Fingerprinting rules |
 | `AddIncidentNote` | `project_id`, group id, body | note id | `NotFound` | Local triage notes. | Incident history |
-| `ExportIncidentMarkdown` | `project_id`, group/occurrence id, redaction profile | export id, local file ref/warnings | `NotFound`, `PermissionDenied` | Manual export only; no AI API. | AI-ready Markdown export |
+| `ExportIncidentMarkdown` | `project_id`, group id, optional occurrence id, redaction profile | export id, sanitized markdown, redaction summary | `NotFound` | M7c: assemble → always sanitize → return Markdown; manual copy only; no AI API. | AI-ready Markdown export |
 
 ## Queries
 
@@ -63,7 +63,7 @@ M7c export is the deliberate outbound path and requires sanitization; it is out 
 | `IncidentCreated` | `project_id`, group id, occurrence id, severity | Automation, Monitoring, Audit |
 | `IncidentOccurrenceAppended` | `project_id`, group id, occurrence id | Automation, Audit |
 | `IncidentStatusChanged` | `project_id`, group id, status | Automation, Audit |
-| `IncidentMarkdownExported` | `project_id`, group id, export id | Audit |
+| `IncidentMarkdownExported` | `project_id`, group id, export id | Audit (local bus only) |
 | `IncidentGroupingRuleChanged` | `project_id`, rule id | Audit |
 
 ## Subscribed Events
@@ -103,7 +103,8 @@ M7c export is the deliberate outbound path and requires sanitization; it is out 
 | `GET /api/v1/projects/{project_id}/incidents/{group_id}/timeline` | occurrence/time filters | group occurrence timeline (M7b) |
 | `POST /api/v1/projects/{project_id}/incidents/compare` | group ids | comparison report (M7b) |
 | `POST /api/v1/projects/{project_id}/incidents/migrate-grouping` | ids | placeholder migration stats (M7b) |
-| `POST /api/v1/projects/{project_id}/incidents/{group_id}/exports/markdown` | redaction profile | export ref/warnings |
+| `POST /api/v1/projects/{project_id}/incidents/{group_id}/exports/markdown` | optional occurrence id, redaction profile | sanitized markdown + export record (M7c) |
+| `GET /api/v1/projects/{project_id}/incidents/{group_id}/exports` | group id | export history metadata (M7c) |
 | `GET /api/v1/projects/{project_id}/streams/incidents` | filters | incident stream topic |
 
 ## Open Questions
@@ -112,7 +113,8 @@ M7c export is the deliberate outbound path and requires sanitization; it is out 
 
 ## Deviations
 
-- M7b implements automatic related-group linking only for shared `resource_hint` with different fingerprints (`same_root_cause`, confidence 0.6). User rules, notes, and manual relate APIs remain deferred.
-- `incident_group_rules` and `incident_notes` tables exist for future use; no rule/note API in M7b.
-- `incident_stack_frames` table exists; no frame rows written until structured stack traces are available.
-- M7b API surface is still a subset of this contract; ingest, status, export, and incidents SSE stream are deferred to M7c or later.
+- Export sanitizer reuses M2 `SECRET_RULES` / `IDENTIFIER_RULES` with redact-in-place policy (not telemetry fail-closed). Status is **unproven until independent adversarial audit** (ADR-0005 family, ADR-0019).
+- M7b automatic related-group linking only for shared `resource_hint` with different fingerprints. User rules, notes, and manual relate APIs remain deferred.
+- `incident_group_rules` and `incident_notes` tables exist for future use; no rule/note API yet.
+- `incident_stack_frames` table exists; no frame rows until structured stack traces are available.
+- Ingest, status triage, and incidents SSE stream remain deferred.

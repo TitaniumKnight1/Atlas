@@ -58,3 +58,16 @@ def incident_grouped(project_id: ProjectId, incident_group_id: str, fingerprint:
             "occurrence_count": occurrence_count,
         },
     )
+
+
+def incident_markdown_exported(project_id: ProjectId, incident_group_id: str, export_id: str) -> DomainEventEnvelope:
+    return DomainEventEnvelope.create(
+        event_type="IncidentMarkdownExported",
+        aggregate_ref=AggregateRef("IncidentExport", export_id),
+        project_id=project_id,
+        payload={
+            "project_id": str(project_id),
+            "incident_group_id": incident_group_id,
+            "incident_export_id": export_id,
+        },
+    )

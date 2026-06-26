@@ -16,7 +16,9 @@ The Sentry SDK is not added in M2. Delivery is represented by a `TelemetryDelive
 
 Before any real Sentry transport replaces the no-op delivery adapter, an independent adversarial audit of `backend/adapters/telemetry/sanitizer.py` by someone other than the original author must pass. Telemetry remains disabled by default until that audit passes and the Sentry transport is explicitly approved.
 
-Two audit questions remain open for that gate:
+**M7c export sanitizer (second deliberate outbound path):** User-initiated incident Markdown export is a separate, higher-risk outbound path than telemetry because the user explicitly copies sanitized content into uncontrolled third-party AI tools. `backend/domain/incident/export_sanitizer.py` reuses the M2 `SECRET_RULES` / `IDENTIFIER_RULES` vocabulary but applies a **redact-in-place** policy (not fail-closed). Before this export is exposed to end users, an **independent adversarial audit** of the export sanitizer by a different author/model must pass. The export sanitizer is **unproven until that audit passes** — do not claim leak-proof.
+
+The same two audit questions apply to both sanitizers:
 
 - Whether sanitizer confidence should be primarily structure-based or blocklist-based.
 - Whether free-text and stack-trace fields should redact in place or fail closed when they contain suspicious content.
@@ -25,5 +27,6 @@ Two audit questions remain open for that gate:
 
 - Disabled telemetry records local rejection summaries and queues nothing.
 - Sanitization is deterministic and unit-testable without I/O.
-- Privacy wins over debuggability whenever classification is uncertain.
+- Privacy wins over debuggability whenever classification is uncertain (telemetry). Export errs toward redaction per-value but preserves surrounding debug context.
 - Queue rows contain only sanitized Atlas application telemetry.
+- Incident exports store only sanitized Markdown files plus redaction summaries — never unsanitized copies.

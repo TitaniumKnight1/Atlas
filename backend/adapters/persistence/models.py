@@ -1127,3 +1127,18 @@ class IncidentNoteRecord(Base):
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     updated_at: Mapped[str | None] = mapped_column(String)
     created_by: Mapped[str | None] = mapped_column(String)
+
+
+class IncidentExportRecord(Base):
+    __tablename__ = "incident_exports"
+    __table_args__ = (Index("idx_incident_exports_group_time", "incident_group_id", "created_at"),)
+
+    incident_export_id: Mapped[str] = mapped_column(String, primary_key=True)
+    incident_group_id: Mapped[str] = mapped_column(ForeignKey("incident_groups.incident_group_id"), nullable=False)
+    occurrence_id: Mapped[str | None] = mapped_column(String)
+    export_format: Mapped[str] = mapped_column(String, nullable=False)
+    redaction_profile: Mapped[str] = mapped_column(String, nullable=False)
+    local_file_path: Mapped[str | None] = mapped_column(Text)
+    content_hash: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    warning_json: Mapped[dict | None] = mapped_column(JSON)

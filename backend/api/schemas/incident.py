@@ -17,3 +17,8 @@ class ResponseEnvelope(BaseModel):
 
 class CompareIncidentsRequest(BaseModel):
     incident_group_ids: list[str] = Field(min_length=2)
+
+
+class ExportIncidentMarkdownRequest(BaseModel):
+    occurrence_id: str | None = None
+    redaction_profile: str = "default"

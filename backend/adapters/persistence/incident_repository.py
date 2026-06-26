@@ -8,6 +8,7 @@ from sqlalchemy import delete, func, select, update
 from backend.adapters.persistence.models import (
     IncidentBreadcrumbRecord,
     IncidentContextSnapshotRecord,
+    IncidentExportRecord,
     IncidentFingerprintRecord,
     IncidentGroupRecord,
     IncidentOccurrenceRecord,
@@ -421,6 +422,46 @@ class IncidentRepository:
             .order_by(IncidentFingerprintRecord.created_at.desc())
         ).scalar_one_or_none()
         return dict(record.components_json or {}) if record is not None else None
+
+    def create_export_record(
+        self,
+        *,
+        incident_export_id: str,
+        incident_group_id: str,
+        occurrence_id: str | None,
+        export_format: str,
+        redaction_profile: str,
+        content_hash: str,
+        local_file_path: str | None,
+        warning_json: dict[str, Any],
+        created_at: datetime,
+    ) -> IncidentExportRecord:
+        record = IncidentExportRecord(
+            incident_export_id=incident_export_id,
+            incident_group_id=incident_group_id,
+            occurrence_id=occurrence_id,
+            export_format=export_format,
+            redaction_profile=redaction_profile,
+            local_file_path=local_file_path,
+            content_hash=content_hash,
+            created_at=created_at.isoformat(),
+            warning_json=warning_json,
+        )
+        self._session.add(record)
+        return record
+
+    def list_exports(self, project_id: ProjectId, incident_group_id: str) -> list[IncidentExportRecord]:
+        self._ensure_project_scope(project_id)
+        group = self.get_group(project_id, incident_group_id)
+        if group is None:
+            return []
+        return list(
+            self._session.execute(
+                select(IncidentExportRecord)
+                .where(IncidentExportRecord.incident_group_id == incident_group_id)
+                .order_by(IncidentExportRecord.created_at.desc())
+            ).scalars()
+        )
 
     def has_placeholder_groups(self, project_id: ProjectId) -> bool:
         return bool(self.list_placeholder_groups(project_id))

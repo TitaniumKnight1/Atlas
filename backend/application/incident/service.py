@@ -7,6 +7,7 @@ from typing import Any
 from backend.adapters.incident.signal_extractor import signals_from_assembled
 from backend.adapters.incident.snapshot_assembler import IncidentSnapshotAssembler
 from backend.adapters.persistence import AuditRepository, IncidentRepository, ProjectRepository
+from backend.application.incident.export_service import export_incident_markdown
 from backend.application.incident.grouping_service import (
     compare_groups,
     grouping_existing_group,
@@ -266,6 +267,46 @@ class IncidentApplicationService:
                 )
         return compare_groups(payloads)
 
+    def export_incident_markdown(
+        self,
+        project_id: ProjectId,
+        *,
+        incident_group_id: str,
+        occurrence_id: str | None = None,
+        redaction_profile: str = "default",
+    ) -> dict[str, Any]:
+        """Single sanitized export path — always redacts before returning Markdown."""
+        self.ensure_grouping_ready(project_id)
+        exports_dir = self._container.app_data_dir / "exports" / str(project_id)
+        with self._container.create_unit_of_work(project_id) as uow:
+            uow.begin()
+            self._require_project(uow.repository(ProjectRepository), project_id)
+            try:
+                result = export_incident_markdown(
+                    uow=uow,
+                    project_id=project_id,
+                    incident_group_id=incident_group_id,
+                    occurrence_id=occurrence_id,
+                    redaction_profile=redaction_profile,
+                    exports_dir=exports_dir,
+                    repository=uow.repository(IncidentRepository),
+                )
+            except ValueError as error:
+                raise IncidentApplicationError(ErrorCode.NOT_FOUND, str(error)) from error
+            uow.commit()
+        return result
+
+    def list_incident_exports(self, project_id: ProjectId, incident_group_id: str) -> list[dict[str, Any]]:
+        self.ensure_grouping_ready(project_id)
+        with self._container.session_factory() as session:
+            from backend.infrastructure.unit_of_work import RepositoryContext
+
+            repository = IncidentRepository(RepositoryContext(session=session, project_id=project_id))
+            if repository.get_group(project_id, incident_group_id) is None:
+                raise IncidentApplicationError(ErrorCode.NOT_FOUND, f"Incident not found: {incident_group_id}")
+            records = repository.list_exports(project_id, incident_group_id)
+        return [_export_data(record) for record in records]
+
     def _require_project(self, repository: ProjectRepository, project_id: ProjectId) -> None:
         if repository.get_project(project_id) is None:
             raise IncidentApplicationError(ErrorCode.NOT_FOUND, f"Project not found: {project_id}")
@@ -294,4 +335,18 @@ def _occurrence_data(record: Any) -> dict[str, Any]:
         "occurred_at": record.occurred_at,
         "source_type": record.source_type,
         "message": record.message,
+    }
+
+
+def _export_data(record: Any) -> dict[str, Any]:
+    return {
+        "incident_export_id": record.incident_export_id,
+        "incident_group_id": record.incident_group_id,
+        "occurrence_id": record.occurrence_id,
+        "export_format": record.export_format,
+        "redaction_profile": record.redaction_profile,
+        "content_hash": record.content_hash,
+        "local_file_path": record.local_file_path,
+        "created_at": record.created_at,
+        "redaction_summary": record.warning_json or {},
     }

@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query
 
 from backend.api.dependencies import get_container
-from backend.api.schemas.incident import CompareIncidentsRequest, ErrorPayload, ResponseEnvelope
+from backend.api.schemas.incident import CompareIncidentsRequest, ErrorPayload, ExportIncidentMarkdownRequest, ResponseEnvelope
 from backend.application.incident import IncidentApplicationError
 from backend.domain.shared_kernel import ProjectId
 from backend.infrastructure.di import ApplicationContainer
@@ -58,6 +58,39 @@ def compare_incidents(
 def migrate_grouping(project_id: str, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
     try:
         return _success(container.create_incident_service().migrate_placeholder_incidents(ProjectId(project_id)))
+    except IncidentApplicationError as error:
+        return _failure(error)
+
+
+@router.post("/projects/{project_id}/incidents/{incident_group_id}/exports/markdown", response_model=ResponseEnvelope)
+def export_incident_markdown(
+    project_id: str,
+    incident_group_id: str,
+    body: ExportIncidentMarkdownRequest | None = None,
+    container: ApplicationContainer = Depends(get_container),
+) -> ResponseEnvelope:
+    try:
+        request = body or ExportIncidentMarkdownRequest()
+        return _success(
+            container.create_incident_service().export_incident_markdown(
+                ProjectId(project_id),
+                incident_group_id=incident_group_id,
+                occurrence_id=request.occurrence_id,
+                redaction_profile=request.redaction_profile,
+            )
+        )
+    except IncidentApplicationError as error:
+        return _failure(error)
+
+
+@router.get("/projects/{project_id}/incidents/{incident_group_id}/exports", response_model=ResponseEnvelope)
+def list_incident_exports(
+    project_id: str,
+    incident_group_id: str,
+    container: ApplicationContainer = Depends(get_container),
+) -> ResponseEnvelope:
+    try:
+        return _success(container.create_incident_service().list_incident_exports(ProjectId(project_id), incident_group_id))
     except IncidentApplicationError as error:
         return _failure(error)
 
