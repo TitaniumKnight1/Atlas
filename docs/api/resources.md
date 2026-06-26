@@ -30,12 +30,12 @@ Responsibility: resource inventory, dependency graph, install/update/enable/disa
 
 | Event | Payload summary | Consumers |
 | --- | --- | --- |
-| `ResourceInventoryChanged` | `project_id`, added/removed/changed counts | Monitoring, Automation, Audit |
+| `ResourceInventoryChanged` | `project_id`, added/removed/changed counts | Audit, Event bus (local-only; never telemetry) |
 | `ResourceInstallPlanned` | `project_id`, source, target | Backup, Audit |
 | `ResourceInstalled` | `project_id`, `resource_id`, source | Git, Config, Incident, Audit |
 | `ResourceUpdatePlanned` | `project_id`, `resource_id`, target version | Backup, Automation |
-| `ResourceUpdated` | `project_id`, `resource_id`, version | Incident, Monitoring, Audit |
-| `ResourceEnabledStateChanged` | `project_id`, `resource_id`, state | Automation, Monitoring, Audit |
+| `ResourceUpdated` | `project_id`, `resource_id`, version | Incident, Audit, Event bus (local-only) |
+| `ResourceEnabledStateChanged` | `project_id`, `resource_id`, state | Automation, Audit, Event bus (local-only) |
 | `ResourceDeleted` | `project_id`, `resource_id` | Incident, Audit |
 
 ## Subscribed Events
@@ -64,7 +64,12 @@ Responsibility: resource inventory, dependency graph, install/update/enable/disa
 | --- | --- | --- |
 | `GET /api/v1/projects/{project_id}/resources` | filters, pagination | resource list |
 | `GET /api/v1/projects/{project_id}/resources/graph` | optional root | dependency graph |
-| `POST /api/v1/projects/{project_id}/resources/scan` | path filters | operation id |
+| `GET /api/v1/projects/{project_id}/resources/graph/health` | — | graph health + findings |
+| `GET /api/v1/projects/{project_id}/resources/graph/order` | — | topological start order |
+| `GET /api/v1/projects/{project_id}/resources/{resource_id}/dependencies` | transitive flag | dependency list |
+| `GET /api/v1/projects/{project_id}/resources/{resource_id}/dependents` | transitive flag | dependent list |
+| `GET /api/v1/projects/{project_id}/resources/{resource_id}/health` | — | resource health summary |
+| `POST /api/v1/projects/{project_id}/resources/scan` | path filters | scan result |
 | `POST /api/v1/projects/{project_id}/resources/install-plan` | source/target | command plan |
 | `POST /api/v1/projects/{project_id}/resources/install` | approved plan | resource/operation refs |
 | `POST /api/v1/projects/{project_id}/resources/{resource_id}/update-plan` | target version | command plan |

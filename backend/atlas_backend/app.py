@@ -14,6 +14,7 @@ from backend.api.routers.config import router as config_router
 from backend.api.routers.git import router as git_router
 from backend.api.routers.health import router as health_router
 from backend.api.routers.project import router as project_router
+from backend.api.routers.resources import router as resources_router
 from backend.api.routers.setup import router as setup_router
 from backend.api.routers.streams import router as streams_router
 from backend.api.routers.telemetry import router as telemetry_router
@@ -53,6 +54,7 @@ def create_app(app_data_dir: Path | None = None) -> FastAPI:
     app.include_router(project_router)
     app.include_router(config_router)
     app.include_router(git_router)
+    app.include_router(resources_router)
     app.include_router(setup_router)
     app.include_router(streams_router)
     app.include_router(telemetry_router)

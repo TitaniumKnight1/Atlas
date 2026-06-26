@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -653,3 +653,119 @@ class GitOperationRecord(Base):
     started_at: Mapped[str | None] = mapped_column(String)
     finished_at: Mapped[str | None] = mapped_column(String)
     result_json: Mapped[dict | None] = mapped_column(JSON)
+
+
+class ResourceRecord(Base):
+    __tablename__ = "resources"
+    __table_args__ = (
+        UniqueConstraint("project_id", "resource_name", name="uq_resources_project_name"),
+        CheckConstraint("enabled_state in ('enabled', 'disabled', 'unknown')", name="ck_resources_enabled_state"),
+        CheckConstraint("resource_type in ('script', 'map', 'framework', 'library', 'unknown')", name="ck_resources_type"),
+        Index("idx_resources_project_state", "project_id", "enabled_state"),
+        Index("idx_resources_startup", "project_id", "startup_order"),
+    )
+
+    resource_id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    resource_name: Mapped[str] = mapped_column(Text, nullable=False)
+    relative_path: Mapped[str] = mapped_column(Text, nullable=False)
+    resource_type: Mapped[str] = mapped_column(String, nullable=False)
+    enabled_state: Mapped[str] = mapped_column(String, nullable=False)
+    startup_order: Mapped[int | None] = mapped_column(Integer)
+    current_version_id: Mapped[str | None] = mapped_column(String)
+    git_repository_id: Mapped[str | None] = mapped_column(ForeignKey("git_repositories.git_repository_id"))
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class ResourceVersionRecord(Base):
+    __tablename__ = "resource_versions"
+    __table_args__ = (
+        UniqueConstraint("resource_id", "content_hash", name="uq_resource_versions_resource_hash"),
+        Index("idx_resource_versions_resource_time", "resource_id", "detected_at"),
+    )
+
+    resource_version_id: Mapped[str] = mapped_column(String, primary_key=True)
+    resource_id: Mapped[str] = mapped_column(ForeignKey("resources.resource_id"), nullable=False)
+    version_label: Mapped[str | None] = mapped_column(String)
+    git_commit_sha: Mapped[str | None] = mapped_column(String)
+    source_ref: Mapped[str | None] = mapped_column(Text)
+    content_hash: Mapped[str | None] = mapped_column(String)
+    manifest_json: Mapped[dict | None] = mapped_column(JSON)
+    detected_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class ResourceDependencyRecord(Base):
+    __tablename__ = "resource_dependencies"
+    __table_args__ = (
+        UniqueConstraint("source_resource_id", "target_name", "dependency_type", name="uq_resource_dependencies_source_target_type"),
+        CheckConstraint("dependency_type in ('requires', 'optional', 'conflicts', 'loads_after')", name="ck_resource_dependencies_type"),
+        Index("idx_resource_dependencies_project", "project_id"),
+        Index("idx_resource_dependencies_target", "target_resource_id"),
+    )
+
+    resource_dependency_id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    source_resource_id: Mapped[str] = mapped_column(ForeignKey("resources.resource_id"), nullable=False)
+    target_resource_id: Mapped[str | None] = mapped_column(ForeignKey("resources.resource_id"))
+    target_name: Mapped[str] = mapped_column(Text, nullable=False)
+    dependency_type: Mapped[str] = mapped_column(String, nullable=False)
+    declared_in_path: Mapped[str | None] = mapped_column(Text)
+    detected_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class ResourceStateChangeRecord(Base):
+    __tablename__ = "resource_state_changes"
+    __table_args__ = (
+        CheckConstraint(
+            "change_type in ('install', 'update', 'enable', 'disable', 'delete', 'rollback')",
+            name="ck_resource_state_changes_type",
+        ),
+        Index("idx_resource_state_changes_resource_time", "resource_id", "changed_at"),
+    )
+
+    resource_state_change_id: Mapped[str] = mapped_column(String, primary_key=True)
+    resource_id: Mapped[str] = mapped_column(ForeignKey("resources.resource_id"), nullable=False)
+    change_type: Mapped[str] = mapped_column(String, nullable=False)
+    from_state: Mapped[str | None] = mapped_column(String)
+    to_state: Mapped[str | None] = mapped_column(String)
+    command_execution_id: Mapped[str | None] = mapped_column(ForeignKey("command_executions.command_execution_id"))
+    audit_event_id: Mapped[str | None] = mapped_column(ForeignKey("audit_events.audit_event_id"))
+    changed_at: Mapped[str] = mapped_column(String, nullable=False)
+    details_json: Mapped[dict | None] = mapped_column(JSON)
+
+
+class ResourceHealthSnapshotRecord(Base):
+    __tablename__ = "resource_health_snapshots"
+    __table_args__ = (
+        CheckConstraint("health_status in ('healthy', 'warning', 'error', 'unknown')", name="ck_resource_health_status"),
+        Index("idx_resource_health_resource_time", "resource_id", "sampled_at"),
+        Index("idx_resource_health_status", "health_status"),
+    )
+
+    resource_health_snapshot_id: Mapped[str] = mapped_column(String, primary_key=True)
+    resource_id: Mapped[str] = mapped_column(ForeignKey("resources.resource_id"), nullable=False)
+    environment_id: Mapped[str | None] = mapped_column(String)
+    health_status: Mapped[str] = mapped_column(String, nullable=False)
+    server_fps: Mapped[float | None] = mapped_column(Float)
+    cpu_percent: Mapped[float | None] = mapped_column(Float)
+    memory_mb: Mapped[float | None] = mapped_column(Float)
+    sampled_at: Mapped[str] = mapped_column(String, nullable=False)
+    details_json: Mapped[dict | None] = mapped_column(JSON)
+
+
+class ResourceInstallSourceRecord(Base):
+    __tablename__ = "resource_install_sources"
+    __table_args__ = (
+        UniqueConstraint("resource_id", "source_type", "source_uri", name="uq_resource_install_sources_resource_type_uri"),
+        CheckConstraint("source_type in ('git', 'zip', 'local', 'plugin', 'manual')", name="ck_resource_install_sources_type"),
+        Index("idx_resource_install_sources_type", "source_type"),
+    )
+
+    resource_install_source_id: Mapped[str] = mapped_column(String, primary_key=True)
+    resource_id: Mapped[str] = mapped_column(ForeignKey("resources.resource_id"), nullable=False)
+    source_type: Mapped[str] = mapped_column(String, nullable=False)
+    source_uri: Mapped[str | None] = mapped_column(Text)
+    plugin_id: Mapped[str | None] = mapped_column(String)
+    trusted_at: Mapped[str | None] = mapped_column(String)
+    metadata_json: Mapped[dict | None] = mapped_column(JSON)

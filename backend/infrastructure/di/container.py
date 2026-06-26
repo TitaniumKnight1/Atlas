@@ -19,6 +19,7 @@ from backend.adapters.config import FiveMConfigValidator, LocalConfigSecretScann
 from backend.adapters.git import GitPythonProvider
 from backend.application.config.service import ConfigApplicationService
 from backend.application.git.service import GitApplicationService
+from backend.application.resources.service import ResourceApplicationService
 from backend.application.setup.service import SetupApplicationService
 from backend.application.telemetry.service import TelemetryApplicationService
 from backend.domain.shared_kernel.identifiers import ProjectId
@@ -77,6 +78,9 @@ class ApplicationContainer:
             validator=FiveMConfigValidator(),
             secret_scanner=LocalConfigSecretScanner(),
         )
+
+    def create_resource_service(self) -> ResourceApplicationService:
+        return ResourceApplicationService(container=self, filesystem=self.setup_filesystem)
 
     def create_setup_service(self) -> SetupApplicationService:
         service = SetupApplicationService(
