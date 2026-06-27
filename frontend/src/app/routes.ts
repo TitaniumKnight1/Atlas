@@ -49,7 +49,7 @@ export const featureRoutes: FeatureRoute[] = [
     path: "/resources",
     label: "Resources",
     summary: "Install, update, and reason about resources.",
-    implemented: false,
+    implemented: true,
     group: "Workspace",
     glyph: "R"
   },
@@ -58,7 +58,7 @@ export const featureRoutes: FeatureRoute[] = [
     path: "/git",
     label: "Git",
     summary: "Version project changes deliberately.",
-    implemented: false,
+    implemented: true,
     group: "Workspace",
     glyph: "G"
   },
@@ -67,7 +67,7 @@ export const featureRoutes: FeatureRoute[] = [
     path: "/config",
     label: "Config",
     summary: "Edit and validate server configuration.",
-    implemented: false,
+    implemented: true,
     group: "Workspace",
     glyph: "C"
   },

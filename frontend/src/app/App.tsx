@@ -1,5 +1,8 @@
+import { ConfigView } from "../features/config/ConfigView";
+import { GitView } from "../features/git/GitView";
 import { EmptyState } from "../components/StateViews";
 import { ProjectView } from "../features/project/ProjectView";
+import { ResourceView } from "../features/resources/ResourceView";
 import { SetupView } from "../features/setup/SetupView";
 import "./App.css";
 import { AppShell } from "./AppShell";
@@ -18,6 +21,12 @@ export function App() {
         <ProjectView />
       ) : activeRoute.id === "setup" ? (
         <SetupView />
+      ) : activeRoute.id === "resources" ? (
+        <ResourceView />
+      ) : activeRoute.id === "git" ? (
+        <GitView />
+      ) : activeRoute.id === "config" ? (
+        <ConfigView />
       ) : (
         <EmptyState
           title={`${activeRoute.label} is planned`}

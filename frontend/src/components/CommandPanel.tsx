@@ -302,7 +302,7 @@ function extractPlanSteps(payload: Record<string, unknown> | undefined | null): 
   if (!payload) {
     return undefined;
   }
-  const candidates = ["steps", "plan_steps", "rollback_steps", "operations", "plan"];
+  const candidates = ["steps", "plan_steps", "rollback_steps", "operations", "plan", "ordered_items", "outcomes"];
   for (const key of candidates) {
     const value = payload[key];
     if (Array.isArray(value)) {
@@ -320,7 +320,7 @@ function toCommandPlanStep(value: unknown): CommandPlanStep | undefined {
     return undefined;
   }
   const record = value as Record<string, unknown>;
-  const label = String(record.label ?? record.name ?? record.operation ?? record.action ?? record.step ?? "Step");
+  const label = String(record.label ?? record.name ?? record.resource_name ?? record.operation ?? record.action ?? record.step ?? "Step");
   const detailValue = record.detail ?? record.description ?? record.reason ?? record.path;
   const rawStatus = String(record.status ?? record.state ?? "not-attempted").toLowerCase();
   return {

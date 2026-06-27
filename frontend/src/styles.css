@@ -1471,3 +1471,32 @@ pre {
     transform: translateX(320%);
   }
 }
+
+.atlas-code-editor {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.atlas-code-editor__note {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.atlas-code-editor__area {
+  min-height: 18rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.dependency-graph {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.dependency-graph__svg {
+  display: block;
+  border: 1px solid var(--atlas-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--atlas-bg-sunken);
+}
