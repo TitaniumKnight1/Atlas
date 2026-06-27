@@ -166,6 +166,21 @@ class GitPythonProvider:
         repo = Repo(str(repo_path))
         repo.git.reset("--soft", commit_sha)
 
+    def ls_remote(self, *, remote_url: str) -> dict[str, str]:
+        from git import Git
+        g = Git()
+        refs: dict[str, str] = {}
+        try:
+            output = g.ls_remote(remote_url)
+            if output:
+                for line in output.splitlines():
+                    parts = line.split(maxsplit=1)
+                    if len(parts) == 2:
+                        refs[parts[1]] = parts[0]
+        except GitCommandError as e:
+            raise RuntimeError(f"Failed to connect to remote: {e}") from e
+        return refs
+
 
 def _default_branch(repo: Repo) -> str | None:
     try:

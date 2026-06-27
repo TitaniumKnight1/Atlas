@@ -82,6 +82,44 @@ class BackupApplicationService:
             records = BackupRepository(RepositoryContext(session=session, project_id=project_id)).list_plans(project_id)
         return [_plan_data(record) for record in records]
 
+    def get_plan(self, project_id: ProjectId, plan_id: str) -> dict[str, Any]:
+        with self._container.session_factory() as session:
+            plan = BackupRepository(RepositoryContext(session=session, project_id=project_id)).get_plan(project_id, plan_id)
+            if not plan:
+                raise BackupApplicationError(ErrorCode.NOT_FOUND, f"Backup plan not found: {plan_id}")
+            return _plan_data(plan)
+
+    def update_plan(
+        self,
+        project_id: ProjectId,
+        plan_id: str,
+        *,
+        retention_policy: dict[str, Any] | None = None,
+        schedule_interval_seconds: int | None = None,
+        is_enabled: bool | None = None,
+    ) -> dict[str, Any]:
+        with self._container.create_unit_of_work(project_id) as uow:
+            uow.begin()
+            repository = uow.repository(BackupRepository)
+            plan = repository.get_plan(project_id, plan_id)
+            if not plan:
+                raise BackupApplicationError(ErrorCode.NOT_FOUND, f"Backup plan not found: {plan_id}")
+
+            if retention_policy is not None:
+                plan.retention_policy_json = retention_policy
+            if schedule_interval_seconds is not None:
+                plan.schedule_interval_seconds = schedule_interval_seconds
+            if is_enabled is not None:
+                plan.is_enabled = 1 if is_enabled else 0
+
+            plan.updated_at = self._clock().isoformat()
+            uow.commit()
+
+        if retention_policy is not None:
+            self.evaluate_retention(project_id, plan_id=plan_id)
+
+        return self.get_plan(project_id, plan_id)
+
     def list_runs(self, project_id: ProjectId, *, limit: int = 50) -> list[dict[str, Any]]:
         with self._container.session_factory() as session:
             repository = BackupRepository(RepositoryContext(session=session, project_id=project_id))

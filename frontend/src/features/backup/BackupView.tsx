@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { listProjects, type ProjectSummary } from "../../api/project";
 import {
   createBackupPlan,
+  updateBackupPlan,
   evaluateRetention,
   executeRestore,
   getBackupRun,
@@ -279,16 +280,28 @@ export function BackupView() {
     setRetentionBusy(true);
     setError(null);
     try {
-      await createBackupPlan(selectedProjectId, {
-        name: retentionPlanName,
-        backup_scope: "full_project",
-        retention_policy: {
-          keep_count: Number(retentionKeepCount) || undefined,
-          keep_days: Number(retentionKeepDays) || undefined
-        },
-        is_enabled: true
-      });
-      setToast({ title: "Retention plan created", detail: "Existing plans are read-only — no PATCH endpoint; new plan added with updated policy.", severity: "info" });
+      if (selectedPlanId || primaryPlan?.backup_plan_id) {
+        const planId = selectedPlanId || primaryPlan?.backup_plan_id;
+        await updateBackupPlan(selectedProjectId, planId!, {
+          retention_policy: {
+            keep_count: Number(retentionKeepCount) || undefined,
+            keep_days: Number(retentionKeepDays) || undefined
+          },
+          is_enabled: true
+        });
+        setToast({ title: "Retention plan updated", detail: "Existing plan updated with new policy.", severity: "info" });
+      } else {
+        await createBackupPlan(selectedProjectId, {
+          name: retentionPlanName,
+          backup_scope: "full_project",
+          retention_policy: {
+            keep_count: Number(retentionKeepCount) || undefined,
+            keep_days: Number(retentionKeepDays) || undefined
+          },
+          is_enabled: true
+        });
+        setToast({ title: "Retention plan created", detail: "New plan added with updated policy.", severity: "info" });
+      }
       bumpMutation();
     } catch (caught) {
       setError(caught);
@@ -501,7 +514,7 @@ export function BackupView() {
           <Surface>
             <SectionHeading
               title="Current retention policies"
-              detail="Plans are read-only after creation — create a new plan to change policy (no PATCH endpoint)."
+              detail="Review and update existing backup plans."
             />
             {plans.length === 0 ? (
               <EmptyState title="No backup plans" detail="Create a plan below to define retention keep count and days." />
@@ -532,7 +545,7 @@ export function BackupView() {
           </Surface>
 
           <Surface>
-            <SectionHeading title="Create plan with retention" detail="The last-backup guard prevents silently pruning the only remaining backup during evaluate." />
+            <SectionHeading title="Update or Create plan" detail="The last-backup guard prevents silently pruning the only remaining backup during evaluate." />
             <div className="atlas-stack" style={{ gap: "var(--space-3)" }}>
               <Field label="Plan name">
                 <Input value={retentionPlanName} onChange={(event) => setRetentionPlanName(event.target.value)} />
@@ -547,7 +560,7 @@ export function BackupView() {
               </div>
               <div className="atlas-row" style={{ gap: "var(--space-2)" }}>
                 <Button loading={retentionBusy} variant="primary" onClick={() => void handleCreateRetentionPlan()}>
-                  Create plan
+                  {selectedPlanId || primaryPlan?.backup_plan_id ? "Update plan" : "Create plan"}
                 </Button>
                 <Button loading={retentionBusy} variant="secondary" onClick={() => void handleEvaluateRetention()}>
                   Evaluate retention now

@@ -70,16 +70,7 @@ export async function previewCloneRepository(projectId: string, request: CloneRe
 }
 
 export async function dryRunCloneRepository(projectId: string, request: CloneRepositoryRequest): Promise<BackendResponse<DryRunData>> {
-  const preview = await previewCloneRepository(projectId, request);
-  return {
-    data: {
-      command_type: preview.data.command_type,
-      valid: true,
-      simulation: preview.data.preview
-    },
-    warnings: preview.warnings,
-    auditRef: preview.auditRef
-  };
+  return requestBackend<DryRunData>(`/api/v1/projects/${projectId}/git/clone-dry-run`, jsonRequest(request));
 }
 
 export async function cloneRepository(projectId: string, request: CloneRepositoryRequest): Promise<GitCommandResponse> {
@@ -95,16 +86,7 @@ export async function previewPullRepository(projectId: string, repoId: string): 
 }
 
 export async function dryRunPullRepository(projectId: string, repoId: string): Promise<BackendResponse<DryRunData>> {
-  const preview = await previewPullRepository(projectId, repoId);
-  return {
-    data: {
-      command_type: preview.data.command_type,
-      valid: true,
-      simulation: preview.data.preview
-    },
-    warnings: preview.warnings,
-    auditRef: preview.auditRef
-  };
+  return requestBackend<DryRunData>(`/api/v1/projects/${projectId}/git/repositories/${repoId}/pull-dry-run`, jsonRequest({}));
 }
 
 export async function pullRepository(projectId: string, repoId: string, idempotencyKey?: string | null): Promise<GitCommandResponse> {

@@ -45,15 +45,18 @@ def discover_repositories(project_id: str, request: DiscoverGitRequest, containe
         return _failure(error)
 
 
-@router.post("/projects/{project_id}/git/clone-plan", response_model=ResponseEnvelope)
-def plan_clone(project_id: str, request: CloneRepositoryRequest, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
-    preview = container.create_git_service().preview_clone_repository(
-        project_id=ProjectId(project_id),
-        remote_url=request.remote_url,
-        destination_path=request.destination_path,
-        repository_role=request.repository_role,
-    )
-    return _success(_preview_data(preview), warnings=preview.warnings)
+@router.post("/projects/{project_id}/git/clone-dry-run", response_model=ResponseEnvelope)
+def dry_run_clone(project_id: str, request: CloneRepositoryRequest, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        dry_run = container.create_git_service().dry_run_clone_repository(
+            project_id=ProjectId(project_id),
+            remote_url=request.remote_url,
+            destination_path=request.destination_path,
+            repository_role=request.repository_role or "resource",
+        )
+        return _success(_dry_run_data(dry_run), warnings=dry_run.warnings)
+    except GitApplicationError as error:
+        return _failure(error)
 
 
 @router.post("/projects/{project_id}/git/clone", response_model=ResponseEnvelope)
@@ -96,11 +99,11 @@ def get_status(project_id: str, repo_id: str, container: ApplicationContainer = 
         return _failure(error)
 
 
-@router.post("/projects/{project_id}/git/repositories/{repo_id}/pull-plan", response_model=ResponseEnvelope)
-def plan_pull(project_id: str, repo_id: str, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+@router.post("/projects/{project_id}/git/repositories/{repo_id}/pull-dry-run", response_model=ResponseEnvelope)
+def dry_run_pull(project_id: str, repo_id: str, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
     try:
-        preview = container.create_git_service().preview_pull_repository(project_id=ProjectId(project_id), git_repository_id=repo_id)
-        return _success(_preview_data(preview), warnings=preview.warnings)
+        dry_run = container.create_git_service().dry_run_pull_repository(project_id=ProjectId(project_id), git_repository_id=repo_id)
+        return _success(_dry_run_data(dry_run), warnings=dry_run.warnings)
     except GitApplicationError as error:
         return _failure(error)
 
@@ -257,3 +260,7 @@ def _command_success(result: CommandExecutionResult) -> ResponseEnvelope:
 
 def _preview_data(preview: CommandPreview) -> dict:
     return {"command_type": preview.command_type, "summary": preview.summary, "risk_level": preview.risk_level.value, "preview": preview.preview}
+
+
+def _dry_run_data(dry_run: Any) -> dict:
+    return {"command_type": dry_run.command_type, "valid": dry_run.valid, "simulation": dry_run.simulation}

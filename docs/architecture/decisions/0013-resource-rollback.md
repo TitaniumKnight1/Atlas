@@ -16,6 +16,7 @@ M5b provides per-resource composite compensation undo. Operators need to reverse
 4. **Batch reporting, not batch atomicity** — Each resource reversal remains atomic via M5b `CompositeCompensation`. The batch command reports precise partial state; it does not claim all-or-nothing multi-resource undo.
 5. **Safety** — Rolling back a resource with **enabled** dependents outside the batch warns in preview and blocks execute (consistent with M5b disable/delete policy).
 6. **No undo-of-rollback** — The batch command has preview and execute only; reversing a halted rollback is explicitly out of scope.
+7. **Delete Rollback (Placeholder Semantics)** — Reversing a resource deletion immediately recreates the resource record as a placeholder (via `upsert_resource`) to satisfy foreign-key constraints for restored state changes. Full hydration of the resource (metadata, dependencies, validation state) is deferred until the next scanner cycle, cleanly separating structural restoration from full discovery.
 
 ## Consequences
 

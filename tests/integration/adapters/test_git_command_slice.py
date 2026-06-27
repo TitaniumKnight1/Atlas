@@ -203,3 +203,35 @@ def _init_bare_repo_with_commit(bare_path: Path) -> Path:
     repo.create_remote("origin", str(bare_path))
     repo.remotes.origin.push(refspec=f"{branch}:{branch}")
     return bare_path
+
+def test_dry_run_clone_does_not_mutate(tmp_path: Path) -> None:
+    container, project_id, bare_path = _fixture_project(tmp_path)
+    service = container.create_git_service()
+    clone_dest = tmp_path / "dry-run-clone"
+    try:
+        dry_run = service.dry_run_clone_repository(project_id=project_id, remote_url=str(bare_path), destination_path=str(clone_dest))
+        assert dry_run.valid is True
+        assert not clone_dest.exists()  # Assert no mutation
+        assert "CloneRepository" == dry_run.command_type
+    finally:
+        container.close()
+
+
+def test_dry_run_pull_does_not_mutate(tmp_path: Path) -> None:
+    container, project_id, bare_path = _fixture_project(tmp_path)
+    service = container.create_git_service()
+    clone_dest = tmp_path / "dry-run-pull"
+    try:
+        result = service.execute_clone_repository(project_id=project_id, remote_url=str(bare_path), destination_path=str(clone_dest))
+        repo_id = result.result["git_repository_id"]
+        
+        before_status = service.get_worktree_status(project_id, repo_id)
+        
+        dry_run = service.dry_run_pull_repository(project_id=project_id, git_repository_id=repo_id)
+        assert dry_run.valid is True
+        assert dry_run.simulation["remote_head_sha"] == before_status["head_commit_sha"]
+        
+        after_status = service.get_worktree_status(project_id, repo_id)
+        assert before_status == after_status  # Assert no mutation
+    finally:
+        container.close()

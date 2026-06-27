@@ -10,6 +10,7 @@ from backend.api.schemas.backup import (
     ResponseEnvelope,
     RestoreBackupRequest,
     RunBackupRequest,
+    UpdateBackupPlanRequest,
 )
 from backend.application.backup import BackupApplicationError
 from backend.domain.shared_kernel import ProjectId
@@ -45,6 +46,25 @@ def create_backup_plan(
         return _failure(error)
 
 
+@router.patch("/projects/{project_id}/backups/plans/{plan_id}", response_model=ResponseEnvelope)
+def update_backup_plan(
+    project_id: str,
+    plan_id: str,
+    request: UpdateBackupPlanRequest,
+    container: ApplicationContainer = Depends(get_container),
+) -> ResponseEnvelope:
+    try:
+        return _success(
+            container.create_backup_service().update_plan(
+                ProjectId(project_id),
+                plan_id=plan_id,
+                retention_policy=request.retention_policy,
+                schedule_interval_seconds=request.schedule_interval_seconds,
+                is_enabled=request.is_enabled,
+            )
+        )
+    except BackupApplicationError as error:
+        return _failure(error)
 @router.get("/projects/{project_id}/backups/runs", response_model=ResponseEnvelope)
 def list_backup_runs(project_id: str, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
     return _success(container.create_backup_service().list_runs(ProjectId(project_id)))

@@ -164,6 +164,42 @@ class GitApplicationService:
             risk_level=RiskLevel.HIGH,
         )
 
+    def dry_run_clone_repository(
+        self,
+        *,
+        project_id: ProjectId,
+        remote_url: str,
+        destination_path: str,
+        repository_role: str = RepositoryRole.RESOURCE.value,
+    ) -> DryRunResult:
+        preview = self.preview_clone_repository(
+            project_id=project_id,
+            remote_url=remote_url,
+            destination_path=destination_path,
+            repository_role=repository_role,
+        )
+        warnings = list(preview.warnings)
+        valid = True
+        try:
+            refs = self._provider.ls_remote(remote_url=remote_url)
+            if not refs:
+                warnings.append("Remote reachable but returned no refs (possibly empty repository).")
+        except RuntimeError as e:
+            valid = False
+            warnings.append(str(e))
+        
+        destination = Path(destination_path).expanduser().resolve()
+        if destination.exists() and any(destination.iterdir()):
+            valid = False
+            warnings.append(f"Destination path {destination} exists and is not empty; clone will fail.")
+
+        return DryRunResult(
+            command_type="CloneRepository",
+            valid=valid,
+            simulation=preview.preview,
+            warnings=warnings,
+        )
+
     def execute_clone_repository(
         self,
         *,
@@ -336,6 +372,40 @@ class GitApplicationService:
             },
             warnings=warnings,
             risk_level=risk,
+        )
+
+    def dry_run_pull_repository(self, *, project_id: ProjectId, git_repository_id: str) -> DryRunResult:
+        preview = self.preview_pull_repository(project_id=project_id, git_repository_id=git_repository_id)
+        record = self._get_repository(project_id, git_repository_id)
+        warnings = list(preview.warnings)
+        valid = True
+        simulation = dict(preview.preview)
+        
+        try:
+            status = self._provider.status(repo_path=Path(record.local_path))
+            remote_refs = self._provider.ls_remote(remote_url=record.remote_url or "")
+            remote_ref_name = f"refs/heads/{status.branch_name}"
+            if status.branch_name and remote_ref_name in remote_refs:
+                remote_sha = remote_refs[remote_ref_name]
+                if remote_sha != status.head_commit_sha:
+                    simulation["remote_head_sha"] = remote_sha
+                    simulation["note"] = "Remote branch has different HEAD. Pull will modify local tree."
+                else:
+                    simulation["remote_head_sha"] = remote_sha
+                    simulation["note"] = "Already up to date with remote tracking branch."
+            else:
+                simulation["note"] = "Could not accurately determine remote tracking status without fetching (partial preview)."
+                warnings.append("Remote tracking branch not found or unknown. Pull behavior is uncertain without mutation.")
+                
+        except RuntimeError as e:
+            valid = False
+            warnings.append(f"Failed to check remote: {e}")
+
+        return DryRunResult(
+            command_type="PullRepository",
+            valid=valid,
+            simulation=simulation,
+            warnings=warnings,
         )
 
     def execute_pull_repository(self, *, project_id: ProjectId, git_repository_id: str, idempotency_key: str | None = None) -> CommandExecutionResult:

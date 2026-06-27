@@ -60,6 +60,19 @@ export async function createBackupPlan(projectId: string, request: CreateBackupP
   return (await requestBackend<BackupPlan>(`/api/v1/projects/${projectId}/backups/plans`, jsonRequest(request))).data;
 }
 
+export interface UpdateBackupPlanRequest {
+  retention_policy?: { keep_count?: number; keep_days?: number } | null;
+  schedule_interval_seconds?: number | null;
+  is_enabled?: boolean | null;
+}
+
+export async function updateBackupPlan(projectId: string, planId: string, request: UpdateBackupPlanRequest): Promise<BackupPlan> {
+  return (await requestBackend<BackupPlan>(`/api/v1/projects/${projectId}/backups/plans/${planId}`, {
+    method: "PATCH",
+    ...jsonRequest(request)
+  })).data;
+}
+
 export async function listBackupRuns(projectId: string): Promise<BackupRun[]> {
   return (await requestBackend<BackupRun[]>(`/api/v1/projects/${projectId}/backups/runs`)).data;
 }

@@ -23,6 +23,12 @@ class CreateBackupPlanRequest(BaseModel):
     is_enabled: bool = True
 
 
+class UpdateBackupPlanRequest(BaseModel):
+    retention_policy: dict | None = None
+    schedule_interval_seconds: int | None = None
+    is_enabled: bool | None = None
+
+
 class RunBackupRequest(BaseModel):
     backup_plan_id: str | None = None
     idempotency_key: str | None = None
