@@ -817,7 +817,7 @@ class MetricSourceRecord(Base):
     __tablename__ = "metric_sources"
     __table_args__ = (
         CheckConstraint(
-            "source_type in ('process', 'resource', 'disk', 'plugin', 'system', 'deferred', 'fivem')",
+            "source_type in ('process', 'resource', 'disk', 'plugin', 'fivem', 'system', 'deferred')",
             name="ck_metric_sources_type",
         ),
         UniqueConstraint("project_id", "source_type", "source_ref", name="uq_metric_sources_project_type_ref"),
