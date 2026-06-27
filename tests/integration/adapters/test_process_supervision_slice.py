@@ -90,6 +90,13 @@ def test_unexpected_exit_records_local_crash_without_telemetry(tmp_path: Path) -
 
         assert status["state"] == "crashed"
         assert status["exit_code"] == 7
+
+        while time.monotonic() < deadline:
+            event_types = _domain_event_types(container)
+            if "IncidentCaptured" in event_types:
+                break
+            time.sleep(0.05)
+
         event_types = _domain_event_types(container)
         assert "ServerCrashed" in event_types
         assert "IncidentCaptured" in event_types
