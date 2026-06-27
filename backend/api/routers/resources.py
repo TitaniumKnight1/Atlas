@@ -12,6 +12,7 @@ from backend.api.schemas.resources import (
     SetEnabledStateRequest,
     UpdateResourceRequest,
 )
+from backend.application.commands import CommandExecutionResult, DryRunResult
 from backend.application.resources import InstallSource, ResourceApplicationError, ResourceLifecycleError, ResourceRollbackError
 from backend.domain.shared_kernel import ProjectId
 from backend.infrastructure.di import ApplicationContainer
@@ -153,6 +154,21 @@ def update_plan(
         return _lifecycle_failure(error)
 
 
+@router.post("/projects/{project_id}/resources/{resource_id}/update-dry-run", response_model=ResponseEnvelope)
+def update_dry_run(
+    project_id: str, resource_id: str, request: UpdateResourceRequest, container: ApplicationContainer = Depends(get_container)
+) -> ResponseEnvelope:
+    try:
+        dry_run = container.create_resource_lifecycle_service().dry_run_update_resource(
+            project_id=ProjectId(project_id),
+            resource_id=resource_id,
+            source=InstallSource(request.source_type, request.source_uri),
+        )
+        return ResponseEnvelope(ok=dry_run.valid, data=dry_run.simulation, warnings=dry_run.warnings)
+    except ResourceLifecycleError as error:
+        return _lifecycle_failure(error)
+
+
 @router.post("/projects/{project_id}/resources/{resource_id}/update", response_model=ResponseEnvelope)
 def update_resource(
     project_id: str, resource_id: str, request: UpdateResourceRequest, container: ApplicationContainer = Depends(get_container)
@@ -229,6 +245,19 @@ def rollback_plan(project_id: str, request: RollbackResourcesRequest, container:
         return _rollback_failure(error)
 
 
+@router.post("/projects/{project_id}/resources/rollback-dry-run", response_model=ResponseEnvelope)
+def rollback_dry_run(project_id: str, request: RollbackResourcesRequest, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        dry_run = container.create_resource_rollback_service().dry_run_rollback_batch(
+            project_id=ProjectId(project_id),
+            resource_ids=request.resource_ids,
+            command_execution_ids=request.command_execution_ids,
+        )
+        return ResponseEnvelope(ok=dry_run.valid, data=dry_run.simulation, warnings=dry_run.warnings)
+    except ResourceRollbackError as error:
+        return _rollback_failure(error)
+
+
 @router.post("/projects/{project_id}/resources/rollback", response_model=ResponseEnvelope)
 def rollback_resources(project_id: str, request: RollbackResourcesRequest, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
     try:
@@ -266,9 +295,14 @@ def _rollback_failure(error: ResourceRollbackError) -> ResponseEnvelope:
     return ResponseEnvelope(ok=False, error=ErrorPayload(code=error.code.value, message=str(error)))
 
 
-def _command_result(result) -> ResponseEnvelope:
+def _command_result(result: CommandExecutionResult) -> ResponseEnvelope:
     return ResponseEnvelope(
         ok=True,
-        data=result.result,
-        audit_ref={"ref_type": result.audit_ref.ref_type, "ref_id": result.audit_ref.ref_id},
+        data={
+            **result.result,
+            "command_plan_id": str(result.command_plan_id),
+            "command_execution_id": str(result.command_execution_id),
+            "undo_plan": result.undo_plan.payload if result.undo_plan else None,
+        },
+        audit_ref=AuditReference(ref_type=result.audit_ref.ref_type, ref_id=result.audit_ref.ref_id),
     )

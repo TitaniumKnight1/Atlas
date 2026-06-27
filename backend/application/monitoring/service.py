@@ -99,6 +99,19 @@ class MonitoringApplicationService:
         with self._lock:
             return len(self._sessions)
 
+    def collection_status(self, project_id: ProjectId) -> dict[str, Any]:
+        """Return the collection status for a project (running/stopped, thread alive, pending sample count)."""
+        with self._lock:
+            session = self._sessions.get(str(project_id))
+        if session is None:
+            return {"project_id": str(project_id), "status": "stopped", "thread_alive": False, "pending_samples": 0}
+        return {
+            "project_id": str(project_id),
+            "status": "running",
+            "thread_alive": session.thread.is_alive(),
+            "pending_samples": len(session.pending_samples),
+        }
+
     def list_sources(self, project_id: ProjectId) -> list[dict[str, Any]]:
         with self._container.session_factory() as session:
             records = MonitoringRepository(RepositoryContext(session=session, project_id=project_id)).list_sources(project_id)

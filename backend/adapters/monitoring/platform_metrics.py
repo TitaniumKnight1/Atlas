@@ -5,6 +5,8 @@ import os
 import shutil
 from pathlib import Path
 
+import psutil
+
 
 class _MEMORYSTATUSEX(ctypes.Structure):
     _fields_ = [
@@ -97,3 +99,11 @@ def process_memory_mb(pid: int) -> float | None:
     except OSError:
         return None
     return None
+
+
+def system_cpu_percent() -> float | None:
+    try:
+        # non-blocking call for CPU usage over the time since last call
+        return float(psutil.cpu_percent(interval=None))
+    except Exception:
+        return None

@@ -135,6 +135,18 @@ export async function previewUpdateResource(projectId: string, resourceId: strin
   };
 }
 
+export async function dryRunUpdateResource(projectId: string, resourceId: string, request: UpdateResourceRequest): Promise<ResourceEnvelope<DryRunData>> {
+  const response = await requestBackend<Record<string, unknown>>(
+    `/api/v1/projects/${projectId}/resources/${resourceId}/update-dry-run`,
+    jsonRequest(request)
+  );
+  return {
+    ...wrapDryRun(response.data, "PlanUpdateResource"),
+    warnings: response.warnings,
+    auditRef: response.auditRef
+  };
+}
+
 export async function updateResource(projectId: string, resourceId: string, request: UpdateResourceRequest): Promise<ResourceEnvelope<CommandResultData>> {
   return requestBackend<CommandResultData>(`/api/v1/projects/${projectId}/resources/${resourceId}/update`, jsonRequest(request));
 }
@@ -204,16 +216,11 @@ export async function previewRollbackBatch(projectId: string, request: RollbackR
 }
 
 export async function dryRunRollbackBatch(projectId: string, request: RollbackResourcesRequest): Promise<ResourceEnvelope<DryRunData>> {
-  const preview = await previewRollbackBatch(projectId, request);
-  const ok = Boolean(preview.data.preview.ok ?? preview.data.preview["ok"]);
+  const response = await requestBackend<Record<string, unknown>>(`/api/v1/projects/${projectId}/resources/rollback-dry-run`, jsonRequest(request));
   return {
-    data: {
-      command_type: preview.data.command_type,
-      valid: ok,
-      simulation: preview.data.preview
-    },
-    warnings: preview.warnings,
-    auditRef: preview.auditRef
+    ...wrapDryRun(response.data, "RollbackResourceBatch"),
+    warnings: response.warnings,
+    auditRef: response.auditRef
   };
 }
 

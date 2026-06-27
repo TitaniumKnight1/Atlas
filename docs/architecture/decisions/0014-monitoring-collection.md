@@ -13,8 +13,8 @@ ADR-0007 deferred the reusable monitoring collector seam to M6 and limited M3b t
 1. **Collector seam** — `MetricCollectorPort` + `MetricCollectorRegistry` in `backend/adapters/monitoring/` register pluggable collectors. M6b/M6c and future plugin collectors extend this seam.
 2. **M3b reuse** — `SupervisedProcessMetricCollector` reads `ProcessPort.status()` from M3b; no second process-status mechanism.
 3. **M5a reuse** — `ResourceHealthMetricCollector` calls `ResourceApplicationService` health queries; inventory/graph logic is not rebuilt.
-4. **Implemented sources (M6a)** — host memory, project disk usage, supervised-process state/pid/memory, resource-health counts.
-5. **Deferred sources (stubbed, not faked)** — host CPU (`psutil` not added), server FPS, player count, network throughput, database latency — emitted with `quality=missing` and `deferred_reason`.
+4. **Implemented sources (M6a)** — host memory, host CPU (`psutil` added in closeout build), project disk usage, supervised-process state/pid/memory, resource-health counts.
+5. **Deferred sources (stubbed, not faked)** — server FPS, player count, network throughput, database latency — emitted with `quality=missing` and `deferred_reason`.
 6. **Live streaming** — every collected sample publishes `MetricSample` on the existing `metrics` topic via `StreamEventPublisher` → `InProcessEventBus` → `StreamEventBridge` → `ProjectStreamHub` → SSE. Project-scoped; coalesce policy per ADR-0008.
 7. **Cadence** — default 2s in-process timer per active collection session (no APScheduler).
 8. **Persistence batching** — samples buffer in memory; flush every 10s or 30 samples in a single UoW write. Series/source metadata resolves in one UoW per tick (cached per session). Streaming bypasses per-sample DB commits to respect the M0b single-writer model.
@@ -24,5 +24,5 @@ ADR-0007 deferred the reusable monitoring collector seam to M6 and limited M3b t
 ## Consequences
 
 - M6b can roll up `metric_samples` without changing the collector seam.
-- Rich host CPU on Windows likely needs `psutil` or platform counters — paused pending explicit approval.
+- Rich host CPU on Windows is handled by `psutil` which was explicitly approved.
 - High-frequency live metrics are intentionally loss-tolerant on the SSE transport.

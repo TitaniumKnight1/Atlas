@@ -161,6 +161,14 @@ def run_rollup_cycle(project_id: str, container: ApplicationContainer = Depends(
         return _retention_failure(error)
 
 
+@router.get("/projects/{project_id}/monitoring/collection/status", response_model=ResponseEnvelope)
+def collection_status(project_id: str, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        return _success(container.create_monitoring_service().collection_status(ProjectId(project_id)))
+    except MonitoringApplicationError as error:
+        return _failure(error)
+
+
 @router.post("/projects/{project_id}/monitoring/collection/start", response_model=ResponseEnvelope)
 def start_collection(
     project_id: str,

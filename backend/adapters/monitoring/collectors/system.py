@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.adapters.monitoring.platform_metrics import disk_usage_percent, system_memory_percent
+from backend.adapters.monitoring.platform_metrics import disk_usage_percent, system_cpu_percent, system_memory_percent
 from backend.domain.monitoring import CollectedMetricSample, CollectorContext, MetricQuality, MetricSourceType, MetricValueType
 
 
@@ -46,15 +46,16 @@ class SystemMetricCollector:
                     value_real=memory,
                 )
             )
-        samples.append(
-            CollectedMetricSample(
-                source_type="system",
-                source_ref="host",
-                metric_name="cpu_used_percent",
-                unit="percent",
-                value_type=MetricValueType.GAUGE.value,
-                quality=MetricQuality.MISSING.value,
-                deferred_reason="deferred — host CPU sampling needs platform-specific counters; psutil not added in M6a",
+        cpu = system_cpu_percent()
+        if cpu is not None:
+            samples.append(
+                CollectedMetricSample(
+                    source_type="system",
+                    source_ref="host",
+                    metric_name="cpu_used_percent",
+                    unit="percent",
+                    value_type=MetricValueType.GAUGE.value,
+                    value_real=cpu,
+                )
             )
-        )
         return samples

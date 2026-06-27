@@ -71,6 +71,15 @@ def clone_repository(project_id: str, request: CloneRepositoryRequest, container
         return _failure(error)
 
 
+@router.post("/projects/{project_id}/git/repositories/{repo_id}/fetch-plan", response_model=ResponseEnvelope)
+def plan_fetch(project_id: str, repo_id: str, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        preview = container.create_git_service().preview_fetch_repository(project_id=ProjectId(project_id), git_repository_id=repo_id)
+        return _success(_preview_data(preview), warnings=preview.warnings)
+    except GitApplicationError as error:
+        return _failure(error)
+
+
 @router.post("/projects/{project_id}/git/repositories/{repo_id}/fetch", response_model=ResponseEnvelope)
 def fetch_repository(project_id: str, repo_id: str, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
     try:
