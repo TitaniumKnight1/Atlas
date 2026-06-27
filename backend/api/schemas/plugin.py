@@ -47,3 +47,7 @@ class StartPluginRunRequest(BaseModel):
 class RevokeCapabilityRequest(BaseModel):
     capability: str
     idempotency_key: str | None = None
+
+
+class InvokeContributionRequest(BaseModel):
+    payload: dict | None = None

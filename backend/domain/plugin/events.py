@@ -73,3 +73,67 @@ def plugin_failed(plugin_id: str, *, runtime_id: str, project_id: ProjectId, sum
         project_id=project_id,
         payload={"plugin_id": plugin_id, "runtime_id": runtime_id, "project_id": str(project_id), "summary": summary},
     )
+
+
+def plugin_contribution_registered(
+    plugin_id: str,
+    *,
+    contribution_id: str,
+    contribution_point: str,
+    identifier: str,
+    project_id: ProjectId,
+) -> DomainEventEnvelope:
+    return DomainEventEnvelope.create(
+        event_type="PluginContributionRegistered",
+        aggregate_ref=AggregateRef("PluginContribution", contribution_id),
+        project_id=project_id,
+        payload={
+            "plugin_id": plugin_id,
+            "contribution_id": contribution_id,
+            "contribution_point": contribution_point,
+            "identifier": identifier,
+            "project_id": str(project_id),
+        },
+    )
+
+
+def plugin_contribution_invoked(
+    plugin_id: str,
+    *,
+    contribution_id: str,
+    contribution_point: str,
+    project_id: ProjectId,
+) -> DomainEventEnvelope:
+    return DomainEventEnvelope.create(
+        event_type="PluginContributionInvoked",
+        aggregate_ref=AggregateRef("PluginContribution", contribution_id),
+        project_id=project_id,
+        payload={
+            "plugin_id": plugin_id,
+            "contribution_id": contribution_id,
+            "contribution_point": contribution_point,
+            "project_id": str(project_id),
+        },
+    )
+
+
+def plugin_contribution_failed(
+    plugin_id: str,
+    *,
+    contribution_id: str,
+    contribution_point: str,
+    project_id: ProjectId,
+    reason: str,
+) -> DomainEventEnvelope:
+    return DomainEventEnvelope.create(
+        event_type="PluginContributionFailed",
+        aggregate_ref=AggregateRef("PluginContribution", contribution_id),
+        project_id=project_id,
+        payload={
+            "plugin_id": plugin_id,
+            "contribution_id": contribution_id,
+            "contribution_point": contribution_point,
+            "project_id": str(project_id),
+            "reason": reason,
+        },
+    )

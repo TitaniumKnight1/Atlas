@@ -1,18 +1,20 @@
 ﻿# plugin-sdk\contribution-points\automation-actions
 
-## Responsibility
+## M9c contract
 
-Plugins that define custom automation actions with approval gates.
+`automation-actions` is the representative MUTATING contribution.
 
-## Belongs here
+Required capability: `invoke-resource-lifecycle`.
 
-- Contribution contract documentation
-- Future schema fragments for this extension point
+Invocation:
 
-## Does not belong here
+1. Atlas invokes the contribution through the M9b subprocess host using mode `contribution:automation-actions:<identifier>`.
+2. The plugin requests a mediated mutation over JSON IPC.
+3. The host re-checks the live M9a grant.
+4. The host performs the mutation through Atlas services and M1 `CommandAuditRecorder`, including undo compensation.
+5. The plugin receives only the command result, not raw adapter access.
 
-- Plugin host implementation
-- Core adapter code
+Destructive automation actions must be paired with M8b approval tiering when exposed as real automation recipes. M9c proves the subprocess/mediation pattern; rich recipe wiring remains a future extension.
 
 ## See also
 

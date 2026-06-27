@@ -75,4 +75,7 @@ Responsibility: plugin registration, manifest validation, capability grants, con
 
 ## Deviations
 
-None.
+- M9b chose Python subprocess + JSON IPC. Plugin data and failures are local-only; plugin events are not telemetry consumers despite the event table above.
+- `docs/database/plugin.md` is missing; runtime/contribution tables are documented in ADR-0024/0025 until the database contract is reconciled.
+- M9c wires representative contribution points (`config-validators`, `automation-actions`, `commands`) through the subprocess host. Remaining contribution points follow the documented template.
+- `report-exporters` are deferred. They must use the M7c sanitized export path and remain subject to the ADR-0005/0019 independent audit gate.

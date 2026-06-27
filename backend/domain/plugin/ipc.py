@@ -9,6 +9,7 @@ MESSAGE_CAPABILITY_REQUEST = "capability_request"
 MESSAGE_CAPABILITY_RESPONSE = "capability_response"
 MESSAGE_SHUTDOWN = "shutdown"
 MESSAGE_PLUGIN_LOG = "plugin_log"
+MESSAGE_CONTRIBUTION_RESULT = "contribution_result"
 
 
 def host_ready_message(*, plugin_id: str, granted_capabilities: list[str], mode: str, plugin_script: str) -> dict[str, Any]:
@@ -46,4 +47,13 @@ def capability_response_message(
         "granted": granted,
         "result": result or {},
         "error": error,
+    }
+
+
+def contribution_result_message(*, contribution_id: str, result: dict[str, Any] | None = None) -> dict[str, Any]:
+    return {
+        "ipc_version": IPC_VERSION,
+        "type": MESSAGE_CONTRIBUTION_RESULT,
+        "contribution_id": contribution_id,
+        "result": result or {},
     }

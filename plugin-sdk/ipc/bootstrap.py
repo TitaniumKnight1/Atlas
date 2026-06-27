@@ -35,6 +35,20 @@ class PluginIpcClient:
         sys.stdout.write(json.dumps({"ipc_version": "1", "type": "shutdown"}) + "\n")
         sys.stdout.flush()
 
+    def contribution_result(self, contribution_id: str, result: dict[str, Any] | None = None) -> None:
+        sys.stdout.write(
+            json.dumps(
+                {
+                    "ipc_version": "1",
+                    "type": "contribution_result",
+                    "contribution_id": contribution_id,
+                    "result": result or {},
+                }
+            )
+            + "\n"
+        )
+        sys.stdout.flush()
+
 
 def main() -> None:
     if len(sys.argv) < 3:

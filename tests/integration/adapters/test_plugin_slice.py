@@ -146,7 +146,8 @@ def test_honest_trust_posture_recorded_on_grant(tmp_path: Path) -> None:
         )
         assert caps["consent_model"] == ConsentModel.INTEGRITY_NOT_SANDBOX.value
         assert caps["trust_acknowledgment"]["acknowledged_warning"] == HONEST_TRUST_WARNING
-        assert "no real security sandbox" in HONEST_TRUST_WARNING.lower()
+        assert "isolated subprocess" in HONEST_TRUST_WARNING.lower()
+        assert "os privileges" in HONEST_TRUST_WARNING.lower()
     finally:
         container.close()
 

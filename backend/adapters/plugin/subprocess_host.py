@@ -12,6 +12,7 @@ from typing import Any, Callable
 from backend.adapters.plugin.process_teardown import assign_windows_job, kill_process_tree
 from backend.domain.plugin.ipc import (
     MESSAGE_CAPABILITY_REQUEST,
+    MESSAGE_CONTRIBUTION_RESULT,
     MESSAGE_CAPABILITY_RESPONSE,
     MESSAGE_SHUTDOWN,
     capability_response_message,
@@ -93,6 +94,7 @@ class SubprocessPluginHost:
         if self._session is None:
             raise RuntimeError("Plugin subprocess not started")
         responses: list[dict[str, Any]] = []
+        contribution_results: list[dict[str, Any]] = []
         while True:
             if self._session.process.poll() is not None and not self._pending_requests():
                 break
@@ -103,12 +105,15 @@ class SubprocessPluginHost:
                 continue
             if message.get("type") == MESSAGE_SHUTDOWN:
                 break
+            if message.get("type") == MESSAGE_CONTRIBUTION_RESULT:
+                contribution_results.append(message)
+                continue
             if message.get("type") != MESSAGE_CAPABILITY_REQUEST:
                 continue
             response = handler(message)
             responses.append(response)
             self._write(response)
-        return {"responses": responses, "exit_code": self._session.process.poll()}
+        return {"responses": responses, "contribution_results": contribution_results, "exit_code": self._session.process.poll()}
 
     def stop(self, *, timeout_seconds: float = 3.0) -> int | None:
         if self._session is None:

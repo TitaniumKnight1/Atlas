@@ -5,6 +5,28 @@
   "version": "1.0.0",
   "author": "Atlas",
   "entry_script": "plugin.py",
-  "contribution_points": ["config-validators", "incident-enrichers", "commands"],
-  "requested_capabilities": ["read-config", "read-incidents", "filesystem-write"]
+  "contribution_points": ["config-validators", "incident-enrichers", "commands", "automation-actions"],
+  "requested_capabilities": ["read-project-metadata", "read-config", "read-incidents", "filesystem-write", "invoke-resource-lifecycle"],
+  "contributions": [
+    {
+      "contribution_point": "config-validators",
+      "identifier": "atlas.test_echo.config_summary",
+      "title": "Config Summary Validator"
+    },
+    {
+      "contribution_point": "automation-actions",
+      "identifier": "atlas.test_echo.write_marker",
+      "title": "Write Plugin Marker"
+    },
+    {
+      "contribution_point": "commands",
+      "identifier": "atlas.test_echo.status",
+      "title": "Echo Plugin Status"
+    },
+    {
+      "contribution_point": "commands",
+      "identifier": "atlas.test_echo.crash",
+      "title": "Crashing Test Command"
+    }
+  ]
 }

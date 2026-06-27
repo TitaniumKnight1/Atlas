@@ -74,6 +74,11 @@ class ApplicationContainer:
 
         return PluginHostService(container=self)
 
+    def create_plugin_contribution_service(self):
+        from backend.application.plugin.contributions import PluginContributionService
+
+        return PluginContributionService(container=self)
+
     def create_plugin_service(self) -> PluginApplicationService:
         if self._plugin_service is None:
             self._plugin_service = PluginApplicationService(container=self)

@@ -90,12 +90,27 @@ class ConsentModel(StrEnum):
 
 
 HONEST_TRUST_WARNING = (
-    "Atlas plugins run in-process with the backend. Python provides no real security sandbox: "
-    "a malicious plugin can bypass capability checks using the shared interpreter. "
-    "Capability grants are an integrity and informed-consent mechanism for trusted plugins, "
-    "not isolation against a determined attacker. Only install plugins you trust."
+    "Atlas plugins run in an isolated subprocess and access Atlas through mediated IPC. "
+    "This prevents plugins from reading Atlas process memory, sharing Atlas DB connections, "
+    "or importing around the capability ledger. It does not confine the plugin below the "
+    "user's OS privileges: the subprocess can still access filesystem and network resources "
+    "the OS permits unless future OS-level sandboxing is added. Only install plugins you trust."
 )
 
 
 class PluginSettingKey(StrEnum):
     GLOBAL_ENABLED = "global_enabled"
+
+
+CONTRIBUTION_REQUIRED_CAPABILITIES: dict[str, frozenset[PluginCapability]] = {
+    ContributionPoint.COMMANDS.value: frozenset({PluginCapability.READ_PROJECT_METADATA}),
+    ContributionPoint.VIEWS.value: frozenset({PluginCapability.RENDER_UI}),
+    ContributionPoint.RESOURCE_PROVIDERS.value: frozenset({PluginCapability.INVOKE_RESOURCE_LIFECYCLE}),
+    ContributionPoint.SETUP_RECIPES.value: frozenset({PluginCapability.INVOKE_SETUP_PROCESS}),
+    ContributionPoint.CONFIG_VALIDATORS.value: frozenset({PluginCapability.READ_CONFIG}),
+    ContributionPoint.INCIDENT_ENRICHERS.value: frozenset({PluginCapability.READ_INCIDENTS}),
+    ContributionPoint.REPORT_EXPORTERS.value: frozenset({PluginCapability.READ_INCIDENTS}),
+    ContributionPoint.AUTOMATION_TRIGGERS.value: frozenset({PluginCapability.CONTRIBUTE_AUTOMATION}),
+    ContributionPoint.AUTOMATION_ACTIONS.value: frozenset({PluginCapability.INVOKE_RESOURCE_LIFECYCLE}),
+    ContributionPoint.MONITORING_COLLECTORS.value: frozenset({PluginCapability.CONTRIBUTE_MONITORING}),
+}

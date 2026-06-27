@@ -64,6 +64,17 @@ class PluginCapabilityMediator:
             return {"incidents": incidents}
         if capability == PluginCapability.FILESYSTEM_WRITE.value:
             return self._write_file(project_id, params)
+        if capability == PluginCapability.INVOKE_RESOURCE_LIFECYCLE.value:
+            relative_path = str(params.get("relative_path") or "plugin-resource-action.txt")
+            content = str(params.get("content") or "plugin resource lifecycle action\n")
+            return self._write_file(
+                project_id,
+                {
+                    "relative_path": relative_path,
+                    "content": content,
+                    "idempotency_key": params.get("idempotency_key"),
+                },
+            )
         if capability == PluginCapability.NETWORK.value:
             raise PermissionError("Network access is blocked by Atlas plugin host")
         if capability == PluginCapability.TELEMETRY_SUBMIT.value:

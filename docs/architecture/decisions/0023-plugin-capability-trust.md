@@ -10,15 +10,11 @@ M9 introduces third-party plugins — inverting the threat model from Atlas-cont
 
 ## Threat model (honest)
 
-**Python has no real in-process security sandbox.** A plugin sharing the Atlas backend interpreter can bypass in-process permission checks via `import os`, `ctypes`, introspection, or other interpreter escape hatches. The capability layer and plugin code run in the same process.
+M9a originally records the **authoritative permission ledger** without executing plugin code. M9b chose subprocess isolation + JSON IPC, so plugin code no longer shares Atlas's interpreter, memory, SQLite connection, or imports.
 
-### Decision: integrity + informed consent (not malicious-plugin isolation)
+Subprocess isolation contains Atlas memory reads, direct Atlas internal calls, and importing around the ledger. It does **not** provide OS-level confinement: the child process can still access filesystem and network resources available to the current user unless a future OS sandbox is added.
 
-M9 adopts model **(b)**: defend against **accidental misuse by trusted plugins** via declaration, least-privilege grants, and explicit user consent. This is **not** a defense against a **determined malicious plugin** in-process.
-
-True malicious-plugin isolation requires **OS-level separation** (subprocess, restricted interpreter, WASM, container) — an **M9b execution/isolation** decision. M9a must not overclaim sandbox security it cannot enforce.
-
-The capability/trust record is the **authoritative permission ledger** that M9b's execution boundary will enforce to the extent the chosen runtime allows.
+The capability/trust record remains the **authoritative permission ledger** that M9b/M9c enforce at the subprocess IPC boundary.
 
 ## M9a / M9b / M9c split
 

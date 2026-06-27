@@ -22,6 +22,21 @@ Atlas plugins extend the platform without modifying core application code. The p
 - Automation actions.
 - Monitoring collectors.
 
+M9c contribution wiring is capability-mapped and subprocess-mediated:
+
+| Contribution point | Required capability | M9c status |
+| --- | --- | --- |
+| Commands | `read-project-metadata` | Wired representative producing contribution |
+| Configuration validators | `read-config` | Wired representative read contribution |
+| Automation actions | `invoke-resource-lifecycle` | Wired representative mutating contribution |
+| Resource providers | `invoke-resource-lifecycle` | Template only |
+| Setup recipes | `invoke-setup-process` | Template only |
+| Incident enrichers | `read-incidents` | Template only |
+| Markdown report exporters | `read-incidents` + M7c sanitized export path | Deferred until export-audit gate is satisfied |
+| Views | `render-ui` | Template only |
+| Automation triggers | `contribute-automation` | Template only |
+| Monitoring collectors | `contribute-monitoring` | Template only |
+
 ## Plugin Lifecycle
 
 ```mermaid
@@ -56,7 +71,7 @@ Network access should be denied by default. Any plugin that requests network acc
 
 ## Runtime Strategy
 
-The recommended initial approach is a restricted manifest-first model with limited executable hooks implemented through backend-defined extension points. Full arbitrary plugin runtimes should wait until Phase 6 module API design, because runtime choice has major security implications.
+M9b uses subprocess isolation plus stdlib JSON IPC. Plugins do not share Atlas memory, imports, or SQLite connections. This is not OS-level confinement: the plugin subprocess still has user-level filesystem/network privileges unless a future OS sandbox is added.
 
 ## Isolation Diagram
 

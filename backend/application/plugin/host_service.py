@@ -121,7 +121,12 @@ class PluginHostService:
                         summary=self._sanitize_failure("Plugin execution timed out"),
                         plugin_key=runtime.get("plugin_key"),
                     )
-                    return {**runtime, "status": PluginRuntimeStatus.TIMED_OUT.value, "responses": result.get("responses", [])}
+                    return {
+                        **runtime,
+                        "status": PluginRuntimeStatus.TIMED_OUT.value,
+                        "responses": result.get("responses", []),
+                        "contribution_results": result.get("contribution_results", []),
+                    }
             else:
                 result = host.run_until_shutdown(lambda message: self._handle_message(plugin_id, project_id, runtime_id, message))
             exit_code = host.stop()
@@ -139,7 +144,11 @@ class PluginHostService:
                 summary=failure_summary,
                 plugin_key=None,
             )
-            return {**self.get_runtime(runtime_id, project_id), "responses": result.get("responses", [])}
+            return {
+                **self.get_runtime(runtime_id, project_id),
+                "responses": result.get("responses", []),
+                "contribution_results": result.get("contribution_results", []),
+            }
         finally:
             self._active_hosts.pop(runtime_id, None)
             if host.is_running():

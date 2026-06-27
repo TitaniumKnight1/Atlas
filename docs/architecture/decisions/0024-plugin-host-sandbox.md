@@ -58,5 +58,5 @@ M9c wires contribution points; M9b does not.
 
 ## Consequences
 
-- M9a `HONEST_TRUST_WARNING` (in-process) is superseded at runtime by subprocess + mediation, but OS-privilege limits must still be disclosed in UI/docs.
+- M9c updates `HONEST_TRUST_WARNING` so user-facing consent text matches subprocess + mediation and still discloses OS-privilege limits.
 - `telemetry-submit` and `network` capabilities are denied or stub-blocked at the host until explicitly designed with sanitizer routing.

@@ -13,6 +13,7 @@ Declarative JSON manifest — parsed with `json.loads` only. Atlas **never impor
 | `author` | string | Publisher name |
 | `contribution_points` | string[] | Declared contribution points (wired in M9c) |
 | `requested_capabilities` | string[] | Least-privilege capability requests |
+| `contributions` | object[] | Optional concrete contribution descriptors for M9c registration |
 
 ## Contribution points
 
@@ -40,6 +41,20 @@ Declarative JSON manifest — parsed with `json.loads` only. Atlas **never impor
 
 Nothing is granted by default. Users must explicitly grant requested capabilities after reading the honest trust warning.
 
+## Contribution descriptors
+
+M9c accepts descriptors like:
+
+```json
+{
+  "contribution_point": "config-validators",
+  "identifier": "com.example.config.check",
+  "title": "Example Config Check"
+}
+```
+
+Atlas registers a descriptor only when the contribution point is declared and its required capability is granted for the project.
+
 ## Validation rules
 
 - Unknown capabilities are **rejected** (not silently narrowed).
@@ -49,7 +64,7 @@ Nothing is granted by default. Users must explicitly grant requested capabilitie
 
 ## Trust model (honest)
 
-Python provides **no real in-process sandbox**. Capability grants are an **integrity and informed-consent** mechanism for trusted plugins — not isolation against a malicious plugin. See ADR-0023.
+Atlas runs plugins in a subprocess and mediates Atlas access over JSON IPC. This contains Atlas memory/DB/ledger bypass, but it is not OS-level confinement: the plugin subprocess still has the filesystem/network access allowed to the current user unless future OS sandboxing is added. See ADR-0023/0024.
 
 ## Example
 

@@ -121,6 +121,19 @@ class PluginRepository:
     ) -> PluginCapabilityGrantRecord:
         if project_id is not None:
             self._ensure_project_scope(project_id)
+        existing = self._session.execute(
+            select(PluginCapabilityGrantRecord).where(
+                PluginCapabilityGrantRecord.plugin_id == plugin_id,
+                PluginCapabilityGrantRecord.project_id == (str(project_id) if project_id else None),
+                PluginCapabilityGrantRecord.capability == capability,
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            existing.scope_json = scope_json or {}
+            existing.is_active = 1
+            existing.granted_at = granted_at.isoformat()
+            existing.revoked_at = None
+            return existing
         record = PluginCapabilityGrantRecord(
             grant_id=str(grant_id),
             plugin_id=plugin_id,
@@ -301,6 +314,90 @@ class PluginRepository:
                 .limit(limit)
             ).scalars()
         )
+
+    def create_or_update_contribution(
+        self,
+        *,
+        contribution_id: StableIdentifier,
+        plugin_id: str,
+        project_id: ProjectId,
+        contribution_point: str,
+        identifier: str,
+        required_capability: str,
+        descriptor_json: dict[str, Any],
+        is_enabled: bool,
+        registered_at: datetime,
+    ):
+        from backend.adapters.persistence.models import PluginContributionRecord
+
+        self._ensure_project_scope(project_id)
+        existing = self._session.execute(
+            select(PluginContributionRecord).where(
+                PluginContributionRecord.plugin_id == plugin_id,
+                PluginContributionRecord.project_id == str(project_id),
+                PluginContributionRecord.contribution_point == contribution_point,
+                PluginContributionRecord.identifier == identifier,
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            existing.required_capability = required_capability
+            existing.descriptor_json = descriptor_json
+            existing.is_enabled = 1 if is_enabled else 0
+            existing.disabled_at = None if is_enabled else registered_at.isoformat()
+            return existing
+        record = PluginContributionRecord(
+            contribution_id=str(contribution_id),
+            plugin_id=plugin_id,
+            project_id=str(project_id),
+            contribution_point=contribution_point,
+            identifier=identifier,
+            required_capability=required_capability,
+            descriptor_json=descriptor_json,
+            is_enabled=1 if is_enabled else 0,
+            registered_at=registered_at.isoformat(),
+            disabled_at=None if is_enabled else registered_at.isoformat(),
+        )
+        self._session.add(record)
+        return record
+
+    def get_contribution(self, contribution_id: str):
+        from backend.adapters.persistence.models import PluginContributionRecord
+
+        return self._session.get(PluginContributionRecord, contribution_id)
+
+    def list_contributions(
+        self,
+        *,
+        project_id: ProjectId,
+        plugin_id: str | None = None,
+        contribution_point: str | None = None,
+    ) -> list:
+        from backend.adapters.persistence.models import PluginContributionRecord
+
+        self._ensure_project_scope(project_id)
+        query = select(PluginContributionRecord).where(PluginContributionRecord.project_id == str(project_id))
+        if plugin_id is not None:
+            query = query.where(PluginContributionRecord.plugin_id == plugin_id)
+        if contribution_point is not None:
+            query = query.where(PluginContributionRecord.contribution_point == contribution_point)
+        return list(self._session.execute(query.order_by(PluginContributionRecord.contribution_point, PluginContributionRecord.identifier)).scalars())
+
+    def disable_contributions_for_capability(
+        self,
+        *,
+        plugin_id: str,
+        project_id: ProjectId,
+        capability: str,
+        disabled_at: datetime,
+    ) -> int:
+        records = self.list_contributions(project_id=project_id, plugin_id=plugin_id)
+        count = 0
+        for record in records:
+            if record.required_capability == capability and record.is_enabled:
+                record.is_enabled = 0
+                record.disabled_at = disabled_at.isoformat()
+                count += 1
+        return count
 
     def _ensure_project_scope(self, project_id: ProjectId) -> None:
         if self._project_id is not None and self._project_id != project_id:

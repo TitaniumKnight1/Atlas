@@ -6,6 +6,7 @@ from backend.api.dependencies import get_container
 from backend.api.schemas.plugin import (
     ErrorPayload,
     GrantCapabilitiesRequest,
+    InvokeContributionRequest,
     RegisterPluginRequest,
     ResponseEnvelope,
     RevokeCapabilityRequest,
@@ -201,6 +202,48 @@ def list_plugin_capability_calls(
 ) -> ResponseEnvelope:
     try:
         return _success(container.create_plugin_host_service().list_capability_calls(plugin_id, ProjectId(project_id)))
+    except PluginApplicationError as error:
+        return _failure(error)
+
+
+@router.post("/projects/{project_id}/plugins/{plugin_id}/contributions/register", response_model=ResponseEnvelope)
+def register_plugin_contributions(
+    project_id: str,
+    plugin_id: str,
+    container: ApplicationContainer = Depends(get_container),
+) -> ResponseEnvelope:
+    try:
+        return _success(container.create_plugin_contribution_service().register_manifest_contributions(plugin_id, ProjectId(project_id)))
+    except PluginApplicationError as error:
+        return _failure(error)
+
+
+@router.get("/projects/{project_id}/plugin-contributions", response_model=ResponseEnvelope)
+def list_plugin_contributions(
+    project_id: str,
+    container: ApplicationContainer = Depends(get_container),
+) -> ResponseEnvelope:
+    try:
+        return _success(container.create_plugin_contribution_service().list_contributions(ProjectId(project_id)))
+    except PluginApplicationError as error:
+        return _failure(error)
+
+
+@router.post("/projects/{project_id}/plugin-contributions/{contribution_id}/invoke", response_model=ResponseEnvelope)
+def invoke_plugin_contribution(
+    project_id: str,
+    contribution_id: str,
+    request: InvokeContributionRequest,
+    container: ApplicationContainer = Depends(get_container),
+) -> ResponseEnvelope:
+    try:
+        return _success(
+            container.create_plugin_contribution_service().invoke_contribution(
+                contribution_id,
+                ProjectId(project_id),
+                payload=request.payload,
+            )
+        )
     except PluginApplicationError as error:
         return _failure(error)
 

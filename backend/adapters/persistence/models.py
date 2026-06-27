@@ -1574,3 +1574,29 @@ class PluginCapabilityCallRecord(Base):
     request_json: Mapped[dict | None] = mapped_column(JSON)
     response_json: Mapped[dict | None] = mapped_column(JSON)
     occurred_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class PluginContributionRecord(Base):
+    """Declared plugin contribution, enabled only when its required capability is granted."""
+
+    __tablename__ = "plugin_contributions"
+    __table_args__ = (
+        UniqueConstraint("plugin_id", "project_id", "contribution_point", "identifier", name="uq_plugin_contributions_scope"),
+        CheckConstraint(
+            "contribution_point in ('commands', 'views', 'resource-providers', 'setup-recipes', 'config-validators', 'incident-enrichers', 'report-exporters', 'automation-triggers', 'automation-actions', 'monitoring-collectors')",
+            name="ck_plugin_contributions_point",
+        ),
+        Index("idx_plugin_contributions_project_point", "project_id", "contribution_point", "is_enabled"),
+        Index("idx_plugin_contributions_plugin", "plugin_id", "is_enabled"),
+    )
+
+    contribution_id: Mapped[str] = mapped_column(String, primary_key=True)
+    plugin_id: Mapped[str] = mapped_column(ForeignKey("plugin_registrations.plugin_id"), nullable=False)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    contribution_point: Mapped[str] = mapped_column(String, nullable=False)
+    identifier: Mapped[str] = mapped_column(String, nullable=False)
+    required_capability: Mapped[str] = mapped_column(String, nullable=False)
+    descriptor_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    is_enabled: Mapped[int] = mapped_column(Integer, nullable=False)
+    registered_at: Mapped[str] = mapped_column(String, nullable=False)
+    disabled_at: Mapped[str | None] = mapped_column(String)
