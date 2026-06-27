@@ -94,7 +94,7 @@ export const featureRoutes: FeatureRoute[] = [
     path: "/automation",
     label: "Automation",
     summary: "Build workflows with approvals and undo.",
-    implemented: false,
+    implemented: true,
     group: "Operate",
     glyph: "A"
   },
@@ -103,7 +103,7 @@ export const featureRoutes: FeatureRoute[] = [
     path: "/backup",
     label: "Backup",
     summary: "Plan backups and restores.",
-    implemented: false,
+    implemented: true,
     group: "Operate",
     glyph: "B"
   },

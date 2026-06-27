@@ -1,3 +1,5 @@
+import { AutomationView, useAutomationNavCount } from "../features/automation/AutomationView";
+import { BackupView } from "../features/backup/BackupView";
 import { ConfigView } from "../features/config/ConfigView";
 import { GitView } from "../features/git/GitView";
 import { MonitoringView } from "../features/monitoring/MonitoringView";
@@ -7,17 +9,20 @@ import { ResourceView } from "../features/resources/ResourceView";
 import { SetupView } from "../features/setup/SetupView";
 import "./App.css";
 import { AppShell } from "./AppShell";
-import { featureRoutes } from "./routes";
+import { featureRoutes, type FeatureRouteId } from "./routes";
 import { useBackendStatus } from "./useBackendStatus";
 import { useHashRoute } from "./useHashRoute";
 
 export function App() {
   const { routePath, navigate } = useHashRoute();
   const backendStatus = useBackendStatus();
+  const pendingApprovalCount = useAutomationNavCount(backendStatus.state === "ready");
+  const navCounts: Partial<Record<FeatureRouteId, number>> =
+    pendingApprovalCount > 0 ? { automation: pendingApprovalCount } : {};
   const activeRoute = featureRoutes.find((route) => route.path === routePath) ?? featureRoutes[0];
 
   return (
-    <AppShell activeLabel={activeRoute.label} activePath={routePath} backendStatus={backendStatus} onNavigate={navigate}>
+    <AppShell activeLabel={activeRoute.label} activePath={routePath} backendStatus={backendStatus} navCounts={navCounts} onNavigate={navigate}>
       {activeRoute.id === "project" ? (
         <ProjectView />
       ) : activeRoute.id === "setup" ? (
@@ -30,6 +35,10 @@ export function App() {
         <ConfigView />
       ) : activeRoute.id === "monitoring" ? (
         <MonitoringView />
+      ) : activeRoute.id === "automation" ? (
+        <AutomationView />
+      ) : activeRoute.id === "backup" ? (
+        <BackupView />
       ) : (
         <EmptyState
           title={`${activeRoute.label} is planned`}

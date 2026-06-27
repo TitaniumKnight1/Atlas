@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { StatusPill } from "../components";
+import type { FeatureRouteId } from "./routes";
 import { featureRoutes } from "./routes";
 import type { BackendStatus } from "./useBackendStatus";
 
@@ -8,13 +9,14 @@ interface AppShellProps {
   activePath: string;
   activeLabel: string;
   backendStatus: BackendStatus;
+  navCounts?: Partial<Record<FeatureRouteId, number>>;
   onNavigate: (path: string) => void;
   children: ReactNode;
 }
 
 const GROUPS = ["Workspace", "Operate"] as const;
 
-export function AppShell({ activePath, activeLabel, backendStatus, onNavigate, children }: AppShellProps) {
+export function AppShell({ activePath, activeLabel, backendStatus, navCounts, onNavigate, children }: AppShellProps) {
   const countsUnavailable = backendStatus.state !== "ready";
 
   return (
@@ -60,7 +62,7 @@ export function AppShell({ activePath, activeLabel, backendStatus, onNavigate, c
                       <small>{route.implemented ? route.summary : "Planned foundation"}</small>
                     </span>
                     <span className={countsUnavailable ? "feature-nav__count feature-nav__count--unavailable" : "feature-nav__count"}>
-                      {countsUnavailable ? "-" : route.count ?? ""}
+                      {countsUnavailable ? "-" : navCounts?.[route.id] ?? route.count ?? ""}
                     </span>
                   </button>
                 ))}
