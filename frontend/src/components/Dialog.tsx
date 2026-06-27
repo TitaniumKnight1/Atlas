@@ -47,11 +47,25 @@ interface ConsentDialogProps {
   pluginName: string;
   projectName: string;
   capabilities: CapabilityRequest[];
+  trustWarning?: string;
+  trustAcknowledged?: boolean;
+  onTrustAcknowledge?: (value: boolean) => void;
   onDeny: () => void;
   onGrant: () => void;
 }
 
-export function ConsentDialog({ pluginName, projectName, capabilities, onDeny, onGrant }: ConsentDialogProps) {
+export function ConsentDialog({
+  pluginName,
+  projectName,
+  capabilities,
+  trustWarning,
+  trustAcknowledged = false,
+  onTrustAcknowledge,
+  onDeny,
+  onGrant
+}: ConsentDialogProps) {
+  const canGrant = trustWarning ? trustAcknowledged : true;
+
   return (
     <Dialog
       detail={`Plugin requests scoped access for ${projectName}. You can revoke capabilities later in Plugins -> Trust.`}
@@ -60,7 +74,7 @@ export function ConsentDialog({ pluginName, projectName, capabilities, onDeny, o
           <Button variant="ghost" onClick={onDeny}>
             Deny
           </Button>
-          <Button variant="primary" onClick={onGrant}>
+          <Button disabled={!canGrant} variant="primary" onClick={onGrant}>
             Grant {capabilities.length} capabilities
           </Button>
         </>
@@ -68,6 +82,17 @@ export function ConsentDialog({ pluginName, projectName, capabilities, onDeny, o
       icon="shield"
       title={`Grant capabilities to ${pluginName}`}
     >
+      {trustWarning ? (
+        <div className="atlas-alert atlas-alert--warn" role="status" style={{ marginBottom: "var(--space-3)" }}>
+          <span className="atlas-alert__icon" aria-hidden="true">
+            !
+          </span>
+          <div>
+            <h4>Trust posture (subprocess isolation)</h4>
+            <p>{trustWarning}</p>
+          </div>
+        </div>
+      ) : null}
       <div className="atlas-cap-list">
         {capabilities.map((capability) => (
           <div className="atlas-cap" key={`${capability.scope}-${capability.label}`}>
@@ -83,7 +108,15 @@ export function ConsentDialog({ pluginName, projectName, capabilities, onDeny, o
           </div>
         ))}
       </div>
-      <Toggle>Trust this publisher for future installs</Toggle>
+      {trustWarning && onTrustAcknowledge ? (
+        <div style={{ marginTop: "var(--space-3)" }}>
+          <Toggle checked={trustAcknowledged} onChange={(event) => onTrustAcknowledge(event.currentTarget.checked)}>
+            I have read and understand the trust warning above
+          </Toggle>
+        </div>
+      ) : (
+        <Toggle>Trust this publisher for future installs</Toggle>
+      )}
     </Dialog>
   );
 }

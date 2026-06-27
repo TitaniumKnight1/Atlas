@@ -85,7 +85,7 @@ export const featureRoutes: FeatureRoute[] = [
     path: "/incidents",
     label: "Incidents",
     summary: "Group crashes and produce explainable reports.",
-    implemented: false,
+    implemented: true,
     group: "Operate",
     glyph: "I"
   },
@@ -112,7 +112,7 @@ export const featureRoutes: FeatureRoute[] = [
     path: "/plugins",
     label: "Plugins",
     summary: "Manage trusted extensions and capabilities.",
-    implemented: false,
+    implemented: true,
     group: "Operate",
     glyph: "X"
   }

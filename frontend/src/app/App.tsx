@@ -3,6 +3,8 @@ import { BackupView } from "../features/backup/BackupView";
 import { ConfigView } from "../features/config/ConfigView";
 import { GitView } from "../features/git/GitView";
 import { MonitoringView } from "../features/monitoring/MonitoringView";
+import { IncidentsView } from "../features/incidents/IncidentsView";
+import { PluginsView } from "../features/plugins/PluginsView";
 import { EmptyState } from "../components/StateViews";
 import { ProjectView } from "../features/project/ProjectView";
 import { ResourceView } from "../features/resources/ResourceView";
@@ -39,6 +41,10 @@ export function App() {
         <AutomationView />
       ) : activeRoute.id === "backup" ? (
         <BackupView />
+      ) : activeRoute.id === "incidents" ? (
+        <IncidentsView />
+      ) : activeRoute.id === "plugins" ? (
+        <PluginsView />
       ) : (
         <EmptyState
           title={`${activeRoute.label} is planned`}
