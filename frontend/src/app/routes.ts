@@ -40,7 +40,7 @@ export const featureRoutes: FeatureRoute[] = [
     path: "/setup",
     label: "Setup",
     summary: "Prepare artifacts and txAdmin handoff.",
-    implemented: false,
+    implemented: true,
     group: "Workspace",
     glyph: "S"
   },

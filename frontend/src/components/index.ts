@@ -16,3 +16,6 @@ export { Tabs } from "./Tabs";
 export type { TabItem } from "./Tabs";
 export { Toggle } from "./Toggle";
 export { Tooltip } from "./Tooltip";
+export { ProgressBar } from "./ProgressBar";
+export { WizardStepper } from "./WizardStepper";
+export type { WizardStepItem, WizardStepStatus } from "./WizardStepper";

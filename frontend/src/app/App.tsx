@@ -1,5 +1,6 @@
 import { EmptyState } from "../components/StateViews";
 import { ProjectView } from "../features/project/ProjectView";
+import { SetupView } from "../features/setup/SetupView";
 import "./App.css";
 import { AppShell } from "./AppShell";
 import { featureRoutes } from "./routes";
@@ -15,6 +16,8 @@ export function App() {
     <AppShell activeLabel={activeRoute.label} activePath={routePath} backendStatus={backendStatus} onNavigate={navigate}>
       {activeRoute.id === "project" ? (
         <ProjectView />
+      ) : activeRoute.id === "setup" ? (
+        <SetupView />
       ) : (
         <EmptyState
           title={`${activeRoute.label} is planned`}
