@@ -209,3 +209,62 @@ dependencies {{
 }}
 """
     (path / "fxmanifest.lua").write_text(body, encoding="utf-8")
+
+
+def test_undo_resource_install_via_command_execution_id(tmp_path: Path) -> None:
+    container, project_id, resources_root, staging = _fixture(tmp_path)
+    lifecycle = container.create_resource_lifecycle_service()
+    project_svc = container.create_project_service()
+    server_cfg = _server_cfg_path(resources_root)
+    before_cfg = server_cfg.read_text(encoding="utf-8")
+    try:
+        result = lifecycle.execute_install_resource(
+            project_id=project_id,
+            source=InstallSource("local", str(staging / "delta")),
+            enable=True,
+        )
+        assert (resources_root / "delta").exists()
+        
+        # Round trip via command execution ID
+        rollback_svc = container.create_resource_rollback_service()
+        rollback_svc.execute_rollback_batch(
+            project_id=project_id,
+            command_execution_ids=[str(result.command_execution_id)]
+        )
+        
+        assert not (resources_root / "delta").exists()
+        assert server_cfg.read_text(encoding="utf-8") == before_cfg
+    finally:
+        container.close()
+
+def test_delete_resource_and_rollback_restores_resource(tmp_path: Path) -> None:
+    container, project_id, resources_root, staging = _fixture(tmp_path)
+    lifecycle = container.create_resource_lifecycle_service()
+    rollback_svc = container.create_resource_rollback_service()
+    try:
+        # 1. Install
+        install_result = lifecycle.execute_install_resource(
+            project_id=project_id,
+            source=InstallSource("local", str(staging / "delta")),
+            enable=True,
+        )
+        assert (resources_root / "delta").exists()
+        resource_id = install_result.result["resource_id"]
+
+        # 2. Delete
+        delete_result = lifecycle.execute_delete_resource(
+            project_id=project_id,
+            resource_id=resource_id,
+        )
+        assert not (resources_root / "delta").exists()
+        assert delete_result.command_execution_id is not None
+        
+        # 3. Rollback the deletion using the captured command execution ID
+        rollback_result = rollback_svc.execute_rollback_batch(
+            project_id=project_id,
+            command_execution_ids=[str(delete_result.command_execution_id)]
+        )
+        assert rollback_result.result["status"] == "completed"
+        assert (resources_root / "delta").exists()
+    finally:
+        container.close()

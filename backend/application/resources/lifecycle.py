@@ -519,16 +519,9 @@ class ResourceLifecycleService:
         with self._container.create_unit_of_work(project_id) as uow:
             uow.begin()
             repository = uow.repository(ResourceRepository)
-            repository.add_state_change(
-                state_change_id=StableIdentifier.new(),
-                resource_id=record.resource_id,
-                change_type="delete",
-                from_state=record.enabled_state,
-                to_state=None,
-                command_execution_id=None,
-                changed_at=now,
-                details={"resource_name": record.resource_name},
-            )
+            # Do not add a state change because the resource and its state changes will be physically deleted,
+            # which would cause a foreign key constraint violation on flush.
+            # The deletion is still fully audited via the CommandExecutionRecord and AuditEventRecord.
             resource_name = record.resource_name
             repository.delete_resource(project_id, record.resource_id)
             execution = self._recorder.record_success(

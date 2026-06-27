@@ -185,9 +185,28 @@ class ResourceRollbackService:
                     outcomes[index]["result"] = action_result
                     succeeded.append(item.resource_name)
                     if item.resource_id:
+                        target_resource_id = item.resource_id
+                        record = repository.get_resource(project_id, StableIdentifier(item.resource_id))
+                        if not record:
+                            # Resource was deleted, recreate it as a placeholder to satisfy the FK constraint
+                            # The next rescan will populate the correct details based on resource_name
+                            repository.upsert_resource(
+                                resource_id=item.resource_id,
+                                project_id=project_id,
+                                resource_name=item.resource_name,
+                                relative_path=item.resource_name,
+                                resource_type="unknown",
+                                enabled_state="unknown",
+                                startup_order=0,
+                                current_version_id=None,
+                                git_repository_id=None,
+                                created_at=datetime.now(UTC),
+                                updated_at=datetime.now(UTC),
+                            )
+                        
                         repository.add_state_change(
                             state_change_id=StableIdentifier.new(),
-                            resource_id=item.resource_id,
+                            resource_id=target_resource_id,
                             change_type="rollback",
                             from_state=item.change_type,
                             to_state="rolled_back",
