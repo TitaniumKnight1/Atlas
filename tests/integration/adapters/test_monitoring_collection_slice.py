@@ -4,8 +4,9 @@ import sys
 import threading
 import time
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
+import httpx
 from sqlalchemy import func, select
 
 from backend.adapters.persistence.models import MetricSampleRecord, TelemetryQueueRecord, TelemetryRejectionRecord
@@ -177,6 +178,48 @@ def test_project_isolation_on_metric_queries(tmp_path: Path) -> None:
         recent_b = service.recent_samples(project_b, limit=10)
         assert recent_a
         assert recent_b == []
+    finally:
+        container.close()
+
+
+def test_fivem_player_count_collector(tmp_path: Path) -> None:
+    container, project_id = _container_with_project(tmp_path)
+    
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"clients": 42}
+    mock_response.raise_for_status.return_value = None
+    
+    mock_client = MagicMock()
+    mock_client.get.return_value = mock_response
+    
+    setup = container.create_setup_service()
+    script = "import time\nwhile True: time.sleep(0.2)\n"
+    
+    try:
+        from backend.adapters.monitoring.collectors.fivem import FivemPlayerCountCollector
+        collector = FivemPlayerCountCollector(port=30120, http_client=mock_client)
+        # Register manually for the test
+        container.create_monitoring_service()._registry.register(collector)
+        
+        start = setup.execute_start_server(
+            project_id=project_id,
+            fxserver_path=sys.executable,
+            server_data_path=str(tmp_path),
+            extra_args=["-c", script],
+        )
+        process_run_id = start.result["process_run_id"]
+        
+        service = container.create_monitoring_service()
+        samples = service.collect_once(project_id)
+        
+        by_name = {item["metric_name"]: item for item in samples if item["source_type"] == "fivem"}
+        
+        assert "player_count" in by_name
+        assert by_name["player_count"]["value_real"] == 42.0
+        assert by_name["player_count"]["quality"] == "ok"
+        assert by_name["player_count"]["source_ref"] == process_run_id
+        
+        setup.execute_stop_server(project_id=project_id, process_run_id=process_run_id)
     finally:
         container.close()
 

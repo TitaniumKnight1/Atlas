@@ -7,10 +7,9 @@ from enum import StrEnum
 class MetricSourceType(StrEnum):
     PROCESS = "process"
     RESOURCE = "resource"
-    DATABASE = "database"
-    NETWORK = "network"
     DISK = "disk"
     PLUGIN = "plugin"
+    FIVEM = "fivem"
 
 
 class MetricValueType(StrEnum):

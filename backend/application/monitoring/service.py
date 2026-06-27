@@ -16,6 +16,7 @@ from backend.adapters.monitoring.collectors import (
     SupervisedProcessMetricCollector,
     SystemMetricCollector,
 )
+from backend.adapters.monitoring.collectors.fivem import FivemPlayerCountCollector
 from backend.adapters.persistence import MonitoringRepository, ProjectRepository, SetupRepository
 from backend.adapters.persistence.models import ProjectPathRecord
 from backend.domain.monitoring import CollectorContext, CollectedMetricSample, RetentionClass
@@ -56,6 +57,7 @@ class MonitoringApplicationService:
         self._registry.register(SupervisedProcessMetricCollector(process_port))
         self._registry.register(ResourceHealthMetricCollector(container.create_resource_service()))
         self._registry.register(DeferredServerMetricCollector())
+        self._registry.register(FivemPlayerCountCollector())
         self._lock = threading.RLock()
         self._sessions: dict[str, _CollectionSession] = {}
 
