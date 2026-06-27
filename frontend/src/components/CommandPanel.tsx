@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import type { BackendResponse } from "../api/backend";
 import { formatAuditRef, type CommandResultData, type DryRunData, type CommandPreviewData } from "../api/project";
+import { Alert, Badge, Button, type BadgeVariant } from ".";
 import { ErrorState, LoadingState } from "./StateViews";
 
 interface CommandPanelProps {
@@ -19,6 +20,13 @@ interface CommandPanelProps {
 }
 
 type Phase = "idle" | "previewing" | "ready" | "executing" | "success" | "undoing" | "undone" | "error";
+type CommandStepStatus = "succeeded" | "failed" | "not-attempted" | "held" | "active";
+
+interface CommandPlanStep {
+  label: string;
+  detail?: string;
+  status: CommandStepStatus;
+}
 
 export function CommandPanel({
   title,
@@ -89,29 +97,37 @@ export function CommandPanel({
 
   const isBusy = phase === "previewing" || phase === "executing" || phase === "undoing";
   const canUndo = Boolean(onUndo && result?.data.undo_plan && result.data.command_execution_id && phase !== "undone");
+  const commandSteps = buildCommandSteps({ phase, preview: Boolean(preview), dryRun: Boolean(dryRun), result: Boolean(result), canUndo });
+  const planSteps = extractPlanSteps(preview?.data.preview) ?? extractPlanSteps(dryRun?.data.simulation) ?? extractPlanSteps(result?.data);
+  const compactPreview = preview ? isCompactPayload(preview.data.preview) : false;
 
   return (
     <section className="command-panel">
-      <div className="command-rail" aria-hidden="true">
-        <span className={preview ? "command-rail__node command-rail__node--done" : "command-rail__node"} />
-        <span className={dryRun ? "command-rail__node command-rail__node--done" : "command-rail__node"} />
-        <span className={result ? "command-rail__node command-rail__node--done" : "command-rail__node"} />
+      <div className="command-panel__head">
+        <div className="atlas-row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div className="atlas-section-heading">
+            <p className="eyebrow">Command rail</p>
+            <h2>{title}</h2>
+            <p>{description}</p>
+          </div>
+          {preview ? <Badge variant={riskToVariant(preview.data.risk_level)}>{preview.data.risk_level} risk</Badge> : null}
+        </div>
+      </div>
+
+      <div className="command-panel__steps" aria-label="Command progress">
+        {commandSteps.map((step) => (
+          <CommandStep key={step.label} step={step} />
+        ))}
       </div>
 
       <div className="command-panel__body">
-        <div className="section-heading">
-          <p className="eyebrow">Command rail</p>
-          <h2>{title}</h2>
-          <p>{description}</p>
-        </div>
-
         <div className="command-panel__actions">
-          <button className="button button--secondary" type="button" onClick={previewCommand} disabled={disabled || isBusy}>
+          <Button type="button" variant="secondary" onClick={previewCommand} disabled={disabled || isBusy} loading={phase === "previewing"}>
             {previewLabel}
-          </button>
-          <button className="button" type="button" onClick={executeCommand} disabled={disabled || phase !== "ready" || isBusy}>
+          </Button>
+          <Button type="button" variant="primary" onClick={executeCommand} disabled={disabled || phase !== "ready" || isBusy} loading={phase === "executing"}>
             {executeLabel}
-          </button>
+          </Button>
         </div>
 
         {phase === "previewing" ? <LoadingState title="Previewing command" detail="Validating through the backend without persisting changes." /> : null}
@@ -120,8 +136,11 @@ export function CommandPanel({
         {phase === "error" && error ? <ErrorState error={error} /> : null}
 
         {preview ? (
-          <div className="command-result">
-            <h3>{preview.data.summary}</h3>
+          <div className={compactPreview ? "command-result command-result--compact" : "command-result"}>
+            <div>
+              <h3>{preview.data.summary}</h3>
+              <p className="muted-copy">Review what Atlas detected before writing anything.</p>
+            </div>
             <DefinitionGrid
               items={[
                 ["Command", preview.data.command_type],
@@ -129,20 +148,48 @@ export function CommandPanel({
                 ["Warnings", preview.warnings.join(", ") || "None"]
               ]}
             />
-            <pre>{JSON.stringify(preview.data.preview, null, 2)}</pre>
+            {!compactPreview ? <pre className="command-json">{JSON.stringify(preview.data.preview, null, 2)}</pre> : null}
+          </div>
+        ) : null}
+
+        {planSteps && planSteps.length > 0 ? (
+          <div className="command-result command-result--warning">
+            <div>
+              <h3>Plan steps</h3>
+              <p className="muted-copy">Complex commands can stop and hold when a step fails or needs approval.</p>
+            </div>
+            <div className="command-plan">
+              {planSteps.map((step, index) => (
+                <div className="command-plan__item" key={`${step.label}-${index}`}>
+                  <CommandStep step={step} />
+                  <span>
+                    <strong>{step.label}</strong>
+                    {step.detail ? <span className="muted-copy">{step.detail}</span> : null}
+                  </span>
+                  <Badge variant={step.status === "failed" ? "danger" : step.status === "held" ? "warn" : step.status === "succeeded" ? "success" : "neutral"}>
+                    {formatStepStatus(step.status)}
+                  </Badge>
+                </div>
+              ))}
+            </div>
           </div>
         ) : null}
 
         {dryRun ? (
-          <div className="command-result command-result--quiet">
+          <div className={dryRun.data.valid ? "command-result command-result--success" : "command-result command-result--warning"}>
             <h3>Dry-run {dryRun.data.valid ? "passed" : "failed"}</h3>
+            <Alert severity={dryRun.data.valid ? "success" : "warn"} title={dryRun.data.valid ? "Safe to execute" : "Hold before execute"}>
+              {dryRun.data.valid
+                ? "Atlas simulated the command without persisting changes."
+                : "Resolve the dry-run findings before executing the command."}
+            </Alert>
             <pre>{JSON.stringify(dryRun.data.simulation, null, 2)}</pre>
           </div>
         ) : null}
 
         {result ? (
           <div className="command-result command-result--success">
-            <h3>Imported</h3>
+            <h3>Executed</h3>
             <DefinitionGrid
               items={[
                 ["Execution", String(result.data.command_execution_id)],
@@ -152,9 +199,9 @@ export function CommandPanel({
             />
             {result.data.undo_plan ? (
               <div className="command-panel__actions">
-                <button className="button button--secondary" type="button" onClick={undoCommand} disabled={!canUndo || isBusy}>
-                  Undo import
-                </button>
+                <Button type="button" variant="secondary" onClick={undoCommand} disabled={!canUndo || isBusy} loading={phase === "undoing"}>
+                  Undo
+                </Button>
                 <p className="note">
                   Undo references execution <code>{String(result.data.command_execution_id)}</code>. Atlas rehydrates the
                   compensating action from the stored audit record server-side.
@@ -182,8 +229,12 @@ export function CommandPanel({
 }
 
 function DefinitionGrid({ items }: { items: Array<[string, string]> }) {
+  return <DefinitionGridBase items={items} />;
+}
+
+function DefinitionGridBase({ items }: { items: Array<[string, string]> }) {
   return (
-    <dl className="definition-grid">
+    <dl className="atlas-definition-grid">
       {items.map(([label, value]) => (
         <div key={label}>
           <dt>{label}</dt>
@@ -192,4 +243,112 @@ function DefinitionGrid({ items }: { items: Array<[string, string]> }) {
       ))}
     </dl>
   );
+}
+
+function CommandStep({ step }: { step: CommandPlanStep }) {
+  const className =
+    step.status === "succeeded"
+      ? "command-step command-step--done"
+      : step.status === "active"
+        ? "command-step command-step--active"
+        : step.status === "failed"
+          ? "command-step command-step--failed"
+          : step.status === "held"
+            ? "command-step command-step--held"
+            : "command-step";
+
+  return (
+    <span className={className}>
+      <span className="command-step__mark" aria-hidden="true">
+        {step.status === "succeeded" ? "ok" : step.status === "failed" ? "x" : step.status === "held" ? "!" : ""}
+      </span>
+      {step.label}
+    </span>
+  );
+}
+
+function buildCommandSteps(input: { phase: Phase; preview: boolean; dryRun: boolean; result: boolean; canUndo: boolean }): CommandPlanStep[] {
+  return [
+    { label: "Preview", status: input.preview ? "succeeded" : input.phase === "previewing" ? "active" : "not-attempted" },
+    { label: "Dry-run", status: input.dryRun ? "succeeded" : input.phase === "previewing" ? "active" : "not-attempted" },
+    {
+      label: "Execute",
+      status: input.result ? "succeeded" : input.phase === "executing" ? "active" : input.phase === "ready" ? "held" : "not-attempted"
+    },
+    {
+      label: "Undo",
+      status: input.phase === "undone" ? "succeeded" : input.phase === "undoing" ? "active" : input.canUndo ? "held" : "not-attempted"
+    }
+  ];
+}
+
+function riskToVariant(risk: string): BadgeVariant {
+  const normalized = risk.toLowerCase();
+  if (normalized.includes("high") || normalized.includes("danger")) {
+    return "danger";
+  }
+  if (normalized.includes("medium") || normalized.includes("warn")) {
+    return "warn";
+  }
+  return "info";
+}
+
+function isCompactPayload(payload: Record<string, unknown>) {
+  const values = Object.values(payload);
+  return values.length <= 2 && values.every((value) => value === null || ["string", "number", "boolean"].includes(typeof value));
+}
+
+function extractPlanSteps(payload: Record<string, unknown> | undefined | null): CommandPlanStep[] | undefined {
+  if (!payload) {
+    return undefined;
+  }
+  const candidates = ["steps", "plan_steps", "rollback_steps", "operations", "plan"];
+  for (const key of candidates) {
+    const value = payload[key];
+    if (Array.isArray(value)) {
+      const steps = value.map(toCommandPlanStep).filter((step): step is CommandPlanStep => Boolean(step));
+      if (steps.length > 0) {
+        return steps;
+      }
+    }
+  }
+  return undefined;
+}
+
+function toCommandPlanStep(value: unknown): CommandPlanStep | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const label = String(record.label ?? record.name ?? record.operation ?? record.action ?? record.step ?? "Step");
+  const detailValue = record.detail ?? record.description ?? record.reason ?? record.path;
+  const rawStatus = String(record.status ?? record.state ?? "not-attempted").toLowerCase();
+  return {
+    label,
+    detail: detailValue ? String(detailValue) : undefined,
+    status: normalizeStepStatus(rawStatus)
+  };
+}
+
+function normalizeStepStatus(status: string): CommandStepStatus {
+  if (["success", "succeeded", "done", "completed", "applied"].includes(status)) {
+    return "succeeded";
+  }
+  if (["failed", "error", "blocked"].includes(status)) {
+    return "failed";
+  }
+  if (["held", "hold", "pending-approval", "pending_approval", "needs-approval", "needs_approval"].includes(status)) {
+    return "held";
+  }
+  if (["running", "active", "executing"].includes(status)) {
+    return "active";
+  }
+  return "not-attempted";
+}
+
+function formatStepStatus(status: CommandStepStatus) {
+  if (status === "not-attempted") {
+    return "not attempted";
+  }
+  return status;
 }

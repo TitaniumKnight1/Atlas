@@ -1,0 +1,1217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Atlas Design System — visual reference</title>
+<style>
+/* ============================================================
+   ATLAS DESIGN SYSTEM — single-file visual reference (review artifact)
+   Dark, pill-forward, production-SaaS. Evolved from M1b tokens.
+   No build step, no backend, sample data only. CSS-only interactivity.
+   ============================================================ */
+
+/* ---------- TOKENS ---------- */
+:root {
+  color-scheme: dark;
+
+  /* Surfaces — separation by ELEVATION (tone + soft shadow), not heavy borders */
+  --bg-base:    #0a0e17;   /* app base, near-black blue */
+  --bg-sunken:  #06090f;   /* wells, code, input fields */
+  --surface-1:  #10151f;   /* raised panel */
+  --surface-2:  #161d2b;   /* raised-higher card */
+  --surface-3:  #1d2638;   /* hover / active raised */
+  --surface-overlay: #18202f; /* modals, popovers */
+
+  /* Hairline, low-contrast borders */
+  --border-subtle: rgba(255,255,255,0.055);
+  --border:        rgba(255,255,255,0.09);
+  --border-strong: rgba(255,255,255,0.15);
+
+  /* ONE confident accent — evolved Atlas teal */
+  --accent:         #2fd6c3;
+  --accent-hover:   #54e2d2;
+  --accent-press:   #1fb4a4;
+  --accent-soft:    rgba(47,214,195,0.13);
+  --accent-softer:  rgba(47,214,195,0.07);
+  --accent-border:  rgba(47,214,195,0.34);
+  --accent-contrast:#04231f;          /* text on bright accent (AA) */
+
+  /* Semantic set */
+  --success:        #43d98a;
+  --success-soft:   rgba(67,217,138,0.13);
+  --success-border: rgba(67,217,138,0.34);
+  --warn:           #f4c152;
+  --warn-soft:      rgba(244,193,82,0.13);
+  --warn-border:    rgba(244,193,82,0.34);
+  --danger:         #ff6b7a;
+  --danger-soft:    rgba(255,107,122,0.13);
+  --danger-border:  rgba(255,107,122,0.36);
+  --info:           #5b8cff;          /* blueprint blue — secondary/data accent */
+  --info-soft:      rgba(91,140,255,0.13);
+  --info-border:    rgba(91,140,255,0.34);
+
+  /* Text ramp — calm, dense screens stay light */
+  --text-strong:   #f3f6fc;
+  --text:          #d3dbec;
+  --text-muted:    #97a2bb;
+  --text-faint:    #6b768f;
+  --text-disabled: #4c5366;
+
+  /* Data-viz ramp */
+  --viz-1: #2fd6c3;
+  --viz-2: #5b8cff;
+  --viz-3: #b48cff;
+  --viz-4: #f4c152;
+  --viz-5: #ff6b7a;
+
+  /* Fonts — self-contained system stack (real app may load Inter / Space Grotesk) */
+  --font-display: "Space Grotesk", "Segoe UI", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-body: Inter, "Segoe UI", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Type scale (15px base for SaaS density) */
+  --text-xs:   0.75rem;    /* 12 */
+  --text-sm:   0.8125rem;  /* 13 */
+  --text-base: 0.9375rem;  /* 15 */
+  --text-md:   1.0625rem;  /* 17 */
+  --text-lg:   1.25rem;    /* 20 */
+  --text-xl:   1.5rem;     /* 24 */
+  --text-2xl:  2rem;       /* 32 */
+  --text-3xl:  2.75rem;    /* 44 */
+  --leading-tight: 1.18;
+  --leading-snug:  1.35;
+  --leading-normal:1.6;
+  --tracking-tight: -0.02em;
+  --tracking-wide: 0.08em;
+
+  /* Spacing scale (4px base) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 2.5rem;
+  --space-8: 3rem;
+  --space-10: 4rem;
+
+  /* Radius scale — PILL for controls/status; MD for inputs/cards/tables */
+  --radius-xs:   6px;
+  --radius-sm:   8px;
+  --radius-md:   12px;   /* inputs, selects, cards, tables, rows */
+  --radius-lg:   16px;   /* large containers */
+  --radius-pill: 999px;  /* buttons, badges, chips, toggles, tabs, segments */
+
+  /* Elevation / shadow */
+  --shadow-1: 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-2: 0 6px 16px -4px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.3);
+  --shadow-3: 0 18px 48px -12px rgba(0,0,0,0.66), 0 4px 12px rgba(0,0,0,0.4);
+  --hairline-top: inset 0 1px 0 rgba(255,255,255,0.045);
+
+  --focus-ring: 0 0 0 2px var(--bg-base), 0 0 0 4px var(--accent);
+  --ease: cubic-bezier(0.32, 0.72, 0.28, 1);
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+  margin: 0;
+  min-width: 320px;
+  color: var(--text);
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(47,214,195,0.06), transparent 60%),
+    radial-gradient(900px 500px at 0% 0%, rgba(91,140,255,0.05), transparent 55%),
+    var(--bg-base);
+  background-attachment: fixed;
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+h1,h2,h3,h4 { color: var(--text-strong); font-family: var(--font-display); letter-spacing: var(--tracking-tight); line-height: var(--leading-tight); margin: 0; }
+p { margin: 0; }
+code, pre, kbd { font-family: var(--font-mono); }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* transitions respect reduced motion */
+@media (prefers-reduced-motion: no-preference) {
+  .btn, .chip, .seg__opt, .tab, .switch, .nav__item, .card-lift, input, select, textarea {
+    transition: background-color .16s var(--ease), border-color .16s var(--ease),
+                color .16s var(--ease), box-shadow .16s var(--ease), transform .16s var(--ease);
+  }
+}
+
+/* ---------- DOC LAYOUT (the reference page chrome) ---------- */
+.doc { max-width: 1180px; margin: 0 auto; padding: var(--space-6) var(--space-5) var(--space-10); }
+.doc-hero { padding: var(--space-7) 0 var(--space-6); border-bottom: 1px solid var(--border-subtle); margin-bottom: var(--space-7); }
+.doc-hero .mark { display: inline-flex; align-items: center; gap: var(--space-3); }
+.doc-hero .mark span.bar { width: 10px; height: 40px; border-radius: var(--radius-pill); background: linear-gradient(180deg, var(--accent), var(--info)); }
+.doc-hero h1 { font-size: var(--text-3xl); }
+.doc-hero .lede { margin-top: var(--space-4); max-width: 60ch; color: var(--text-muted); font-size: var(--text-md); }
+
+.section { padding: var(--space-7) 0; border-top: 1px solid var(--border-subtle); }
+.section > h2 { font-size: var(--text-2xl); margin-bottom: var(--space-2); }
+.section > .section-sub { color: var(--text-muted); margin-bottom: var(--space-5); max-width: 64ch; }
+.eyebrow { color: var(--accent); font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 700; letter-spacing: var(--tracking-wide); text-transform: uppercase; }
+.subhead { font-size: var(--text-md); margin: var(--space-6) 0 var(--space-3); color: var(--text-strong); }
+.subhead:first-of-type { margin-top: var(--space-3); }
+
+.row { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+.row--top { align-items: flex-start; }
+.stack { display: grid; gap: var(--space-3); }
+.grid { display: grid; gap: var(--space-4); }
+.grid-2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+.grid-3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
+.grid-4 { grid-template-columns: repeat(4, minmax(0,1fr)); }
+@media (max-width: 860px){ .grid-2,.grid-3,.grid-4 { grid-template-columns: 1fr; } }
+.muted { color: var(--text-muted); }
+.faint { color: var(--text-faint); }
+.tiny { font-size: var(--text-xs); }
+.label-mono { font-family: var(--font-mono); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--text-faint); }
+
+/* ---------- SURFACES / CARDS (elevation, not borders) ---------- */
+.panel { background: var(--surface-1); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); box-shadow: var(--shadow-1), var(--hairline-top); }
+.card { background: var(--surface-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); box-shadow: var(--shadow-2), var(--hairline-top); padding: var(--space-5); }
+.card-lift:hover { transform: translateY(-2px); box-shadow: var(--shadow-3), var(--hairline-top); }
+.well { background: var(--bg-sunken); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); }
+.pad { padding: var(--space-5); }
+
+/* ---------- BUTTONS (PILL) ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  min-height: 38px; padding: 0 var(--space-4);
+  border-radius: var(--radius-pill); border: 1px solid transparent;
+  font-family: var(--font-body); font-size: var(--text-sm); font-weight: 600;
+  cursor: pointer; user-select: none; white-space: nowrap; color: var(--text);
+  background: transparent;
+}
+.btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.btn--primary { background: var(--accent); color: var(--accent-contrast); box-shadow: var(--shadow-1); }
+.btn--primary:hover { background: var(--accent-hover); }
+.btn--primary:active { background: var(--accent-press); transform: translateY(1px); }
+.btn--secondary { background: var(--surface-3); color: var(--text-strong); border-color: var(--border); }
+.btn--secondary:hover { background: #232d41; border-color: var(--border-strong); }
+.btn--ghost { background: transparent; color: var(--text-muted); }
+.btn--ghost:hover { background: rgba(255,255,255,0.05); color: var(--text-strong); }
+.btn--danger { background: var(--danger); color: #2a0509; }
+.btn--danger:hover { filter: brightness(1.08); }
+.btn--danger-soft { background: var(--danger-soft); color: var(--danger); border-color: var(--danger-border); }
+.btn[disabled], .btn[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
+.btn--sm { min-height: 30px; padding: 0 var(--space-3); font-size: var(--text-xs); }
+.btn--lg { min-height: 46px; padding: 0 var(--space-5); font-size: var(--text-base); }
+.btn--icon { width: 38px; padding: 0; }
+.btn .spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; border-top-color: transparent; }
+@media (prefers-reduced-motion: no-preference){ .spinner { animation: spin .7s linear infinite; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- INPUTS / SELECT / TEXTAREA (SOFT-ROUNDED md, NOT pills) ---------- */
+.field { display: grid; gap: var(--space-2); }
+.field > label { font-size: var(--text-sm); font-weight: 500; color: var(--text); }
+.field .hint { font-size: var(--text-xs); color: var(--text-faint); }
+.field .err { font-size: var(--text-xs); color: var(--danger); display: flex; gap: 6px; align-items: center; }
+.input, .select, .textarea {
+  width: 100%; padding: 9px var(--space-3); min-height: 38px;
+  background: var(--bg-sunken); color: var(--text-strong);
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  font-family: var(--font-body); font-size: var(--text-sm);
+}
+.textarea { min-height: 84px; resize: vertical; line-height: var(--leading-snug); }
+.input::placeholder, .textarea::placeholder { color: var(--text-faint); }
+.input:hover, .select:hover, .textarea:hover { border-color: var(--border-strong); }
+.input:focus, .select:focus, .textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.input--error { border-color: var(--danger); }
+.input--error:focus { box-shadow: 0 0 0 3px var(--danger-soft); }
+.input-group { display: flex; align-items: center; gap: var(--space-2); padding-left: var(--space-3);
+  background: var(--bg-sunken); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.input-group:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.input-group .input { border: 0; box-shadow: none; background: transparent; padding-left: 0; }
+.select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%), linear-gradient(135deg, var(--text-muted) 50%, transparent 50%); background-position: calc(100% - 18px) 16px, calc(100% - 12px) 16px; background-size: 6px 6px; background-repeat: no-repeat; padding-right: var(--space-6); }
+
+/* ---------- TOGGLE / SWITCH (PILL) ---------- */
+.switch { position: relative; display: inline-flex; align-items: center; gap: var(--space-3); cursor: pointer; }
+.switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.switch .track { width: 42px; height: 24px; border-radius: var(--radius-pill); background: var(--surface-3); border: 1px solid var(--border); position: relative; flex: none; }
+.switch .thumb { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--text-muted); box-shadow: var(--shadow-1); }
+@media (prefers-reduced-motion: no-preference){ .switch .thumb { transition: transform .18s var(--ease), background-color .18s var(--ease); } }
+.switch input:checked + .track { background: var(--accent-soft); border-color: var(--accent-border); }
+.switch input:checked + .track .thumb { transform: translateX(18px); background: var(--accent); }
+.switch input:focus-visible + .track { box-shadow: var(--focus-ring); }
+.switch .switch__text { font-size: var(--text-sm); }
+
+/* ---------- SEGMENTED CONTROL + TABS (PILL) ---------- */
+.seg { display: inline-flex; padding: 4px; gap: 2px; background: var(--bg-sunken); border: 1px solid var(--border-subtle); border-radius: var(--radius-pill); }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg__opt { display: inline-flex; align-items: center; justify-content: center; padding: 6px 14px; border-radius: var(--radius-pill); font-size: var(--text-sm); font-weight: 600; color: var(--text-muted); cursor: pointer; }
+.seg__opt:hover { color: var(--text-strong); }
+.seg input:checked + .seg__opt { background: var(--surface-3); color: var(--text-strong); box-shadow: var(--shadow-1); }
+.seg input:focus-visible + .seg__opt { box-shadow: var(--focus-ring); }
+
+.tabs { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.tab { padding: 7px 16px; border-radius: var(--radius-pill); font-size: var(--text-sm); font-weight: 600; color: var(--text-muted); background: transparent; border: 1px solid transparent; cursor: pointer; }
+.tab:hover { color: var(--text-strong); background: rgba(255,255,255,0.04); }
+.tab--active { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-border); }
+
+/* ---------- STATUS BADGES (PILL) ---------- */
+.badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px; border-radius: var(--radius-pill); font-size: var(--text-xs); font-weight: 600; line-height: 1.5; border: 1px solid transparent; white-space: nowrap; }
+.badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.badge--success { color: var(--success); background: var(--success-soft); border-color: var(--success-border); }
+.badge--warn    { color: var(--warn);    background: var(--warn-soft);    border-color: var(--warn-border); }
+.badge--danger  { color: var(--danger);  background: var(--danger-soft);  border-color: var(--danger-border); }
+.badge--info    { color: var(--info);    background: var(--info-soft);    border-color: var(--info-border); }
+.badge--running { color: var(--accent);  background: var(--accent-soft);  border-color: var(--accent-border); }
+.badge--idle    { color: var(--text-muted); background: rgba(255,255,255,0.05); border-color: var(--border); }
+@media (prefers-reduced-motion: no-preference){ .badge--running .dot { animation: pulse 1.5s ease-in-out infinite; } }
+@keyframes pulse { 0%,100%{ opacity:.35 } 50%{ opacity:1 } }
+
+/* ---------- FILTER CHIPS (PILL) ---------- */
+.chip { display: inline-flex; align-items: center; gap: var(--space-2); padding: 5px 12px; border-radius: var(--radius-pill); font-size: var(--text-sm); font-weight: 500; color: var(--text-muted); background: var(--surface-2); border: 1px solid var(--border-subtle); cursor: pointer; }
+.chip:hover { color: var(--text-strong); border-color: var(--border-strong); }
+.chip--active { color: var(--accent-contrast); background: var(--accent); border-color: var(--accent); font-weight: 600; }
+.chip--active:hover { color: var(--accent-contrast); }
+.chip .x { opacity: .6; font-size: 14px; }
+.chip .count { font-family: var(--font-mono); font-size: var(--text-xs); opacity: .8; }
+
+/* ---------- DENSE DATA TABLE (medium radius, NOT pills) ---------- */
+.table-wrap { border: 1px solid var(--border-subtle); border-radius: var(--radius-md); overflow: hidden; background: var(--surface-1); box-shadow: var(--shadow-1); }
+table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.tbl thead th { text-align: left; padding: 10px var(--space-4); color: var(--text-faint); font-weight: 600; font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.04em; background: var(--bg-sunken); border-bottom: 1px solid var(--border-subtle); }
+.tbl tbody td { padding: 11px var(--space-4); border-bottom: 1px solid var(--border-subtle); color: var(--text); vertical-align: middle; }
+.tbl tbody tr:last-child td { border-bottom: 0; }
+.tbl tbody tr:hover { background: rgba(255,255,255,0.025); }
+.tbl tbody tr[aria-selected="true"] { background: var(--accent-softer); }
+.tbl .cell-strong { color: var(--text-strong); font-weight: 600; }
+.tbl .cell-mono { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); }
+.checkbox { width: 16px; height: 16px; border-radius: 5px; border: 1px solid var(--border-strong); background: var(--bg-sunken); display: inline-grid; place-items: center; cursor: pointer; }
+.checkbox--on { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
+
+/* ---------- ALERTS (inline) mapped to error-envelope severities ---------- */
+.alert { display: flex; gap: var(--space-3); padding: var(--space-4); border-radius: var(--radius-md); border: 1px solid; align-items: flex-start; }
+.alert .ic { flex: none; width: 22px; height: 22px; border-radius: var(--radius-pill); display: grid; place-items: center; font-size: 13px; font-weight: 700; margin-top: 1px; }
+.alert h4 { font-family: var(--font-body); font-size: var(--text-sm); margin-bottom: 2px; }
+.alert p { font-size: var(--text-sm); color: var(--text-muted); }
+.alert--info    { background: var(--info-soft);    border-color: var(--info-border); }
+.alert--info .ic{ background: var(--info); color: #04122e; }
+.alert--success { background: var(--success-soft); border-color: var(--success-border); }
+.alert--success .ic{ background: var(--success); color: #052615; }
+.alert--warn    { background: var(--warn-soft);    border-color: var(--warn-border); }
+.alert--warn .ic{ background: var(--warn); color: #2a1e02; }
+.alert--danger  { background: var(--danger-soft);  border-color: var(--danger-border); }
+.alert--danger .ic{ background: var(--danger); color: #2a0509; }
+
+/* ---------- TOASTS ---------- */
+.toast { display: flex; gap: var(--space-3); align-items: flex-start; width: 340px; padding: var(--space-3) var(--space-4); background: var(--surface-overlay); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-3); }
+.toast .bar { width: 3px; align-self: stretch; border-radius: var(--radius-pill); }
+.toast--success .bar { background: var(--success); }
+.toast--danger .bar { background: var(--danger); }
+.toast--info .bar { background: var(--info); }
+.toast h4 { font-family: var(--font-body); font-size: var(--text-sm); }
+.toast p { font-size: var(--text-xs); color: var(--text-muted); }
+
+/* ---------- TOOLTIP ---------- */
+.tip { position: relative; display: inline-flex; }
+.tip__bubble { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--surface-overlay); color: var(--text-strong); border: 1px solid var(--border); padding: 6px 10px; border-radius: var(--radius-sm); font-size: var(--text-xs); white-space: nowrap; box-shadow: var(--shadow-2); opacity: 0; pointer-events: none; }
+.tip:hover .tip__bubble, .tip:focus-within .tip__bubble { opacity: 1; }
+
+/* ---------- SPARKLINE / MINI-CHART ---------- */
+.metric { padding: var(--space-4) var(--space-5); }
+.metric__label { font-size: var(--text-xs); color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.04em; }
+.metric__value { font-family: var(--font-display); font-size: var(--text-2xl); color: var(--text-strong); letter-spacing: var(--tracking-tight); display: flex; align-items: baseline; gap: 6px; }
+.metric__value .unit { font-size: var(--text-base); color: var(--text-muted); font-family: var(--font-body); }
+.metric__delta { font-size: var(--text-xs); font-weight: 600; }
+.metric__delta--up { color: var(--success); }
+.metric__delta--down { color: var(--danger); }
+.spark { width: 100%; height: 40px; display: block; }
+.spark path.line { fill: none; stroke-width: 2; }
+.spark path.area { opacity: 0.16; stroke: none; }
+
+/* ---------- MODAL / DIALOG ---------- */
+.modal-demo { position: relative; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--border-subtle); }
+.modal-scrim { background: rgba(5,8,13,0.66); padding: var(--space-7) var(--space-4); display: grid; place-items: center; backdrop-filter: blur(2px); }
+.dialog { width: 100%; max-width: 460px; background: var(--surface-overlay); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-3); overflow: hidden; }
+.dialog__head { padding: var(--space-5) var(--space-5) var(--space-3); display: flex; gap: var(--space-3); align-items: flex-start; }
+.dialog__body { padding: 0 var(--space-5) var(--space-4); }
+.dialog__foot { padding: var(--space-4) var(--space-5); display: flex; justify-content: flex-end; gap: var(--space-3); background: rgba(0,0,0,0.18); border-top: 1px solid var(--border-subtle); }
+.dialog__icon { flex: none; width: 38px; height: 38px; border-radius: var(--radius-pill); display: grid; place-items: center; font-size: 18px; }
+.dialog__icon--accent { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-border); }
+.dialog__icon--warn { background: var(--warn-soft); color: var(--warn); border: 1px solid var(--warn-border); }
+.cap-list { display: grid; gap: var(--space-2); margin: var(--space-3) 0; }
+.cap { display: flex; gap: var(--space-3); align-items: center; padding: 10px var(--space-3); background: var(--bg-sunken); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); font-size: var(--text-sm); }
+.cap .cap__ic { width: 26px; height: 26px; border-radius: var(--radius-sm); display: grid; place-items: center; background: var(--surface-3); color: var(--accent); flex: none; }
+.cap .cap__scope { margin-left: auto; }
+
+/* ---------- COMMAND PANEL (signature) ---------- */
+.cmd { background: var(--surface-1); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); box-shadow: var(--shadow-2), var(--hairline-top); overflow: hidden; }
+.cmd__head { padding: var(--space-5); border-bottom: 1px solid var(--border-subtle); }
+.cmd__steps { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-4) var(--space-5); background: var(--bg-sunken); border-bottom: 1px solid var(--border-subtle); flex-wrap: wrap; }
+.step { display: inline-flex; align-items: center; gap: var(--space-2); padding: 5px 12px 5px 8px; border-radius: var(--radius-pill); font-size: var(--text-sm); font-weight: 600; color: var(--text-faint); background: transparent; border: 1px solid transparent; }
+.step .num { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: var(--text-xs); background: var(--surface-3); color: var(--text-muted); border: 1px solid var(--border); }
+.step--done { color: var(--success); } .step--done .num { background: var(--success); color: #052615; border-color: transparent; }
+.step--active { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-border); } .step--active .num { background: var(--accent); color: var(--accent-contrast); border-color: transparent; }
+.step__arrow { color: var(--text-disabled); }
+.cmd__body { padding: var(--space-5); display: grid; gap: var(--space-4); }
+.cmd__actions { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+.diff { font-family: var(--font-mono); font-size: var(--text-xs); border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-subtle); }
+.diff .ln { display: flex; padding: 2px var(--space-3); white-space: pre-wrap; }
+.diff .ln--add { background: var(--success-soft); color: #b6f2d3; }
+.diff .ln--del { background: var(--danger-soft); color: #ffc3c9; }
+.diff .ln--ctx { color: var(--text-muted); }
+.diff .gutter { width: 22px; color: var(--text-faint); user-select: none; flex: none; }
+.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: var(--space-3); }
+.kv dt { font-family: var(--font-mono); font-size: var(--text-xs); text-transform: uppercase; color: var(--accent); margin-bottom: 3px; letter-spacing: 0.04em; }
+.kv dd { margin: 0; color: var(--text-strong); font-size: var(--text-sm); }
+
+/* ---------- APP SHELL (sidebar + topbar) ---------- */
+.shell { display: grid; grid-template-columns: 248px minmax(0,1fr); height: 660px; border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-3); background: var(--bg-base); }
+.sidebar { display: flex; flex-direction: column; background: linear-gradient(180deg, #0c1019, #090d14); border-right: 1px solid var(--border-subtle); min-height: 0; }
+.sidebar__brand { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-4) var(--space-4); }
+.sidebar__brand .bar { width: 7px; height: 28px; border-radius: var(--radius-pill); background: linear-gradient(180deg, var(--accent), var(--info)); flex: none; }
+.sidebar__brand b { font-family: var(--font-display); color: var(--text-strong); font-size: var(--text-md); letter-spacing: var(--tracking-tight); }
+.proj-switch { margin: 0 var(--space-3) var(--space-3); padding: 9px var(--space-3); display: flex; align-items: center; gap: var(--space-2); background: var(--surface-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); cursor: pointer; font-size: var(--text-sm); }
+.proj-switch .avatar { width: 24px; height: 24px; border-radius: var(--radius-sm); background: linear-gradient(135deg, var(--accent), var(--info)); flex: none; }
+.proj-switch .caret { margin-left: auto; color: var(--text-faint); }
+.nav { padding: var(--space-2) var(--space-3); overflow-y: auto; flex: 1; min-height: 0; }
+.nav__group { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-disabled); padding: var(--space-3) var(--space-3) var(--space-1); }
+.nav__item { width: 100%; display: flex; align-items: center; gap: var(--space-3); padding: 8px var(--space-3); border-radius: var(--radius-md); color: var(--text-muted); background: transparent; border: 0; cursor: pointer; font-size: var(--text-sm); font-weight: 500; text-align: left; }
+.nav__item:hover { background: rgba(255,255,255,0.04); color: var(--text-strong); }
+.nav__item .ic { width: 16px; text-align: center; flex: none; opacity: .9; }
+.nav__item--active { background: var(--accent-soft); color: var(--text-strong); box-shadow: inset 2px 0 0 var(--accent); }
+.nav__item--active .ic { color: var(--accent); }
+.nav__item .nav__badge { margin-left: auto; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: var(--radius-pill); background: var(--danger); color: #2a0509; }
+.sidebar__foot { padding: var(--space-3); border-top: 1px solid var(--border-subtle); display: flex; align-items: center; gap: var(--space-3); }
+.sidebar__foot .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--surface-3); flex: none; display: grid; place-items: center; color: var(--text-muted); font-size: var(--text-xs); }
+
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.topbar { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-5); border-bottom: 1px solid var(--border-subtle); background: rgba(10,14,23,0.7); }
+.topbar .crumbs { font-size: var(--text-sm); color: var(--text-muted); }
+.topbar .crumbs b { color: var(--text-strong); }
+.cmdk { margin-left: auto; display: flex; align-items: center; gap: var(--space-2); width: 260px; padding: 7px var(--space-3); background: var(--bg-sunken); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-faint); font-size: var(--text-sm); }
+.cmdk kbd { margin-left: auto; font-size: 10px; padding: 1px 6px; border-radius: var(--radius-sm); background: var(--surface-3); border: 1px solid var(--border); color: var(--text-muted); }
+.content { padding: var(--space-5); overflow: auto; flex: 1; min-height: 0; }
+
+/* ---------- STATE VIEWS ---------- */
+.state { display: grid; place-items: center; text-align: center; padding: var(--space-8) var(--space-5); }
+.state .glyph { width: 64px; height: 64px; border-radius: var(--radius-lg); display: grid; place-items: center; margin-bottom: var(--space-4); font-size: 26px; background: var(--surface-2); border: 1px solid var(--border-subtle); box-shadow: var(--shadow-2); }
+.state h3 { font-size: var(--text-lg); margin-bottom: var(--space-2); }
+.state p { color: var(--text-muted); max-width: 42ch; margin: 0 auto var(--space-4); }
+.onboard { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 0; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--border-subtle); background: var(--surface-1); box-shadow: var(--shadow-2); }
+@media (max-width: 760px){ .onboard { grid-template-columns: 1fr; } }
+.onboard__l { padding: var(--space-7) var(--space-6); }
+.onboard__r { padding: var(--space-6); background: linear-gradient(180deg, var(--accent-softer), transparent), var(--bg-sunken); border-left: 1px solid var(--border-subtle); display: grid; align-content: center; gap: var(--space-3); }
+.steplist { display: grid; gap: var(--space-3); margin-top: var(--space-5); }
+.steplist .it { display: flex; gap: var(--space-3); align-items: center; }
+.steplist .n { width: 26px; height: 26px; border-radius: 50%; flex: none; display: grid; place-items: center; font-size: var(--text-xs); font-weight: 700; background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-border); }
+.skeleton { background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface-3) 50%, var(--surface-2) 100%); background-size: 200% 100%; border-radius: var(--radius-sm); height: 14px; }
+@media (prefers-reduced-motion: no-preference){ .skeleton { animation: shimmer 1.3s linear infinite; } }
+@keyframes shimmer { to { background-position: -200% 0; } }
+
+/* ---------- SWATCHES ---------- */
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px,1fr)); gap: var(--space-3); }
+.sw { border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-subtle); background: var(--surface-1); }
+.sw .chip-color { height: 56px; }
+.sw .meta { padding: 8px var(--space-3); }
+.sw .meta b { display: block; font-size: var(--text-sm); color: var(--text-strong); }
+.sw .meta code { font-size: var(--text-xs); color: var(--text-faint); }
+
+.specimen { padding: var(--space-4) 0; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: baseline; gap: var(--space-4); flex-wrap: wrap; }
+.specimen:last-child { border-bottom: 0; }
+.specimen .tag { width: 120px; flex: none; }
+
+.scale-row { display: flex; align-items: center; gap: var(--space-4); padding: 6px 0; }
+.scale-row .bar { height: 14px; border-radius: var(--radius-xs); background: var(--accent-soft); border: 1px solid var(--accent-border); }
+.radius-demo { display: flex; gap: var(--space-4); flex-wrap: wrap; }
+.radius-demo .box { width: 92px; height: 64px; background: var(--surface-2); border: 1px solid var(--border); display: grid; place-items: end center; padding-bottom: 6px; font-size: 10px; color: var(--text-faint); }
+.elev-demo { display: flex; gap: var(--space-5); flex-wrap: wrap; }
+.elev-demo .box { width: 130px; height: 86px; border-radius: var(--radius-md); background: var(--surface-2); display: grid; place-items: center; font-size: var(--text-xs); color: var(--text-muted); border: 1px solid var(--border-subtle); }
+
+.note-card { background: linear-gradient(180deg, var(--accent-softer), transparent), var(--surface-1); border: 1px solid var(--accent-border); border-radius: var(--radius-lg); padding: var(--space-5) var(--space-6); }
+.note-card ul { margin: var(--space-3) 0 0; padding-left: 1.1rem; }
+.note-card li { margin-bottom: var(--space-2); color: var(--text); }
+.note-card b { color: var(--text-strong); }
+.rule-pill { display: inline-flex; gap: 8px; align-items: center; padding: 4px 12px; border-radius: var(--radius-pill); font-size: var(--text-xs); font-weight: 600; background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-border); }
+.tmpl { counter-reset: step; display: grid; gap: var(--space-2); }
+.tmpl > li { list-style: none; display: flex; gap: var(--space-3); align-items: flex-start; }
+.tmpl > li::before { counter-increment: step; content: counter(step); flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--surface-3); color: var(--accent); display: grid; place-items: center; font-size: var(--text-xs); font-weight: 700; border: 1px solid var(--border); }
+
+.toc { position: sticky; top: 0; z-index: 5; display: flex; gap: var(--space-2); flex-wrap: wrap; padding: var(--space-3) 0; margin-bottom: var(--space-3); background: linear-gradient(180deg, var(--bg-base) 70%, transparent); }
+.toc a { font-size: var(--text-xs); padding: 5px 11px; border-radius: var(--radius-pill); background: var(--surface-2); border: 1px solid var(--border-subtle); color: var(--text-muted); text-decoration: none; }
+.toc a:hover { color: var(--text-strong); border-color: var(--border-strong); }
+</style>
+</head>
+<body>
+<div class="doc">
+
+  <header class="doc-hero">
+    <div class="mark"><span class="bar"></span>
+      <div>
+        <div class="eyebrow">Atlas · design system</div>
+        <h1>Dark, pill-forward SaaS visual language</h1>
+      </div>
+    </div>
+    <p class="lede">A single self-contained visual reference that establishes the surfaces, accent, type, and component language all nine Atlas feature modules will be built on. This is a review artifact — sample data only, not wired to the backend.</p>
+    <div class="row" style="margin-top:var(--space-5)">
+      <span class="badge badge--running"><span class="dot"></span> Review artifact</span>
+      <span class="badge badge--idle">No build step</span>
+      <span class="badge badge--idle">No dependencies</span>
+      <span class="badge badge--idle">Evolved from M1b tokens</span>
+    </div>
+  </header>
+
+  <nav class="toc" aria-label="Sections">
+    <a href="#note">Design note</a>
+    <a href="#color">Color</a>
+    <a href="#type">Type</a>
+    <a href="#space">Spacing &amp; radius</a>
+    <a href="#elevation">Elevation</a>
+    <a href="#buttons">Buttons</a>
+    <a href="#inputs">Inputs</a>
+    <a href="#controls">Toggles &amp; tabs</a>
+    <a href="#status">Status &amp; chips</a>
+    <a href="#table">Table</a>
+    <a href="#feedback">Alerts &amp; toasts</a>
+    <a href="#charts">Sparklines</a>
+    <a href="#dialogs">Dialogs</a>
+    <a href="#command">Command panel</a>
+    <a href="#shell">App shell</a>
+    <a href="#states">States</a>
+    <a href="#sample">Sample screen</a>
+  </nav>
+
+  <!-- ============ DESIGN NOTE ============ -->
+  <section class="section" id="note" style="border-top:0">
+    <div class="eyebrow">00 · principles</div>
+    <h2>Design-system note</h2>
+    <p class="section-sub">How to keep nine feature slices cohesive. Read this before building any module UI.</p>
+
+    <div class="note-card">
+      <div class="grid grid-2" style="gap:var(--space-6)">
+        <div>
+          <h3 style="font-size:var(--text-md);margin-bottom:var(--space-3)">Principles</h3>
+          <ul>
+            <li><b>Elevation over borders.</b> Separate surfaces by tone + soft shadow (base → panel → card), not heavy outlines. Borders are hairline and low-contrast. This is what makes dense screens feel integrated and smooth, not boxy.</li>
+            <li><b>One confident accent.</b> A single saturated Atlas teal carries primary actions, active state, focus, and key data. Everything else is a calm grey text ramp so dense screens stay light.</li>
+            <li><b>Calm by default, bold in the signature.</b> Boldness is concentrated in the pill + accent signature; all other surfaces are quiet.</li>
+            <li><b>Copy is design material.</b> Name things by what the user does (Import project, Preview changes, Undo, Approve). Sentence case. Errors say what happened + how to fix. Empty states invite the next action.</li>
+            <li><b>Accessible &amp; calm motion.</b> Visible keyboard focus everywhere, AA contrast, transitions are short and respect <code>prefers-reduced-motion</code>.</li>
+          </ul>
+        </div>
+        <div>
+          <h3 style="font-size:var(--text-md);margin-bottom:var(--space-3)">The pill-vs-soft-rounded rule</h3>
+          <p class="muted" style="margin-bottom:var(--space-3)">The rounded-shape language is the cohesion device — but applied with restraint.</p>
+          <div class="stack">
+            <div class="row"><span class="rule-pill">Pills · 999px</span> <span class="muted tiny">buttons, status badges, tags, segmented controls, tabs, filter chips, toggles — controls &amp; status</span></div>
+            <div class="row"><span class="rule-pill" style="background:var(--surface-3);color:var(--text);border-color:var(--border)">Soft · 12px</span> <span class="muted tiny">text inputs, selects, textareas, cards, panels, table rows, large containers</span></div>
+          </div>
+          <p class="muted tiny" style="margin-top:var(--space-3)">Why: full-pill text fields read as search bars and hurt forms; rounded rows fight dense data. Pills are for controls + status; soft-rounded for inputs + containers.</p>
+          <h3 style="font-size:var(--text-md);margin:var(--space-5) 0 var(--space-3)">Surface / accent logic</h3>
+          <p class="muted tiny"><code>--bg-base</code> app → <code>--surface-1</code> panel → <code>--surface-2</code> card → <code>--surface-3</code> hover. Accent only for: primary action, active nav/tab, focus ring, selected row, key metric. Semantic colors (success / warn / danger / info) are reserved for state, never decoration.</p>
+        </div>
+      </div>
+
+      <hr style="border:0;border-top:1px solid var(--accent-border);margin:var(--space-5) 0" />
+      <h3 style="font-size:var(--text-md);margin-bottom:var(--space-3)">Template — building a new feature slice</h3>
+      <ol class="tmpl">
+        <li><div><b>Frame it in the shell.</b> Add the module to the sidebar nav group; set breadcrumb + page title. Page = header row (title + primary pill action) then content.</div></li>
+        <li><div><b>Use surfaces, not boxes.</b> Group content in <code>.panel</code>/<code>.card</code>; rely on elevation. Never add heavy borders to separate regions.</div></li>
+        <li><div><b>Controls &amp; status are pills; inputs &amp; data are soft.</b> Buttons/segments/badges/chips = pill; forms/tables = md radius.</div></li>
+        <li><div><b>Mutations go through the command panel.</b> Any write reuses preview → dry-run → execute → undo. Dangerous/capability actions open the approval prompt or consent dialog.</div></li>
+        <li><div><b>Cover the three states.</b> Ship loading (skeleton), error (envelope code + fix), and empty/onboarding (invite next action) for every data view.</div></li>
+        <li><div><b>Map feedback to severity.</b> Use the alert/toast severities tied to the API error envelope (info/success/warn/danger).</div></li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ============ COLOR ============ -->
+  <section class="section" id="color">
+    <div class="eyebrow">01 · tokens</div>
+    <h2>Color</h2>
+    <p class="section-sub">Surfaces separate by elevation. One accent (evolved Atlas teal) plus a four-color semantic set. Everything else is a calm grey ramp.</p>
+
+    <h4 class="subhead">Surfaces &amp; borders</h4>
+    <div class="swatches">
+      <div class="sw"><div class="chip-color" style="background:var(--bg-base)"></div><div class="meta"><b>App base</b><code>--bg-base · #0a0e17</code></div></div>
+      <div class="sw"><div class="chip-color" style="background:var(--bg-sunken)"></div><div class="meta"><b>Sunken / well</b><code>--bg-sunken · #06090f</code></div></div>
+      <div class="sw"><div class="chip-color" style="background:var(--surface-1)"></div><div class="meta"><b>Panel</b><code>--surface-1 · #10151f</code></div></div>
+      <div class="sw"><div class="chip-color" style="background:var(--surface-2)"></div><div class="meta"><b>Card</b><code>--surface-2 · #161d2b</code></div></div>
+      <div class="sw"><div class="chip-color" style="background:var(--surface-3)"></div><div class="meta"><b>Raised / hover</b><code>--surface-3 · #1d2638</code></div></div>
+      <div class="sw"><div class="chip-color" style="background:var(--surface-overlay)"></div><div class="meta"><b>Overlay</b><code>--surface-overlay · #18202f</code></div></div>
+      <div class="sw"><div class="chip-color" style="background:#0a0e17;box-shadow:inset 0 0 0 1px var(--border)"></div><div class="meta"><b>Hairline border</b><code>--border · rgba 9%</code></div></div>
+      <div class="sw"><div class="chip-color" style="background:#0a0e17;box-shadow:inset 0 0 0 1px var(--border-strong)"></div><div class="meta"><b>Strong border</b><code>--border-strong · 15%</code></div></div>
+    </div>
+
+    <h4 class="subhead">Accent (Atlas teal) — evolved from M1b</h4>
+    <div class="swatches">
+      <div class="sw"><div class="chip-color" style="background:var(--accent)"></div><div class="meta"><b>Accent</b><code>--accent · #2fd6c3</code></div></div>
+      <div class="sw"><div class="chip-color" style="background:var(--accent-hover)"></div><div class="meta"><b>Accent hover</b><code>--accent-hover · #54e2d2</code></div></div>
+      <div class="sw"><div class="chip-color" style="background:var(--accent-press)"></div><div class="meta"><b>Accent press</b><code>--accent-press · #1fb4a4</code></div></div>
+      <div class="sw"><div class="chip-color" style="background:var(--accent-soft)"></div><div class="meta"><b>Accent soft</b><code>--accent-soft · 13%</code></div></div>
+    </div>
+
+    <h4 class="subhead">Semantic</h4>
+    <div class="swatches">
+      <div class="sw"><div class="chip-color" style="background:var(--success)"></div><div class="meta"><b>Success</b><code>--success · #43d98a</code></div></div>
+      <div class="sw"><div class="chip-color" style="background:var(--warn)"></div><div class="meta"><b>Warn</b><code>--warn · #f4c152</code></div></div>
+      <div class="sw"><div class="chip-color" style="background:var(--danger)"></div><div class="meta"><b>Danger</b><code>--danger · #ff6b7a</code></div></div>
+      <div class="sw"><div class="chip-color" style="background:var(--info)"></div><div class="meta"><b>Info (blueprint)</b><code>--info · #5b8cff</code></div></div>
+    </div>
+
+    <h4 class="subhead">Text ramp</h4>
+    <div class="swatches">
+      <div class="sw"><div class="chip-color" style="background:var(--bg-base);color:var(--text-strong);display:grid;place-items:center;font-size:var(--text-sm)">Strong</div><div class="meta"><b>Text strong</b><code>--text-strong · #f3f6fc</code></div></div>
+      <div class="sw"><div class="chip-color" style="background:var(--bg-base);color:var(--text);display:grid;place-items:center;font-size:var(--text-sm)">Body</div><div class="meta"><b>Text</b><code>--text · #d3dbec</code></div></div>
+      <div class="sw"><div class="chip-color" style="background:var(--bg-base);color:var(--text-muted);display:grid;place-items:center;font-size:var(--text-sm)">Muted</div><div class="meta"><b>Text muted</b><code>--text-muted · #97a2bb</code></div></div>
+      <div class="sw"><div class="chip-color" style="background:var(--bg-base);color:var(--text-faint);display:grid;place-items:center;font-size:var(--text-sm)">Faint</div><div class="meta"><b>Text faint</b><code>--text-faint · #6b768f</code></div></div>
+    </div>
+  </section>
+
+  <!-- ============ TYPE ============ -->
+  <section class="section" id="type">
+    <div class="eyebrow">02 · tokens</div>
+    <h2>Type</h2>
+    <p class="section-sub">Display (Space Grotesk), body (Inter), mono (JetBrains Mono) — with self-contained system fallbacks so the artifact needs no network. 15px base for SaaS density.</p>
+    <div class="card">
+      <div class="specimen"><div class="tag label-mono">3xl · 44</div><div style="font-family:var(--font-display);font-size:var(--text-3xl);font-weight:600">Stand up a server</div></div>
+      <div class="specimen"><div class="tag label-mono">2xl · 32</div><div style="font-family:var(--font-display);font-size:var(--text-2xl);font-weight:600">Resource manager</div></div>
+      <div class="specimen"><div class="tag label-mono">xl · 24</div><div style="font-family:var(--font-display);font-size:var(--text-xl);font-weight:600">Monitoring dashboard</div></div>
+      <div class="specimen"><div class="tag label-mono">lg · 20</div><div style="font-size:var(--text-lg);font-weight:600;color:var(--text-strong)">Section heading</div></div>
+      <div class="specimen"><div class="tag label-mono">md · 17</div><div style="font-size:var(--text-md)">Lead paragraph that introduces a feature area in calm body grey.</div></div>
+      <div class="specimen"><div class="tag label-mono">base · 15</div><div style="font-size:var(--text-base)">Body copy. The default reading size across dense screens and tables.</div></div>
+      <div class="specimen"><div class="tag label-mono">sm · 13</div><div style="font-size:var(--text-sm);color:var(--text-muted)">Secondary / control text and table cells.</div></div>
+      <div class="specimen"><div class="tag label-mono">xs · 12</div><div style="font-size:var(--text-xs);color:var(--text-faint)">Captions, labels, metadata.</div></div>
+      <div class="specimen"><div class="tag label-mono">mono</div><div style="font-family:var(--font-mono);font-size:var(--text-sm)">cmd_exec_8f2a · audit://2026-06-27/142</div></div>
+      <div class="specimen" style="border-bottom:0"><div class="tag label-mono">weights</div><div class="row"><span style="font-weight:400">Regular 400</span><span style="font-weight:500">Medium 500</span><span style="font-weight:600">Semibold 600</span><span style="font-weight:700">Bold 700</span></div></div>
+    </div>
+  </section>
+
+  <!-- ============ SPACING & RADIUS ============ -->
+  <section class="section" id="space">
+    <div class="eyebrow">03 · tokens</div>
+    <h2>Spacing &amp; radius</h2>
+    <p class="section-sub">A 4px spacing base and the radius scale — note the deliberate split between pill (controls/status) and md (inputs/cards/tables).</p>
+    <div class="grid grid-2">
+      <div class="card">
+        <h4 class="subhead" style="margin-top:0">Spacing scale (4px base)</h4>
+        <div class="scale-row"><code class="label-mono" style="width:84px">space-1</code><div class="bar" style="width:4px"></div><span class="faint tiny">4px</span></div>
+        <div class="scale-row"><code class="label-mono" style="width:84px">space-2</code><div class="bar" style="width:8px"></div><span class="faint tiny">8px</span></div>
+        <div class="scale-row"><code class="label-mono" style="width:84px">space-3</code><div class="bar" style="width:12px"></div><span class="faint tiny">12px</span></div>
+        <div class="scale-row"><code class="label-mono" style="width:84px">space-4</code><div class="bar" style="width:16px"></div><span class="faint tiny">16px</span></div>
+        <div class="scale-row"><code class="label-mono" style="width:84px">space-5</code><div class="bar" style="width:24px"></div><span class="faint tiny">24px</span></div>
+        <div class="scale-row"><code class="label-mono" style="width:84px">space-6</code><div class="bar" style="width:32px"></div><span class="faint tiny">32px</span></div>
+        <div class="scale-row"><code class="label-mono" style="width:84px">space-7</code><div class="bar" style="width:40px"></div><span class="faint tiny">40px</span></div>
+        <div class="scale-row"><code class="label-mono" style="width:84px">space-8</code><div class="bar" style="width:48px"></div><span class="faint tiny">48px</span></div>
+      </div>
+      <div class="card">
+        <h4 class="subhead" style="margin-top:0">Radius scale</h4>
+        <div class="radius-demo">
+          <div class="box" style="border-radius:var(--radius-xs)">xs · 6</div>
+          <div class="box" style="border-radius:var(--radius-sm)">sm · 8</div>
+          <div class="box" style="border-radius:var(--radius-md);border-color:var(--accent-border)">md · 12</div>
+          <div class="box" style="border-radius:var(--radius-lg)">lg · 16</div>
+        </div>
+        <div style="margin-top:var(--space-5)">
+          <div class="row" style="gap:var(--space-4)">
+            <button class="btn btn--primary">Pill · 999px</button>
+            <span class="muted tiny">controls &amp; status</span>
+          </div>
+          <div class="row" style="gap:var(--space-4);margin-top:var(--space-3)">
+            <input class="input" style="width:180px" value="Soft · 12px" readonly />
+            <span class="muted tiny">inputs &amp; containers</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ELEVATION ============ -->
+  <section class="section" id="elevation">
+    <div class="eyebrow">04 · tokens</div>
+    <h2>Elevation</h2>
+    <p class="section-sub">Three soft shadow levels plus a 1px top highlight. Elevation — not borders — is the primary way surfaces separate.</p>
+    <div class="elev-demo">
+      <div class="box" style="box-shadow:var(--shadow-1),var(--hairline-top)">shadow-1 · rest</div>
+      <div class="box" style="box-shadow:var(--shadow-2),var(--hairline-top);background:var(--surface-2)">shadow-2 · card</div>
+      <div class="box" style="box-shadow:var(--shadow-3),var(--hairline-top);background:var(--surface-overlay)">shadow-3 · overlay</div>
+    </div>
+  </section>
+
+  <!-- ============ BUTTONS ============ -->
+  <section class="section" id="buttons">
+    <div class="eyebrow">05 · components</div>
+    <h2>Buttons — pill</h2>
+    <p class="section-sub">Fully rounded. Primary carries the accent; everything else stays quiet. Shown in every state.</p>
+    <div class="card stack" style="gap:var(--space-5)">
+      <div class="row"><span class="label-mono" style="width:96px">primary</span>
+        <button class="btn btn--primary">Import project</button>
+        <button class="btn btn--primary">Hover (try it)</button>
+        <button class="btn btn--primary" disabled>Disabled</button>
+        <button class="btn btn--primary"><span class="spinner"></span> Importing…</button>
+      </div>
+      <div class="row"><span class="label-mono" style="width:96px">secondary</span>
+        <button class="btn btn--secondary">Preview changes</button>
+        <button class="btn btn--secondary" disabled>Disabled</button>
+      </div>
+      <div class="row"><span class="label-mono" style="width:96px">ghost</span>
+        <button class="btn btn--ghost">Cancel</button>
+        <button class="btn btn--ghost">＋ Add source</button>
+      </div>
+      <div class="row"><span class="label-mono" style="width:96px">danger</span>
+        <button class="btn btn--danger">Delete resource</button>
+        <button class="btn btn--danger-soft">Force stop</button>
+      </div>
+      <div class="row"><span class="label-mono" style="width:96px">sizes</span>
+        <button class="btn btn--primary btn--lg">Large</button>
+        <button class="btn btn--secondary">Default</button>
+        <button class="btn btn--secondary btn--sm">Small</button>
+        <button class="btn btn--secondary btn--icon" aria-label="Settings">⚙</button>
+      </div>
+      <p class="faint tiny" style="margin:0">Focus is keyboard-visible: tab to any button to see the accent ring (<code>--focus-ring</code>).</p>
+    </div>
+  </section>
+
+  <!-- ============ INPUTS ============ -->
+  <section class="section" id="inputs">
+    <div class="eyebrow">06 · components</div>
+    <h2>Inputs — soft-rounded (md, not pills)</h2>
+    <p class="section-sub">Text fields, selects and textareas use 12px radius. Full pills here would read as search bars and hurt forms.</p>
+    <div class="grid grid-2">
+      <div class="card stack" style="gap:var(--space-4)">
+        <div class="field">
+          <label for="i1">Project name</label>
+          <input class="input" id="i1" value="downtown-rp" />
+          <span class="hint">Lowercase, used as the folder name.</span>
+        </div>
+        <div class="field">
+          <label for="i2">Server path</label>
+          <div class="input-group">
+            <span class="faint">📁</span>
+            <input class="input" id="i2" placeholder="/srv/fivem/server" />
+            <button class="btn btn--ghost btn--sm" type="button">Browse</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="s1">Environment</label>
+          <select class="select" id="s1"><option>Production</option><option>Staging</option><option>Local</option></select>
+        </div>
+      </div>
+      <div class="card stack" style="gap:var(--space-4)">
+        <div class="field">
+          <label for="i3">License key</label>
+          <input class="input input--error" id="i3" value="cfxk_live_…" />
+          <span class="err">⚠ That key was rejected. Paste the key from your Cfx.re portal, then retry.</span>
+        </div>
+        <div class="field">
+          <label for="t1">Commit message</label>
+          <textarea class="textarea" id="t1">chore: regenerate server.cfg from wizard</textarea>
+        </div>
+        <p class="faint tiny" style="margin:0">Hover for the border lift; focus for the accent ring + soft glow. Error state recolors border and ring to danger.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CONTROLS ============ -->
+  <section class="section" id="controls">
+    <div class="eyebrow">07 · components</div>
+    <h2>Toggles, segmented control &amp; tabs — pill</h2>
+    <p class="section-sub">The rounded control family that makes everything feel like one system.</p>
+    <div class="grid grid-2">
+      <div class="card stack" style="gap:var(--space-5)">
+        <h4 class="subhead" style="margin:0">Toggles</h4>
+        <label class="switch"><input type="checkbox" checked /><span class="track"><span class="thumb"></span></span><span class="switch__text">Auto-restart on crash</span></label>
+        <label class="switch"><input type="checkbox" /><span class="track"><span class="thumb"></span></span><span class="switch__text">Send anonymized telemetry</span></label>
+        <label class="switch"><input type="checkbox" disabled /><span class="track"><span class="thumb"></span></span><span class="switch__text faint">Beta channel (locked)</span></label>
+      </div>
+      <div class="card stack" style="gap:var(--space-5)">
+        <h4 class="subhead" style="margin:0">Segmented control</h4>
+        <div class="seg" role="radiogroup" aria-label="Range">
+          <label><input type="radio" name="seg-range" checked /><span class="seg__opt">1h</span></label>
+          <label><input type="radio" name="seg-range" /><span class="seg__opt">24h</span></label>
+          <label><input type="radio" name="seg-range" /><span class="seg__opt">7d</span></label>
+          <label><input type="radio" name="seg-range" /><span class="seg__opt">30d</span></label>
+        </div>
+        <h4 class="subhead" style="margin:0">Tabs</h4>
+        <div class="tabs">
+          <button class="tab tab--active">Overview</button>
+          <button class="tab">Resources</button>
+          <button class="tab">Config</button>
+          <button class="tab">Logs</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ STATUS & CHIPS ============ -->
+  <section class="section" id="status">
+    <div class="eyebrow">08 · components</div>
+    <h2>Status badges &amp; filter chips — pill</h2>
+    <p class="section-sub">Status uses the semantic set; running pulses (reduced-motion aware). Chips filter dense views.</p>
+    <div class="card stack" style="gap:var(--space-5)">
+      <div class="row">
+        <span class="badge badge--success"><span class="dot"></span> Healthy</span>
+        <span class="badge badge--running"><span class="dot"></span> Running</span>
+        <span class="badge badge--warn"><span class="dot"></span> Degraded</span>
+        <span class="badge badge--danger"><span class="dot"></span> Crashed</span>
+        <span class="badge badge--info"><span class="dot"></span> Updating</span>
+        <span class="badge badge--idle"><span class="dot"></span> Idle</span>
+      </div>
+      <div class="row">
+        <span class="chip chip--active">All <span class="count">128</span></span>
+        <span class="chip">Enabled <span class="count">96</span></span>
+        <span class="chip">Disabled <span class="count">22</span></span>
+        <span class="chip">Errored <span class="count">10</span></span>
+        <span class="chip">git-managed <span class="x">×</span></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TABLE ============ -->
+  <section class="section" id="table">
+    <div class="eyebrow">09 · components</div>
+    <h2>Dense data table — medium radius</h2>
+    <p class="section-sub">Container is soft-rounded; rows are square inside and separated by hairlines. Status uses pill badges; row actions use ghost pills.</p>
+    <div class="table-wrap">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th style="width:36px"><span class="checkbox checkbox--on">✓</span></th>
+            <th>Resource</th><th>Version</th><th>Status</th><th>Source</th><th>CPU</th><th style="text-align:right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr aria-selected="true">
+            <td><span class="checkbox checkbox--on">✓</span></td>
+            <td><span class="cell-strong">esx_core</span><div class="faint tiny">framework · 14 dependents</div></td>
+            <td class="cell-mono">v1.9.4</td>
+            <td><span class="badge badge--success"><span class="dot"></span> Healthy</span></td>
+            <td class="cell-mono">git</td>
+            <td class="cell-mono">2.1%</td>
+            <td style="text-align:right"><button class="btn btn--ghost btn--sm">Disable</button></td>
+          </tr>
+          <tr>
+            <td><span class="checkbox"></span></td>
+            <td><span class="cell-strong">oxmysql</span><div class="faint tiny">database</div></td>
+            <td class="cell-mono">v2.7.1</td>
+            <td><span class="badge badge--running"><span class="dot"></span> Running</span></td>
+            <td class="cell-mono">git</td>
+            <td class="cell-mono">5.8%</td>
+            <td style="text-align:right"><button class="btn btn--ghost btn--sm">Disable</button></td>
+          </tr>
+          <tr>
+            <td><span class="checkbox"></span></td>
+            <td><span class="cell-strong">pma-voice</span><div class="faint tiny">voice · update available</div></td>
+            <td class="cell-mono">v8.0.2</td>
+            <td><span class="badge badge--warn"><span class="dot"></span> Degraded</span></td>
+            <td class="cell-mono">manual</td>
+            <td class="cell-mono">11.4%</td>
+            <td style="text-align:right"><button class="btn btn--ghost btn--sm">Update</button></td>
+          </tr>
+          <tr>
+            <td><span class="checkbox"></span></td>
+            <td><span class="cell-strong">custom_hud</span><div class="faint tiny">ui · missing dependency</div></td>
+            <td class="cell-mono">v0.3.0</td>
+            <td><span class="badge badge--danger"><span class="dot"></span> Crashed</span></td>
+            <td class="cell-mono">local</td>
+            <td class="cell-mono">—</td>
+            <td style="text-align:right"><button class="btn btn--ghost btn--sm">Inspect</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ ALERTS & TOASTS ============ -->
+  <section class="section" id="feedback">
+    <div class="eyebrow">10 · components</div>
+    <h2>Inline alerts &amp; toasts</h2>
+    <p class="section-sub">Severities map directly to the API error envelope: info / success / warn / danger. Errors state what happened and how to fix it.</p>
+    <div class="grid grid-2">
+      <div class="stack">
+        <h4 class="subhead" style="margin:0">Inline alerts</h4>
+        <div class="alert alert--info"><span class="ic">i</span><div><h4>Update available</h4><p>pma-voice v8.1.0 is available. Review the changelog before updating.</p></div></div>
+        <div class="alert alert--success"><span class="ic">✓</span><div><h4>Server started</h4><p>downtown-rp is online on port 30120. 7 resources loaded.</p></div></div>
+        <div class="alert alert--warn"><span class="ic">!</span><div><h4>Startup order conflict</h4><p>custom_hud loads before esx_core. Reorder in server.cfg to resolve.</p></div></div>
+        <div class="alert alert--danger"><span class="ic">✕</span><div><h4>Dry-run failed — <code>ResourceDependencyMissing</code></h4><p>custom_hud needs ox_lib. Install ox_lib, then retry the dry-run.</p></div></div>
+      </div>
+      <div class="stack">
+        <h4 class="subhead" style="margin:0">Toasts</h4>
+        <div class="toast toast--success"><span class="bar"></span><div><h4>Backup complete</h4><p>full-2026-06-27 · 412 MB · 8s</p></div><button class="btn btn--ghost btn--sm btn--icon" aria-label="Dismiss">×</button></div>
+        <div class="toast toast--info"><span class="bar"></span><div><h4>Change preview ready</h4><p>3 files affected · review before executing</p></div><button class="btn btn--ghost btn--sm btn--icon" aria-label="Dismiss">×</button></div>
+        <div class="toast toast--danger"><span class="bar"></span><div><h4>Execute failed</h4><p>GitMergeConflict in server.cfg — resolve and retry</p></div><button class="btn btn--ghost btn--sm btn--icon" aria-label="Dismiss">×</button></div>
+        <h4 class="subhead">Tooltip</h4>
+        <div class="row"><span class="tip"><button class="btn btn--secondary btn--sm">Provenance<span class="tip__bubble">Installed from git · commit 8f2a · 3 days ago</span></button></span><span class="faint tiny">hover or focus the button</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SPARKLINES ============ -->
+  <section class="section" id="charts">
+    <div class="eyebrow">11 · components</div>
+    <h2>Sparklines &amp; metric tiles</h2>
+    <p class="section-sub">Mini-chart treatment for the monitoring dashboard. Accent line over a soft accent area fill; semantic color for thresholds.</p>
+    <div class="grid grid-4">
+      <div class="card metric">
+        <div class="metric__label">CPU</div>
+        <div class="metric__value">38<span class="unit">%</span></div>
+        <div class="metric__delta metric__delta--down">▼ 6% vs 1h</div>
+        <svg class="spark" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">
+          <path class="area" style="fill:var(--accent)" d="M0,30 L12,24 L24,28 L36,18 L48,22 L60,12 L72,20 L84,14 L100,18 L100,40 L0,40 Z"/>
+          <path class="line" style="stroke:var(--accent)" d="M0,30 L12,24 L24,28 L36,18 L48,22 L60,12 L72,20 L84,14 L100,18"/>
+        </svg>
+      </div>
+      <div class="card metric">
+        <div class="metric__label">Memory</div>
+        <div class="metric__value">6.2<span class="unit">GB</span></div>
+        <div class="metric__delta metric__delta--up">▲ 3% vs 1h</div>
+        <svg class="spark" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">
+          <path class="area" style="fill:var(--info)" d="M0,28 L20,26 L40,24 L60,20 L80,16 L100,12 L100,40 L0,40 Z"/>
+          <path class="line" style="stroke:var(--info)" d="M0,28 L20,26 L40,24 L60,20 L80,16 L100,12"/>
+        </svg>
+      </div>
+      <div class="card metric">
+        <div class="metric__label">FPS (server)</div>
+        <div class="metric__value">58<span class="unit">fps</span></div>
+        <div class="metric__delta metric__delta--down">▼ 2 vs 1h</div>
+        <svg class="spark" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">
+          <path class="area" style="fill:var(--warn)" d="M0,10 L20,12 L40,9 L60,16 L80,14 L100,20 L100,40 L0,40 Z"/>
+          <path class="line" style="stroke:var(--warn)" d="M0,10 L20,12 L40,9 L60,16 L80,14 L100,20"/>
+        </svg>
+      </div>
+      <div class="card metric">
+        <div class="metric__label">Players</div>
+        <div class="metric__value">42<span class="unit">/64</span></div>
+        <div class="metric__delta metric__delta--up">▲ 11 vs 1h</div>
+        <svg class="spark" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">
+          <path class="area" style="fill:var(--success)" d="M0,34 L20,30 L40,26 L60,18 L80,14 L100,8 L100,40 L0,40 Z"/>
+          <path class="line" style="stroke:var(--success)" d="M0,34 L20,30 L40,26 L60,18 L80,14 L100,8"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DIALOGS ============ -->
+  <section class="section" id="dialogs">
+    <div class="eyebrow">12 · components</div>
+    <h2>Dialogs — consent &amp; approval</h2>
+    <p class="section-sub">Two Atlas-specific needs: a capability/trust <b>consent dialog</b> (plugins) and an <b>approval prompt</b> (dangerous/automated actions). Shown inline, on a scrim.</p>
+    <div class="grid grid-2">
+
+      <div class="modal-demo">
+        <div class="modal-scrim">
+          <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="consent-t">
+            <div class="dialog__head">
+              <div class="dialog__icon dialog__icon--accent">🛡</div>
+              <div>
+                <h3 id="consent-t" style="font-size:var(--text-md)">Grant capabilities to “Backup Scheduler”</h3>
+                <p class="muted tiny" style="margin-top:4px">Plugin · publisher unverified · runs in-process</p>
+              </div>
+            </div>
+            <div class="dialog__body">
+              <p class="muted tiny">This plugin requests the following capabilities for <b>downtown-rp</b>. You can revoke them anytime in Plugins → Trust.</p>
+              <div class="cap-list">
+                <div class="cap"><span class="cap__ic">📄</span> Read resource inventory <span class="cap__scope badge badge--idle">read</span></div>
+                <div class="cap"><span class="cap__ic">💾</span> Create &amp; restore backups <span class="cap__scope badge badge--warn">write</span></div>
+                <div class="cap"><span class="cap__ic">⏱</span> Register scheduled jobs <span class="cap__scope badge badge--warn">write</span></div>
+              </div>
+              <label class="switch" style="margin-top:var(--space-2)"><input type="checkbox" /><span class="track"><span class="thumb"></span></span><span class="switch__text tiny">Trust this publisher for future installs</span></label>
+            </div>
+            <div class="dialog__foot">
+              <button class="btn btn--ghost">Deny</button>
+              <button class="btn btn--primary">Grant 3 capabilities</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-demo">
+        <div class="modal-scrim">
+          <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="appr-t">
+            <div class="dialog__head">
+              <div class="dialog__icon dialog__icon--warn">⚠</div>
+              <div>
+                <h3 id="appr-t" style="font-size:var(--text-md)">Approve: delete 3 resources</h3>
+                <p class="muted tiny" style="margin-top:4px">Automation “nightly cleanup” · destructive · undo available</p>
+              </div>
+            </div>
+            <div class="dialog__body">
+              <p class="muted tiny" style="margin-bottom:var(--space-3)">This will disable and remove the following from <b>downtown-rp</b>. A compensating undo plan will be recorded.</p>
+              <div class="well pad" style="padding:var(--space-3)">
+                <div class="row" style="justify-content:space-between"><span class="cell-mono">old_chat</span><span class="badge badge--idle">disabled</span></div>
+                <div class="row" style="justify-content:space-between;margin-top:6px"><span class="cell-mono">legacy_hud</span><span class="badge badge--idle">disabled</span></div>
+                <div class="row" style="justify-content:space-between;margin-top:6px"><span class="cell-mono">test_vehicles</span><span class="badge badge--danger">errored</span></div>
+              </div>
+              <label class="switch" style="margin-top:var(--space-3)"><input type="checkbox" /><span class="track"><span class="thumb"></span></span><span class="switch__text tiny">I understand this stops these resources</span></label>
+            </div>
+            <div class="dialog__foot">
+              <button class="btn btn--ghost">Cancel</button>
+              <button class="btn btn--danger">Approve &amp; delete</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============ COMMAND PANEL ============ -->
+  <section class="section" id="command">
+    <div class="eyebrow">13 · signature pattern</div>
+    <h2>Command panel — preview → dry-run → execute → undo</h2>
+    <p class="section-sub">The reusable mutation treatment that recurs in nearly every module. Every write is transparent: see affected paths, validate, execute, undo.</p>
+    <div class="cmd">
+      <div class="cmd__head">
+        <div class="row" style="justify-content:space-between;align-items:flex-start">
+          <div>
+            <div class="eyebrow">Command</div>
+            <h3 style="font-size:var(--text-md);margin-top:6px">Import project from existing server</h3>
+            <p class="muted tiny" style="margin-top:4px">Scans the folder, detects resources &amp; config, and registers the project. Nothing is written until you execute.</p>
+          </div>
+          <span class="badge badge--warn"><span class="dot"></span> medium risk</span>
+        </div>
+      </div>
+      <div class="cmd__steps">
+        <span class="step step--done"><span class="num">✓</span> Preview</span>
+        <span class="step__arrow">→</span>
+        <span class="step step--active"><span class="num">2</span> Dry-run</span>
+        <span class="step__arrow">→</span>
+        <span class="step"><span class="num">3</span> Execute</span>
+        <span class="step__arrow">→</span>
+        <span class="step"><span class="num">↺</span> Undo</span>
+      </div>
+      <div class="cmd__body">
+        <dl class="kv">
+          <div><dt>Command</dt><dd>project.import</dd></div>
+          <div><dt>Affected paths</dt><dd>3 files</dd></div>
+          <div><dt>Processes</dt><dd>none restarted</dd></div>
+          <div><dt>Warnings</dt><dd>1 (startup order)</dd></div>
+        </dl>
+        <div>
+          <div class="label-mono" style="margin-bottom:var(--space-2)">Preview diff · server.cfg</div>
+          <div class="diff">
+            <div class="ln ln--ctx"><span class="gutter">12</span>ensure oxmysql</div>
+            <div class="ln ln--del"><span class="gutter">13</span>- ensure custom_hud</div>
+            <div class="ln ln--add"><span class="gutter">13</span>+ ensure ox_lib</div>
+            <div class="ln ln--add"><span class="gutter">14</span>+ ensure custom_hud</div>
+            <div class="ln ln--ctx"><span class="gutter">15</span>ensure pma-voice</div>
+          </div>
+        </div>
+        <div class="alert alert--success"><span class="ic">✓</span><div><h4>Dry-run passed</h4><p>Simulated against a copy. 3 resources resolved, startup order corrected. Safe to execute.</p></div></div>
+        <div class="cmd__actions">
+          <button class="btn btn--secondary">Re-run preview</button>
+          <button class="btn btn--primary">Execute import</button>
+          <button class="btn btn--ghost" disabled>↺ Undo (after execute)</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ APP SHELL ============ -->
+  <section class="section" id="shell">
+    <div class="eyebrow">14 · signature pattern</div>
+    <h2>App shell — left sidebar + top bar</h2>
+    <p class="section-sub"><b>Decision: persistent left sidebar.</b> A dense, multi-module tool with 10 feature areas needs a nav that scales vertically, supports grouping/labels and per-item status counts, and stays visible while deep in a module. Top-nav would crowd at 10 items; a thin icon rail would hide the module names this product leans on. The top bar carries project switcher context, breadcrumb, and the global command (⌘K).</p>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="sidebar__brand"><span class="bar"></span><b>Atlas</b></div>
+        <div class="proj-switch"><span class="avatar"></span><div style="line-height:1.2"><div class="cell-strong" style="font-size:var(--text-sm)">downtown-rp</div><div class="faint" style="font-size:10px">production</div></div><span class="caret">▾</span></div>
+        <nav class="nav" aria-label="Modules">
+          <div class="nav__group">Workspace</div>
+          <button class="nav__item nav__item--active"><span class="ic">▦</span> Dashboard</button>
+          <button class="nav__item"><span class="ic">◳</span> Setup wizard</button>
+          <button class="nav__item"><span class="ic">⬡</span> Resources <span class="nav__badge">3</span></button>
+          <button class="nav__item"><span class="ic">⎇</span> Git</button>
+          <button class="nav__item"><span class="ic">⚙</span> Config editor</button>
+          <div class="nav__group">Operate</div>
+          <button class="nav__item"><span class="ic">📈</span> Monitoring</button>
+          <button class="nav__item"><span class="ic">⚠</span> Incidents <span class="nav__badge">1</span></button>
+          <button class="nav__item"><span class="ic">⟳</span> Automation</button>
+          <button class="nav__item"><span class="ic">💾</span> Backup</button>
+          <button class="nav__item"><span class="ic">🧩</span> Plugins</button>
+        </nav>
+        <div class="sidebar__foot"><span class="avatar">RK</span><div style="line-height:1.2"><div class="cell-strong" style="font-size:var(--text-sm)">Ryan K.</div><div class="faint" style="font-size:10px">Local · v0.7</div></div></div>
+      </aside>
+      <div class="main">
+        <div class="topbar">
+          <div class="crumbs">downtown-rp <span class="faint">/</span> <b>Dashboard</b></div>
+          <div class="cmdk"><span>🔍</span> Search or run a command <kbd>⌘K</kbd></div>
+          <button class="btn btn--primary btn--sm">Import project</button>
+        </div>
+        <div class="content">
+          <div class="grid grid-4" style="margin-bottom:var(--space-4)">
+            <div class="card metric"><div class="metric__label">Status</div><div class="metric__value" style="font-size:var(--text-lg)"><span class="badge badge--running"><span class="dot"></span> Running</span></div><div class="faint tiny" style="margin-top:8px">uptime 4d 6h</div></div>
+            <div class="card metric"><div class="metric__label">Players</div><div class="metric__value">42<span class="unit">/64</span></div><div class="metric__delta metric__delta--up">▲ 11</div></div>
+            <div class="card metric"><div class="metric__label">CPU</div><div class="metric__value">38<span class="unit">%</span></div><svg class="spark" viewBox="0 0 100 40" preserveAspectRatio="none"><path class="line" style="stroke:var(--accent)" d="M0,30 L24,28 L48,22 L72,20 L100,16"/></svg></div>
+            <div class="card metric"><div class="metric__label">Resources</div><div class="metric__value">96<span class="unit">on</span></div><div class="faint tiny" style="margin-top:8px">3 need attention</div></div>
+          </div>
+          <div class="panel pad">
+            <div class="row" style="justify-content:space-between;margin-bottom:var(--space-4)"><h3 style="font-size:var(--text-md)">Recent activity</h3><div class="seg"><label><input type="radio" name="sh-seg" checked /><span class="seg__opt">All</span></label><label><input type="radio" name="sh-seg" /><span class="seg__opt">Errors</span></label></div></div>
+            <div class="stack">
+              <div class="row" style="justify-content:space-between"><span>Backup <span class="cell-mono">full-2026-06-27</span> completed</span><span class="badge badge--success"><span class="dot"></span> ok</span></div>
+              <div class="row" style="justify-content:space-between"><span>pma-voice flagged degraded</span><span class="badge badge--warn"><span class="dot"></span> warn</span></div>
+              <div class="row" style="justify-content:space-between"><span>custom_hud crashed on load</span><span class="badge badge--danger"><span class="dot"></span> incident</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ STATES ============ -->
+  <section class="section" id="states">
+    <div class="eyebrow">15 · signature pattern</div>
+    <h2>Loading, error &amp; empty states</h2>
+    <p class="section-sub">Every data view ships all three. The first-run empty state is an inviting onboarding, never a blank panel.</p>
+
+    <div class="grid grid-3" style="margin-bottom:var(--space-5)">
+      <div class="card">
+        <div class="label-mono" style="margin-bottom:var(--space-4)">Loading · skeleton</div>
+        <div class="stack" style="gap:var(--space-3)">
+          <div class="skeleton" style="width:60%"></div>
+          <div class="skeleton" style="width:90%"></div>
+          <div class="skeleton" style="width:80%"></div>
+          <div class="skeleton" style="width:40%"></div>
+          <div class="row" style="margin-top:var(--space-2)"><span class="badge badge--running"><span class="dot"></span> Reading backend state…</span></div>
+        </div>
+      </div>
+      <div class="card" style="border-color:var(--danger-border)">
+        <div class="label-mono" style="margin-bottom:var(--space-4)">Error · envelope</div>
+        <div class="state" style="padding:var(--space-4) 0">
+          <div class="glyph" style="background:var(--danger-soft);border-color:var(--danger-border);color:var(--danger)">✕</div>
+          <h3 style="font-size:var(--text-md)">Couldn’t reach the backend</h3>
+          <p class="tiny"><code>BackendUnavailable</code> — the local service isn’t responding. Restart Atlas, then retry.</p>
+          <button class="btn btn--secondary btn--sm">Retry</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="label-mono" style="margin-bottom:var(--space-4)">Empty · no data yet</div>
+        <div class="state" style="padding:var(--space-4) 0">
+          <div class="glyph">⬡</div>
+          <h3 style="font-size:var(--text-md)">No resources yet</h3>
+          <p class="tiny">Install a resource from git or your library to see it here.</p>
+          <button class="btn btn--primary btn--sm">Add resource</button>
+        </div>
+      </div>
+    </div>
+
+    <h4 class="subhead">First-run onboarding empty state</h4>
+    <div class="onboard">
+      <div class="onboard__l">
+        <div class="eyebrow">Welcome to Atlas</div>
+        <h3 style="font-size:var(--text-xl);margin:var(--space-3) 0">Let’s stand up your first server</h3>
+        <p class="muted">Atlas manages your FiveM server end to end — setup, resources, config, monitoring and incidents. Start by importing an existing server or creating one from scratch.</p>
+        <div class="row" style="margin-top:var(--space-5)">
+          <button class="btn btn--primary">Import existing server</button>
+          <button class="btn btn--secondary">Create new project</button>
+        </div>
+        <div class="steplist">
+          <div class="it"><span class="n">1</span><span>Point Atlas at your server folder or download artifacts</span></div>
+          <div class="it"><span class="n">2</span><span>We detect resources, config and dependencies</span></div>
+          <div class="it"><span class="n">3</span><span>Preview every change before anything is written</span></div>
+        </div>
+      </div>
+      <div class="onboard__r">
+        <span class="badge badge--running" style="justify-self:start"><span class="dot"></span> No projects yet</span>
+        <p class="muted tiny">Nothing here is wired up — this is your starting point. Everything Atlas does is previewable and undoable, so it’s safe to explore.</p>
+        <div class="well pad" style="padding:var(--space-4)">
+          <div class="label-mono" style="margin-bottom:8px">Quick import</div>
+          <div class="input-group"><span class="faint">📁</span><input class="input" placeholder="/srv/fivem/server" /><button class="btn btn--primary btn--sm">Scan</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SAMPLE SCREEN ============ -->
+  <section class="section" id="sample">
+    <div class="eyebrow">16 · assembled</div>
+    <h2>Sample screen — Resource manager</h2>
+    <p class="section-sub">Everything together with realistic data: shell, metric tiles + sparkline, segmented range, filter chips, dense table, status badges, and the command panel for a mutation.</p>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="sidebar__brand"><span class="bar"></span><b>Atlas</b></div>
+        <div class="proj-switch"><span class="avatar"></span><div style="line-height:1.2"><div class="cell-strong" style="font-size:var(--text-sm)">downtown-rp</div><div class="faint" style="font-size:10px">production</div></div><span class="caret">▾</span></div>
+        <nav class="nav" aria-label="Modules">
+          <div class="nav__group">Workspace</div>
+          <button class="nav__item"><span class="ic">▦</span> Dashboard</button>
+          <button class="nav__item"><span class="ic">◳</span> Setup wizard</button>
+          <button class="nav__item nav__item--active"><span class="ic">⬡</span> Resources <span class="nav__badge">3</span></button>
+          <button class="nav__item"><span class="ic">⎇</span> Git</button>
+          <button class="nav__item"><span class="ic">⚙</span> Config editor</button>
+          <div class="nav__group">Operate</div>
+          <button class="nav__item"><span class="ic">📈</span> Monitoring</button>
+          <button class="nav__item"><span class="ic">⚠</span> Incidents <span class="nav__badge">1</span></button>
+          <button class="nav__item"><span class="ic">⟳</span> Automation</button>
+          <button class="nav__item"><span class="ic">💾</span> Backup</button>
+          <button class="nav__item"><span class="ic">🧩</span> Plugins</button>
+        </nav>
+        <div class="sidebar__foot"><span class="avatar">RK</span><div style="line-height:1.2"><div class="cell-strong" style="font-size:var(--text-sm)">Ryan K.</div><div class="faint" style="font-size:10px">Local · v0.7</div></div></div>
+      </aside>
+      <div class="main">
+        <div class="topbar">
+          <div class="crumbs">downtown-rp <span class="faint">/</span> <b>Resources</b></div>
+          <div class="cmdk"><span>🔍</span> Search or run a command <kbd>⌘K</kbd></div>
+          <button class="btn btn--primary btn--sm">Install resource</button>
+        </div>
+        <div class="content">
+          <div class="row" style="justify-content:space-between;margin-bottom:var(--space-4)">
+            <div><h3 style="font-size:var(--text-xl)">Resources</h3><p class="muted tiny" style="margin-top:4px">128 installed · 96 enabled · 3 need attention</p></div>
+            <div class="seg"><label><input type="radio" name="sm-range" checked /><span class="seg__opt">Live</span></label><label><input type="radio" name="sm-range" /><span class="seg__opt">1h</span></label><label><input type="radio" name="sm-range" /><span class="seg__opt">24h</span></label></div>
+          </div>
+
+          <div class="grid grid-3" style="margin-bottom:var(--space-4)">
+            <div class="card metric"><div class="metric__label">Total CPU</div><div class="metric__value">38<span class="unit">%</span></div><svg class="spark" viewBox="0 0 100 40" preserveAspectRatio="none"><path class="area" style="fill:var(--accent)" d="M0,30 L24,24 L48,22 L72,16 L100,18 L100,40 L0,40 Z"/><path class="line" style="stroke:var(--accent)" d="M0,30 L24,24 L48,22 L72,16 L100,18"/></svg></div>
+            <div class="card metric"><div class="metric__label">Memory</div><div class="metric__value">6.2<span class="unit">GB</span></div><svg class="spark" viewBox="0 0 100 40" preserveAspectRatio="none"><path class="area" style="fill:var(--info)" d="M0,28 L40,24 L70,18 L100,12 L100,40 L0,40 Z"/><path class="line" style="stroke:var(--info)" d="M0,28 L40,24 L70,18 L100,12"/></svg></div>
+            <div class="card metric"><div class="metric__label">Errored</div><div class="metric__value" style="color:var(--danger)">3</div><div class="faint tiny" style="margin-top:8px">custom_hud · old_chat · test_vehicles</div></div>
+          </div>
+
+          <div class="row" style="margin-bottom:var(--space-4);justify-content:space-between">
+            <div class="row">
+              <span class="chip chip--active">All <span class="count">128</span></span>
+              <span class="chip">Enabled <span class="count">96</span></span>
+              <span class="chip">Degraded <span class="count">19</span></span>
+              <span class="chip">Errored <span class="count">3</span></span>
+            </div>
+            <div class="input-group" style="width:220px"><span class="faint">🔍</span><input class="input" placeholder="Filter resources" /></div>
+          </div>
+
+          <div class="table-wrap" style="margin-bottom:var(--space-4)">
+            <table class="tbl">
+              <thead><tr><th style="width:34px"></th><th>Resource</th><th>Version</th><th>Status</th><th>Source</th><th style="text-align:right">CPU</th></tr></thead>
+              <tbody>
+                <tr><td><span class="checkbox"></span></td><td><span class="cell-strong">esx_core</span><div class="faint tiny">framework</div></td><td class="cell-mono">v1.9.4</td><td><span class="badge badge--success"><span class="dot"></span> Healthy</span></td><td class="cell-mono">git</td><td class="cell-mono" style="text-align:right">2.1%</td></tr>
+                <tr><td><span class="checkbox"></span></td><td><span class="cell-strong">oxmysql</span><div class="faint tiny">database</div></td><td class="cell-mono">v2.7.1</td><td><span class="badge badge--running"><span class="dot"></span> Running</span></td><td class="cell-mono">git</td><td class="cell-mono" style="text-align:right">5.8%</td></tr>
+                <tr><td><span class="checkbox"></span></td><td><span class="cell-strong">pma-voice</span><div class="faint tiny">update available</div></td><td class="cell-mono">v8.0.2</td><td><span class="badge badge--warn"><span class="dot"></span> Degraded</span></td><td class="cell-mono">manual</td><td class="cell-mono" style="text-align:right">11.4%</td></tr>
+                <tr aria-selected="true"><td><span class="checkbox checkbox--on">✓</span></td><td><span class="cell-strong">custom_hud</span><div class="faint tiny">missing ox_lib</div></td><td class="cell-mono">v0.3.0</td><td><span class="badge badge--danger"><span class="dot"></span> Crashed</span></td><td class="cell-mono">local</td><td class="cell-mono" style="text-align:right">—</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="cmd">
+            <div class="cmd__steps">
+              <span class="step step--done"><span class="num">✓</span> Preview</span><span class="step__arrow">→</span>
+              <span class="step step--done"><span class="num">✓</span> Dry-run</span><span class="step__arrow">→</span>
+              <span class="step step--active"><span class="num">3</span> Execute</span><span class="step__arrow">→</span>
+              <span class="step"><span class="num">↺</span> Undo</span>
+            </div>
+            <div class="cmd__body">
+              <div class="row" style="justify-content:space-between"><div><div class="eyebrow">Fix selected</div><h3 style="font-size:var(--text-md);margin-top:6px">Install ox_lib &amp; re-enable custom_hud</h3></div><span class="badge badge--warn"><span class="dot"></span> medium risk</span></div>
+              <div class="alert alert--success"><span class="ic">✓</span><div><h4>Dry-run passed</h4><p>ox_lib v3.30 resolves the missing dependency. custom_hud will re-enable cleanly.</p></div></div>
+              <div class="cmd__actions"><button class="btn btn--secondary">Re-run preview</button><button class="btn btn--primary">Execute fix</button><button class="btn btn--ghost" disabled>↺ Undo</button></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <footer style="margin-top:var(--space-8);padding-top:var(--space-5);border-top:1px solid var(--border-subtle)">
+      <p class="faint tiny">Atlas design system · review artifact · sample data only · not wired to the backend. Tokens evolved from M1b (<code>styles.css</code>). Port into the real app comes after approval.</p>
+    </footer>
+  </section>
+</div>
+</body>
+</html>

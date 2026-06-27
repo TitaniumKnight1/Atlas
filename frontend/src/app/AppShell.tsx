@@ -1,44 +1,110 @@
 import type { ReactNode } from "react";
 
+import { StatusPill } from "../components";
 import { featureRoutes } from "./routes";
+import type { BackendStatus } from "./useBackendStatus";
 
 interface AppShellProps {
   activePath: string;
+  activeLabel: string;
+  backendStatus: BackendStatus;
   onNavigate: (path: string) => void;
   children: ReactNode;
 }
 
-export function AppShell({ activePath, onNavigate, children }: AppShellProps) {
+const GROUPS = ["Workspace", "Operate"] as const;
+
+export function AppShell({ activePath, activeLabel, backendStatus, onNavigate, children }: AppShellProps) {
+  const countsUnavailable = backendStatus.state !== "ready";
+
   return (
-    <div className="atlas-shell">
-      <aside className="shell-sidebar">
-        <div className="brand-block">
-          <span className="brand-mark" aria-hidden="true" />
+    <div className={`atlas-shell atlas-shell--${backendStatus.state}`}>
+      <aside className="shell-sidebar" aria-label="Atlas navigation">
+        <div className="shell-brand">
+          <span className="shell-brand__mark" aria-hidden="true" />
           <div>
             <p className="eyebrow">Atlas</p>
             <h1>Local server control</h1>
           </div>
         </div>
 
+        <button className="project-switch" type="button">
+          <span className="project-switch__avatar" aria-hidden="true" />
+          <span>
+            <strong>Local workspace</strong>
+            <small>{backendStatus.state === "ready" ? "Backend connected" : "Counts unavailable"}</small>
+          </span>
+          <span className="project-switch__caret" aria-hidden="true">
+            v
+          </span>
+        </button>
+
         <nav className="feature-nav" aria-label="Atlas features">
-          {featureRoutes.map((route, index) => (
-            <button
-              className={route.path === activePath ? "feature-nav__item feature-nav__item--active" : "feature-nav__item"}
-              key={route.id}
-              type="button"
-              onClick={() => onNavigate(route.path)}
-            >
-              <span className="feature-nav__index">{String(index + 1).padStart(2, "0")}</span>
-              <span>
-                <strong>{route.label}</strong>
-                <small>{route.implemented ? route.summary : "Planned foundation"}</small>
-              </span>
-            </button>
+          {GROUPS.map((group) => (
+            <div className="feature-nav__group" key={group}>
+              <p className="feature-nav__label">{group}</p>
+              {featureRoutes
+                .filter((route) => route.group === group)
+                .map((route) => (
+                  <button
+                    className={route.path === activePath ? "feature-nav__item feature-nav__item--active" : "feature-nav__item"}
+                    key={route.id}
+                    type="button"
+                    onClick={() => onNavigate(route.path)}
+                  >
+                    <span className="feature-nav__glyph" aria-hidden="true">
+                      {route.glyph}
+                    </span>
+                    <span className="feature-nav__copy">
+                      <strong>{route.label}</strong>
+                      <small>{route.implemented ? route.summary : "Planned foundation"}</small>
+                    </span>
+                    <span className={countsUnavailable ? "feature-nav__count feature-nav__count--unavailable" : "feature-nav__count"}>
+                      {countsUnavailable ? "-" : route.count ?? ""}
+                    </span>
+                  </button>
+                ))}
+            </div>
           ))}
         </nav>
+
+        <div className="shell-sidebar__foot">
+          <span className="shell-user" aria-hidden="true">
+            AT
+          </span>
+          <div>
+            <strong>Atlas local</strong>
+            <small>Review foundation</small>
+          </div>
+        </div>
       </aside>
 
-      <main className="shell-main">{children}</main>
+      <div className="shell-workspace">
+        <header className="shell-topbar">
+          <div className="shell-crumbs">
+            <span>Atlas</span>
+            <span aria-hidden="true">/</span>
+            <strong>{activeLabel}</strong>
+          </div>
+          <div className="shell-command-slot" aria-label="Command search placeholder">
+            <span aria-hidden="true">/</span>
+            <span>Search or run a command</span>
+            <kbd>Ctrl K</kbd>
+          </div>
+          <ShellBackendStatus status={backendStatus} />
+        </header>
+        <main className="shell-main">{children}</main>
+      </div>
     </div>
   );
+}
+
+function ShellBackendStatus({ status }: { status: BackendStatus }) {
+  if (status.state === "ready") {
+    return <StatusPill status="running">Backend ready</StatusPill>;
+  }
+  if (status.state === "connecting") {
+    return <StatusPill status="pending">Connecting</StatusPill>;
+  }
+  return <StatusPill status="crashed">Backend down</StatusPill>;
 }

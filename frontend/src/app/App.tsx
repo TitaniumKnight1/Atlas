@@ -3,14 +3,16 @@ import { ProjectView } from "../features/project/ProjectView";
 import "./App.css";
 import { AppShell } from "./AppShell";
 import { featureRoutes } from "./routes";
+import { useBackendStatus } from "./useBackendStatus";
 import { useHashRoute } from "./useHashRoute";
 
 export function App() {
   const { routePath, navigate } = useHashRoute();
+  const backendStatus = useBackendStatus();
   const activeRoute = featureRoutes.find((route) => route.path === routePath) ?? featureRoutes[0];
 
   return (
-    <AppShell activePath={routePath} onNavigate={navigate}>
+    <AppShell activeLabel={activeRoute.label} activePath={routePath} backendStatus={backendStatus} onNavigate={navigate}>
       {activeRoute.id === "project" ? (
         <ProjectView />
       ) : (

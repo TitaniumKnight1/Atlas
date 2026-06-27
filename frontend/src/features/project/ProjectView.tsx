@@ -17,8 +17,21 @@ import {
   type ProjectSummary,
   type SettingsData
 } from "../../api/project";
+import {
+  Badge,
+  Button,
+  CellStack,
+  DefinitionGrid,
+  Field,
+  Input,
+  InputGroup,
+  SectionHeading,
+  StatusPill,
+  Surface,
+  Table
+} from "../../components";
 import { CommandPanel } from "../../components/CommandPanel";
-import { EmptyState, ErrorState, LoadingState } from "../../components/StateViews";
+import { EmptyState, ErrorState, LoadingState, OnboardingEmptyState } from "../../components/StateViews";
 import { useAsyncTask } from "../../components/useAsyncTask";
 import { useProjectStream } from "../../components/useProjectStream";
 
@@ -109,28 +122,28 @@ export function ProjectView() {
 
   return (
     <div className="feature-page">
-      <header className="feature-header">
-        <div>
-          <p className="eyebrow">Project context</p>
-          <h2>Choose the workspace Atlas controls</h2>
-          <p>
-            Projects are local metadata over your server paths. Atlas previews commands first, then writes through the
-            backend command rail.
-          </p>
-        </div>
+      <header className="feature-header atlas-panel">
+        <SectionHeading
+          detail="Projects are local metadata over your server paths. Atlas previews commands first, then writes through the backend command rail."
+          eyebrow="Project context"
+          title="Choose the workspace Atlas controls"
+        />
       </header>
 
-      <div className="project-layout">
+      <Surface className="project-layout" kind="panel" padded={false}>
         <section className="project-sidebar">
-          <div className="section-heading">
-            <h2>Projects</h2>
-            <p>Persisted local workspaces.</p>
-          </div>
+          <SectionHeading detail="Persisted local workspaces." title="Projects" />
 
           {projectsResource.state === "loading" ? <LoadingState title="Loading projects" detail="Reading project metadata." /> : null}
           {projectsResource.state === "error" ? <ErrorState error={projectsResource.error} /> : null}
           {projectsResource.state === "ready" && projects.length === 0 ? (
-            <EmptyState title="No projects yet" detail="Import a local server path to create the first workspace." />
+            <OnboardingEmptyState
+              primaryAction={
+                <Button variant="primary" onClick={() => document.getElementById("project-root-path")?.focus()}>
+                  Import existing server
+                </Button>
+              }
+            />
           ) : null}
 
           <div className="project-list">
@@ -141,37 +154,46 @@ export function ProjectView() {
                 type="button"
                 onClick={() => setSelectedProjectId(project.project_id)}
               >
-                <strong>{project.display_name}</strong>
-                <span>{project.status}</span>
-                <small>{project.slug}</small>
+                <span>
+                  <strong>{project.display_name}</strong>
+                  <small>{project.slug}</small>
+                </span>
+                <StatusPill status={project.status.toLowerCase() === "open" ? "running" : "idle"}>{project.status}</StatusPill>
               </button>
             ))}
           </div>
         </section>
 
         <section className="project-main">
-          <div className="import-card">
-            <label className="field">
-              <span>Project root path</span>
-              <input
-                value={importPath}
-                onChange={(event) => setImportPath(event.target.value)}
-                placeholder="C:\\servers\\fivem-local"
+          <Surface as="section" className="import-card" kind="card">
+            <Field hint="Paste a local FiveM server folder. Atlas previews before persisting metadata." label="Project root path">
+              <InputGroup>
+                <span className="muted-copy" aria-hidden="true">
+                  path
+                </span>
+                <Input
+                  id="project-root-path"
+                  value={importPath}
+                  onChange={(event) => setImportPath(event.target.value)}
+                  placeholder="C:\\servers\\fivem-local"
+                />
+              </InputGroup>
+            </Field>
+            <div style={{ marginTop: "var(--space-4)" }}>
+              <CommandPanel
+                title="Import project"
+                description="Preview detected paths, dry-run validation, then persist project metadata."
+                executeLabel="Import"
+                disabled={!importPath.trim()}
+                onPreview={() => previewImportProject(importPath)}
+                onDryRun={() => dryRunImportProject(importPath)}
+                onExecute={() => importProject({ root_path: importPath })}
+                onUndo={(commandExecutionId) => undoCommandExecution(commandExecutionId)}
+                onSuccess={(result) => void refreshAfterMutation(String(result.data.project_id ?? ""))}
+                onUndoSuccess={() => void refreshAfterMutation()}
               />
-            </label>
-            <CommandPanel
-              title="Import project"
-              description="Preview detected paths, dry-run validation, then persist project metadata."
-              executeLabel="Import"
-              disabled={!importPath.trim()}
-              onPreview={() => previewImportProject(importPath)}
-              onDryRun={() => dryRunImportProject(importPath)}
-              onExecute={() => importProject({ root_path: importPath })}
-              onUndo={(commandExecutionId) => undoCommandExecution(commandExecutionId)}
-              onSuccess={(result) => void refreshAfterMutation(String(result.data.project_id ?? ""))}
-              onUndoSuccess={() => void refreshAfterMutation()}
-            />
-          </div>
+            </div>
+          </Surface>
 
           {workspace.state === "empty" ? (
             <EmptyState title="Select a project" detail="Project settings and environments appear after a workspace is selected." />
@@ -181,89 +203,84 @@ export function ProjectView() {
 
           {workspace.state === "ready" && selectedProject ? (
             <div className="workspace-grid">
-              <section className="workspace-panel workspace-panel--wide">
-                <div className="section-heading">
-                  <p className="eyebrow">Opened workspace</p>
-                  <h2>{workspace.detail.display_name}</h2>
-                  <p>{workspace.detail.paths.length} tracked path references. No files are read directly by the UI.</p>
+              <Surface as="section" className="workspace-panel workspace-panel--wide" kind="card">
+                <div className="atlas-row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <SectionHeading
+                    detail={`${workspace.detail.paths.length} tracked path references. No files are read directly by the UI.`}
+                    eyebrow="Opened workspace"
+                    title={workspace.detail.display_name}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={async () => {
+                      const result = await openProject(workspace.detail.project_id);
+                      setLastMutation(result.data.command_execution_id);
+                    }}
+                  >
+                    Open project
+                  </Button>
                 </div>
-                <button
-                  className="button button--secondary"
-                  type="button"
-                  onClick={async () => {
-                    const result = await openProject(workspace.detail.project_id);
-                    setLastMutation(result.data.command_execution_id);
-                  }}
-                >
-                  Open project
-                </button>
-                <dl className="definition-grid">
-                  {workspace.detail.paths.map((path) => (
-                    <div key={path.project_path_id}>
-                      <dt>{path.path_role}</dt>
-                      <dd>{path.absolute_path}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </section>
+                <DefinitionGrid items={workspace.detail.paths.map((path) => [path.path_role, path.absolute_path] as [string, string])} />
+              </Surface>
 
-              <section className="workspace-panel">
-                <div className="section-heading">
-                  <h2>Settings</h2>
-                  <p>Patch project metadata through audited commands.</p>
+              <Surface as="section" className="workspace-panel" kind="card">
+                <SectionHeading detail="Patch project metadata through audited commands." title="Settings" />
+                <div className="atlas-grid atlas-grid--2">
+                  <Field label="Setting key">
+                    <Input value={settingKey} onChange={(event) => setSettingKey(event.target.value)} />
+                  </Field>
+                  <Field label="Value">
+                    <Input value={settingValue} onChange={(event) => setSettingValue(event.target.value)} />
+                  </Field>
                 </div>
-                <label className="field">
-                  <span>Setting key</span>
-                  <input value={settingKey} onChange={(event) => setSettingKey(event.target.value)} />
-                </label>
-                <label className="field">
-                  <span>Value</span>
-                  <input value={settingValue} onChange={(event) => setSettingValue(event.target.value)} />
-                </label>
-                <button
-                  className="button"
-                  type="button"
-                  disabled={!settingKey.trim()}
-                  onClick={async () => {
-                    const result = await updateProjectSettings(workspace.detail.project_id, {
-                      settings_patch: { [settingKey]: settingValue }
-                    });
-                    setLastMutation(result.data.command_execution_id);
-                  }}
-                >
-                  Update settings
-                </button>
+                <div className="atlas-row">
+                  <Button
+                    type="button"
+                    variant="primary"
+                    disabled={!settingKey.trim()}
+                    onClick={async () => {
+                      const result = await updateProjectSettings(workspace.detail.project_id, {
+                        settings_patch: { [settingKey]: settingValue }
+                      });
+                      setLastMutation(result.data.command_execution_id);
+                    }}
+                  >
+                    Update settings
+                  </Button>
+                  <Badge variant="neutral">Audited</Badge>
+                </div>
                 <pre>{JSON.stringify(workspace.settings.settings, null, 2)}</pre>
-              </section>
+              </Surface>
 
-              <section className="workspace-panel">
-                <div className="section-heading">
-                  <h2>Live server output</h2>
-                  <p>{streamConnected ? "Listening on the multiplexed SSE stream." : "Waiting for the local stream connection."}</p>
+              <Surface as="section" className="workspace-panel" kind="card">
+                <div className="atlas-row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <SectionHeading
+                    detail={streamConnected ? "Listening on the multiplexed SSE stream." : "Waiting for the local stream connection."}
+                    title="Live server output"
+                  />
+                  <StatusPill status={streamConnected ? "running" : "idle"}>{streamConnected ? "Connected" : "Waiting"}</StatusPill>
                 </div>
                 {serverLines.length === 0 ? (
                   <p className="muted-copy">Server stdout/stderr lines appear here when a supervised process is running.</p>
                 ) : (
                   <pre className="live-stream-log">{serverLines.join("\n")}</pre>
                 )}
-              </section>
+              </Surface>
 
-              <section className="workspace-panel">
-                <div className="section-heading">
-                  <h2>Environments</h2>
-                  <p>Create local profiles for later setup and automation modules.</p>
+              <Surface as="section" className="workspace-panel" kind="card">
+                <SectionHeading detail="Create local profiles for later setup and automation modules." title="Environments" />
+                <div className="atlas-grid atlas-grid--2">
+                  <Field label="Name">
+                    <Input value={environmentName} onChange={(event) => setEnvironmentName(event.target.value)} />
+                  </Field>
+                  <Field label="Display name">
+                    <Input value={environmentDisplayName} onChange={(event) => setEnvironmentDisplayName(event.target.value)} />
+                  </Field>
                 </div>
-                <label className="field">
-                  <span>Name</span>
-                  <input value={environmentName} onChange={(event) => setEnvironmentName(event.target.value)} />
-                </label>
-                <label className="field">
-                  <span>Display name</span>
-                  <input value={environmentDisplayName} onChange={(event) => setEnvironmentDisplayName(event.target.value)} />
-                </label>
-                <button
-                  className="button"
+                <Button
                   type="button"
+                  variant="primary"
                   disabled={!environmentName.trim()}
                   onClick={async () => {
                     const result = await createEnvironmentProfile(workspace.detail.project_id, {
@@ -276,21 +293,38 @@ export function ProjectView() {
                   }}
                 >
                   Create profile
-                </button>
-                <div className="environment-list">
-                  {workspace.environments.map((environment) => (
-                    <article className="environment-item" key={environment.environment_id}>
-                      <strong>{environment.display_name}</strong>
-                      <span>{environment.name}</span>
-                      <small>{environment.is_default ? "Default" : "Profile"}</small>
-                    </article>
-                  ))}
-                </div>
-              </section>
+                </Button>
+                {workspace.environments.length > 0 ? (
+                  <Table>
+                    <thead>
+                      <tr>
+                        <th>Environment</th>
+                        <th>Channel</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {workspace.environments.map((environment) => (
+                        <tr key={environment.environment_id}>
+                          <td>
+                            <CellStack title={environment.display_name} detail={environment.name} />
+                          </td>
+                          <td>{environment.artifact_channel ?? "Not set"}</td>
+                          <td>
+                            <Badge variant={environment.is_default ? "info" : "neutral"}>{environment.is_default ? "Default" : "Profile"}</Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                ) : (
+                  <EmptyState title="No environment profiles" detail="Create a local, staging, or production profile to prepare for setup automation." />
+                )}
+              </Surface>
             </div>
           ) : null}
         </section>
-      </div>
+      </Surface>
     </div>
   );
 }
