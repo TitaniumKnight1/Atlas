@@ -1,5 +1,6 @@
 import { ConfigView } from "../features/config/ConfigView";
 import { GitView } from "../features/git/GitView";
+import { MonitoringView } from "../features/monitoring/MonitoringView";
 import { EmptyState } from "../components/StateViews";
 import { ProjectView } from "../features/project/ProjectView";
 import { ResourceView } from "../features/resources/ResourceView";
@@ -27,6 +28,8 @@ export function App() {
         <GitView />
       ) : activeRoute.id === "config" ? (
         <ConfigView />
+      ) : activeRoute.id === "monitoring" ? (
+        <MonitoringView />
       ) : (
         <EmptyState
           title={`${activeRoute.label} is planned`}

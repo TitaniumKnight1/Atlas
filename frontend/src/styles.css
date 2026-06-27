@@ -1472,6 +1472,80 @@ pre {
   }
 }
 
+.time-series-chart {
+  display: block;
+  border: 1px solid var(--atlas-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--atlas-bg-sunken);
+}
+
+.time-series-chart__range {
+  fill: color-mix(in srgb, var(--series-color, var(--atlas-accent)) 18%, transparent);
+}
+
+.time-series-chart__avg {
+  fill: none;
+  stroke: var(--series-color, var(--atlas-accent));
+  stroke-width: 2;
+}
+
+.time-series-chart__whisker {
+  stroke: color-mix(in srgb, var(--series-color, var(--atlas-accent)) 45%, transparent);
+  stroke-width: 1;
+}
+
+.time-series-chart__avg-dot {
+  fill: var(--series-color, var(--atlas-accent));
+}
+
+.time-series-chart--accent {
+  --series-color: var(--atlas-accent);
+}
+
+.time-series-chart--info {
+  --series-color: var(--atlas-info);
+}
+
+.time-series-chart--success {
+  --series-color: var(--atlas-success-text);
+}
+
+.time-series-chart--warn {
+  --series-color: var(--atlas-warn-text);
+}
+
+.time-series-chart--danger {
+  --series-color: var(--atlas-danger-text);
+}
+
+.metric-card-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+}
+
+.metric-card {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--atlas-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--atlas-surface-2);
+  box-shadow: var(--shadow-1), var(--hairline-top);
+}
+
+.metric-card__value {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--atlas-text-strong);
+}
+
+.alert-feed {
+  display: grid;
+  gap: var(--space-3);
+}
+
 .atlas-code-editor {
   display: grid;
   gap: var(--space-2);

@@ -76,7 +76,7 @@ export const featureRoutes: FeatureRoute[] = [
     path: "/monitoring",
     label: "Monitoring",
     summary: "Watch health, metrics, and runtime signals.",
-    implemented: false,
+    implemented: true,
     group: "Operate",
     glyph: "M"
   },
