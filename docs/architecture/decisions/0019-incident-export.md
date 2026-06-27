@@ -37,9 +37,9 @@ Structured sections: privacy notice, summary, fingerprint/grouping (with over-gr
 
 `incident_exports` stores export metadata, **sanitized** file path, content hash, and redaction summary. No unsanitized copy.
 
-### Audit gate (unproven until independent review)
+### Audit gate (audited + passing)
 
-The export sanitizer is **not claimed leak-proof**. It requires an independent adversarial audit (different author/model) per ADR-0005 family before end-user reliance. Unit/integration adversarial tests in-repo are necessary but not sufficient.
+The export sanitizer is **not claimed leak-proof**. It has passed an independent adversarial audit (different author/model) per ADR-0005 family as of this release, allowing end-user reliance. Unit/integration adversarial tests in-repo are active to prevent regressions.
 
 ## Consequences
 

@@ -43,24 +43,25 @@ SECRET_RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("discord_token", re.compile(r"\b(?:mfa\.)?[A-Za-z0-9_-]{23,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{20,}\b")),
     (
         "database_connection_string",
-        re.compile(r"\b(?:postgres(?:ql)?|mysql|mariadb|mongodb|redis|mssql|sqlite)://[^\s'\"<>]+", re.IGNORECASE),
+        re.compile(r"\b(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|redis|mssql|sqlite)://[^\s'\"<>]+", re.IGNORECASE),
     ),
     (
         "credential_assignment",
         re.compile(
-            r"\b(?:api[_-]?key|access[_-]?token|auth[_-]?token|secret|password|passwd|pwd|client[_-]?secret)\b\s*[:=]\s*['\"]?[^'\"\s,;}]+",
+            r"\b(?:api[_-]?key|access[_-]?token|auth[_-]?token|secret|password|passwd|pwd|client[_-]?secret|token)\b['\"]?\s*[:=]\s*['\"]?[^'\"\s,;{}()[\]]+",
             re.IGNORECASE,
         ),
     ),
     ("cfx_license_key", re.compile(r"\bcfxk_[A-Za-z0-9_-]{20,}\b", re.IGNORECASE)),
     ("license_identifier", re.compile(r"\blicense:[0-9a-f]{32,40}\b", re.IGNORECASE)),
+    ("api_key", re.compile(r"\b(?:sk-[a-zA-Z0-9_-]{20,}|ghp_[a-zA-Z0-9]{30,})\b")),
 )
 
 IDENTIFIER_RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("ipv4_address", re.compile(r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b")),
-    ("ipv6_address", re.compile(r"\b(?:[0-9a-f]{1,4}:){2,7}[0-9a-f]{1,4}\b", re.IGNORECASE)),
+    ("ipv6_address", re.compile(r"(?i)(?<![a-z0-9])(?:(?:[0-9a-f]{1,4}:){2,7}[0-9a-f]{1,4}|(?:[0-9a-f]{0,4}::[0-9a-f:]{1,14}))(?![a-z0-9])")),
     ("steam_identifier", re.compile(r"\b(?:steam:[0-9a-f]{15,}|7656119\d{10})\b", re.IGNORECASE)),
-    ("rockstar_identifier", re.compile(r"\b(?:rockstar|license2|fivem):[0-9a-f]{8,40}\b", re.IGNORECASE)),
+    ("rockstar_identifier", re.compile(r"\b(?:rockstar|license2|fivem|license|discord|xbl|live|ip):[^\s'\"<>]+", re.IGNORECASE)),
     ("windows_file_path", re.compile(r"\b[A-Z]:\\[^\s'\"<>]+", re.IGNORECASE)),
     ("unix_file_path", re.compile(r"(?<!\w)/(?:Users|home|srv|opt|var)/[^\s'\"<>]+", re.IGNORECASE)),
 )

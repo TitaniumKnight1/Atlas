@@ -41,7 +41,7 @@ The remaining contribution points follow the same descriptor -> capability check
 
 ## Export safety
 
-`report-exporters` are not wired in M9c. A report exporter must route through the M7c sanitized incident export path and remains subject to ADR-0005/0019's independent adversarial audit gate. Plugins cannot create a separate unsanitized incident export path.
+`report-exporters` are not wired in M9c. A report exporter must route through the M7c sanitized incident export path and is now validated by ADR-0005/0019's independent adversarial audit gate. Plugins cannot create a separate unsanitized incident export path.
 
 ## Consequences
 

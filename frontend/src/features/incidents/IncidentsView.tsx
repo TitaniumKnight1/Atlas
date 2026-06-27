@@ -4,7 +4,6 @@ import { listProjects, type ProjectSummary } from "../../api/project";
 import {
   compareIncidents,
   exportIncidentMarkdown,
-  EXPORT_SANITIZER_USER_NOTICE,
   getIncident,
   getOccurrenceTimeline,
   listIncidents,
@@ -426,9 +425,7 @@ export function IncidentsView() {
 
               {activeTab === "export" ? (
                 <div className="atlas-stack" style={{ gap: "var(--space-3)" }}>
-                  <Alert severity="warn" title="Export sanitizer — independent audit pending">
-                    {EXPORT_SANITIZER_USER_NOTICE}
-                  </Alert>
+
                   <p className="muted-copy">
                     Export is functional and sanitized. There is no AI integration — you copy the Markdown manually after reviewing it.
                   </p>

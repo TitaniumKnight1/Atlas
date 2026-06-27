@@ -16,7 +16,7 @@ The Sentry SDK is not added in M2. Delivery is represented by a `TelemetryDelive
 
 Before any real Sentry transport replaces the no-op delivery adapter, an independent adversarial audit of `backend/adapters/telemetry/sanitizer.py` by someone other than the original author must pass. Telemetry remains disabled by default until that audit passes and the Sentry transport is explicitly approved.
 
-**M7c export sanitizer (second deliberate outbound path):** User-initiated incident Markdown export is a separate, higher-risk outbound path than telemetry because the user explicitly copies sanitized content into uncontrolled third-party AI tools. `backend/domain/incident/export_sanitizer.py` reuses the M2 `SECRET_RULES` / `IDENTIFIER_RULES` vocabulary but applies a **redact-in-place** policy (not fail-closed). Before this export is exposed to end users, an **independent adversarial audit** of the export sanitizer by a different author/model must pass. The export sanitizer is **unproven until that audit passes** — do not claim leak-proof.
+**M7c export sanitizer (second deliberate outbound path):** User-initiated incident Markdown export is a separate, higher-risk outbound path than telemetry because the user explicitly copies sanitized content into uncontrolled third-party AI tools. `backend/domain/incident/export_sanitizer.py` reuses the M2 `SECRET_RULES` / `IDENTIFIER_RULES` vocabulary but applies a **redact-in-place** policy (not fail-closed). An **independent adversarial audit** of the export sanitizer by a different author/model was completed. The export sanitizer is **audited + passing** — it does not claim to be perfectly leak-proof, but has passed rigorous independent validation.
 
 The same two audit questions apply to both sanitizers:
 

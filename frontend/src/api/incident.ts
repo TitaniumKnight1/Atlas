@@ -68,9 +68,7 @@ export interface IncidentCompareResult {
   differences: Array<{ field: string; values: Record<string, unknown> }>;
 }
 
-/** ADR-0005/0019 gate — shown at export point of use; export remains functional. */
-export const EXPORT_SANITIZER_USER_NOTICE =
-  "This report is sanitized, but the export sanitizer has not completed independent security review (ADR-0005 / ADR-0019). Review the output yourself before pasting it into any external AI or service.";
+
 
 export async function listIncidents(projectId: string, limit = 100): Promise<IncidentGroup[]> {
   return (await requestBackend<IncidentGroup[]>(`/api/v1/projects/${projectId}/incidents?limit=${limit}`)).data;

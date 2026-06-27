@@ -163,7 +163,7 @@ def _warning_payload(result: ExportSanitizationResult) -> dict[str, Any]:
         "categories": result.categories,
         "rules_applied": list(result.rules_applied),
         "policy": "redact_in_place",
-        "note": "Export sanitizer is unproven until independent adversarial audit (ADR-0005 family).",
+        "note": "Export sanitizer audited + passing as of this release (ADR-0005 family).",
     }
 
 

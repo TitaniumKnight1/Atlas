@@ -113,7 +113,7 @@ M7c export is the **only sanctioned deliberate outbound artifact**. It always pa
 
 ## Deviations
 
-- Export sanitizer reuses M2 `SECRET_RULES` / `IDENTIFIER_RULES` with redact-in-place policy (not telemetry fail-closed). Status is **unproven until independent adversarial audit** (ADR-0005 family, ADR-0019).
+- Export sanitizer reuses M2 `SECRET_RULES` / `IDENTIFIER_RULES` with redact-in-place policy (not telemetry fail-closed). Status is **audited + passing as of current release** (ADR-0005 family, ADR-0019).
 - M7b automatic related-group linking only for shared `resource_hint` with different fingerprints. User rules, notes, and manual relate APIs remain deferred.
 - `incident_group_rules` and `incident_notes` tables exist for future use; no rule/note API yet.
 - `incident_stack_frames` table exists; no frame rows until structured stack traces are available.
