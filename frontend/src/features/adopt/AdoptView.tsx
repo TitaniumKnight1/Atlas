@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   adoptRepository,
+  applySafeReturnCommit,
   applyDevSecret,
   applyDevConfigTransform,
   applyRepoNormalization,
@@ -9,18 +10,24 @@ import {
   dryRunAdoptRepository,
   dryRunDevConfigTransform,
   dryRunRepoNormalization,
+  dryRunSafeReturnCommit,
   dryRunSecretSubstitution,
   getPathway2Status,
+  getReturnPathStatus,
   previewAdoptRepository,
   previewDevConfigTransform,
   previewRepoNormalization,
+  previewSafeReturnCommit,
   previewSecretSubstitution,
+  type ContaminationReport,
+  type ReturnPathStatus,
   undoPathway2Command,
   type InlineSecretFinding,
   type Pathway2Status,
   type StructureScorecard,
   type SubstitutionSlotPreview
 } from "../../api/pathway2";
+import { createBranch } from "../../api/git";
 import { listProjects, type ProjectSummary } from "../../api/project";
 import {
   Badge,
@@ -237,6 +244,10 @@ export function AdoptView() {
               />
             </Surface>
           ) : null}
+
+          {status?.pathway2_state.origin ? (
+            <ReturnPathSection projectId={projectId} />
+          ) : null}
         </>
       ) : null}
 
@@ -397,6 +408,136 @@ function DevSecretEntryForm({
           </Field>
         </InputGroup>
       ))}
+    </div>
+  );
+}
+
+function ReturnPathSection({ projectId }: { projectId: string }) {
+  const [returnStatus, setReturnStatus] = useState<ReturnPathStatus | null>(null);
+  const [statusError, setStatusError] = useState<unknown>(null);
+  const [branchName, setBranchName] = useState("feature/atlas-dev");
+  const [commitMessage, setCommitMessage] = useState("Pathway 2 dev work");
+  const [creatingBranch, setCreatingBranch] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setStatusError(null);
+      try {
+        const response = await getReturnPathStatus(projectId);
+        if (!cancelled) {
+          setReturnStatus(response.data);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setStatusError(error);
+        }
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  const commitRequest = useMemo(
+    () =>
+      returnStatus
+        ? {
+            git_repository_id: returnStatus.git_repository_id,
+            message: commitMessage,
+            paths: returnStatus.default_commit_paths
+          }
+        : null,
+    [returnStatus, commitMessage]
+  );
+
+  async function createFeatureBranch() {
+    if (!returnStatus || !branchName.trim()) {
+      return;
+    }
+    setCreatingBranch(true);
+    try {
+      await createBranch(projectId, returnStatus.git_repository_id, branchName.trim());
+      const response = await getReturnPathStatus(projectId, returnStatus.git_repository_id);
+      setReturnStatus(response.data);
+    } finally {
+      setCreatingBranch(false);
+    }
+  }
+
+  return (
+    <Surface>
+      <SectionHeading
+        title="Return path (safe commit)"
+        detail="Fail-closed secret gate on explicit paths only. Atlas commits locally; you push manually (ADR-0010)."
+      />
+      {statusError ? <ErrorState error={statusError} /> : null}
+      {returnStatus ? (
+        <>
+          <DefinitionGrid
+            items={[
+              ["Branch", returnStatus.branch_name ?? "detached"],
+              ["Git repo", returnStatus.git_repository_id],
+              ["Overlay gitignored", returnStatus.gitignore_contains_overlay ? "Yes" : "No"],
+              ["Gate", returnStatus.contamination_report.gate_status]
+            ]}
+          />
+          <ContaminationReportView report={returnStatus.contamination_report} />
+          <InputGroup>
+            <Field label="Feature branch">
+              <div className="inline-actions">
+                <Input value={branchName} onChange={(event) => setBranchName(event.target.value)} />
+                <Button variant="secondary" disabled={creatingBranch} onClick={() => void createFeatureBranch()}>
+                  {creatingBranch ? "Creating…" : "Create branch"}
+                </Button>
+              </div>
+            </Field>
+            <Field label="Commit message">
+              <Input value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} />
+            </Field>
+          </InputGroup>
+          {commitRequest ? (
+            <CommandPanel
+              title="Safe return commit"
+              description={returnStatus.manual_push_message}
+              executeLabel="Commit locally"
+              onPreview={() => previewSafeReturnCommit(projectId, commitRequest)}
+              onDryRun={() => dryRunSafeReturnCommit(projectId, commitRequest)}
+              onExecute={() => applySafeReturnCommit(projectId, commitRequest)}
+              onUndo={(commandExecutionId) => undoPathway2Command(projectId, commandExecutionId)}
+              onSuccess={async () => {
+                const response = await getReturnPathStatus(projectId, returnStatus.git_repository_id);
+                setReturnStatus(response.data);
+              }}
+            />
+          ) : null}
+        </>
+      ) : (
+        <LoadingState title="Loading return-path status" detail="Discovering git repository and running contamination scan." />
+      )}
+    </Surface>
+  );
+}
+
+function ContaminationReportView({ report }: { report: ContaminationReport }) {
+  return (
+    <div className="stack-gap-sm">
+      <ul className="plain-list">
+        {report.summary_lines.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+      {report.findings.length ? (
+        <ul className="plain-list">
+          {report.findings.map((finding, index) => (
+            <li key={`${finding.path}:${finding.line}:${index}`}>
+              <code>{finding.path}:{finding.line}</code> — {finding.secret_type}: {finding.redacted_preview}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <p className="muted-text">{report.push_seam}</p>
     </div>
   );
 }

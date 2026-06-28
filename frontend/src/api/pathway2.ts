@@ -120,6 +120,59 @@ export async function applyDevConfigTransform(projectId: string, options?: DevTr
   return requestBackend<CommandResultData>(`/api/v1/projects/${projectId}/pathway2/transform/apply`, jsonRequest(options ?? {}));
 }
 
+export interface ReturnPathStatus {
+  project_id: string;
+  git_repository_id: string;
+  branch_name: string | null;
+  is_dirty: boolean;
+  default_commit_paths: string[];
+  contamination_report: ContaminationReport;
+  gitignore_contains_overlay: boolean;
+  manual_push_message: string;
+}
+
+export interface ContaminationReport {
+  gate_status: "PASS" | "BLOCKED";
+  allowed: boolean;
+  staged_paths: string[];
+  overlay_excluded: boolean;
+  server_cfg_placeholder_only: boolean | null;
+  findings: Array<{
+    path: string;
+    line: number;
+    secret_type: string;
+    redacted_preview: string;
+    reason: string;
+  }>;
+  summary_lines: string[];
+  push_seam: string;
+  manual_push_message: string;
+}
+
+export interface SafeReturnCommitRequest {
+  git_repository_id: string;
+  message: string;
+  paths?: string[] | null;
+  include_server_cfg?: boolean;
+}
+
+export async function getReturnPathStatus(projectId: string, gitRepositoryId?: string): Promise<BackendResponse<ReturnPathStatus>> {
+  const query = gitRepositoryId ? `?git_repository_id=${encodeURIComponent(gitRepositoryId)}` : "";
+  return requestBackend<ReturnPathStatus>(`/api/v1/projects/${projectId}/pathway2/return-path/status${query}`);
+}
+
+export async function previewSafeReturnCommit(projectId: string, request: SafeReturnCommitRequest): Promise<BackendResponse<CommandPreviewData>> {
+  return requestBackend<CommandPreviewData>(`/api/v1/projects/${projectId}/pathway2/return-commit-plan`, jsonRequest(request));
+}
+
+export async function dryRunSafeReturnCommit(projectId: string, request: SafeReturnCommitRequest): Promise<BackendResponse<DryRunData>> {
+  return requestBackend<DryRunData>(`/api/v1/projects/${projectId}/pathway2/return-commit-dry-run`, jsonRequest(request));
+}
+
+export async function applySafeReturnCommit(projectId: string, request: SafeReturnCommitRequest): Promise<BackendResponse<CommandResultData>> {
+  return requestBackend<CommandResultData>(`/api/v1/projects/${projectId}/pathway2/return-commit/apply`, jsonRequest(request));
+}
+
 export async function undoPathway2Command(projectId: string, commandExecutionId: string): Promise<BackendResponse<CommandResultData>> {
   return requestBackend<CommandResultData>(
     `/api/v1/projects/${projectId}/pathway2/undo`,

@@ -181,12 +181,12 @@ Substitution and overlay materialization **read production secret values from th
 - **Do not** duplicate `endpoint_add_*` in base.
 - Leave base `ensure` list unchanged unless team explicitly opts into resource diff.
 
-### P2-4 — Return-path safety
+### P2-4 — Return-path safety (implemented)
 
-- Ensure `.gitignore` contains `server.cfg.local`.
-- Pre-commit secret scan on staged files; optional path allowlist (code/resources only).
-- Implement or defer **guarded push** per sub-decision above.
-- `config_files.environment_id` may tag overlay metadata in Atlas SQLite; **physical** separation remains filesystem gitignore, not DB-only.
+- **Primary defense (Model 1):** `server.cfg.local` is gitignored; base `server.cfg` holds placeholders only after P2-1/P2-2.
+- **Defense-in-depth:** `evaluate_commit_safety()` scans the explicit staged path set with M4a `SECRET_RULES` plus pathway2 checks (overlay never committable; base `server.cfg` placeholders only). **Fail-closed** — blocked commits cannot proceed.
+- **Commit-only (ADR-0010 upheld):** Atlas performs explicit-path local commits only; **no push**. After a safe commit, devs push manually with their git tool.
+- **Push seam:** The same `evaluate_commit_safety()` gate is the documented reusable entry point for a future guarded `PushBranch` if ADR-0010 is later amended. Push is not implemented in P2-4.
 
 ### P2-5 — Join-team wizard
 

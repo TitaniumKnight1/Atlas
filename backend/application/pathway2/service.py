@@ -42,6 +42,12 @@ from backend.domain.pathway2.supervisor_fallback import (
     plus_set_preview,
     resolve_plus_set_overrides,
 )
+from backend.domain.pathway2.commit_safety import (
+    evaluate_commit_safety,
+    is_overlay_path,
+    load_staged_files,
+    select_default_return_commit_paths,
+)
 from backend.domain.pathway2.transform import DevTransformOptions, build_transform_diff, default_transform_options, plan_dev_config_transform
 from backend.domain.shared_kernel import ErrorCode, ProjectId, StableIdentifier
 from backend.infrastructure.unit_of_work import RepositoryContext
@@ -596,6 +602,116 @@ class AdoptApplicationService:
             uow.commit()
             return result
 
+    def get_return_path_status(self, *, project_id: ProjectId, git_repository_id: str | None = None) -> dict[str, Any]:
+        self._require_pathway2_origin(project_id)
+        repo = self._resolve_git_repository(project_id, git_repository_id)
+        git_service = self._container.create_git_service()
+        worktree = git_service.get_worktree_status(project_id, repo["git_repository_id"])
+        project_root = Path(repo["local_path"]).resolve()
+        default_paths = select_default_return_commit_paths(file_changes=_file_changes_from_worktree(worktree))
+        staged_files = load_staged_files(repo_root=project_root, paths=default_paths, read_text=self.filesystem.read_text)
+        safety = evaluate_commit_safety(staged_files=staged_files, scanner=self.secret_scanner)
+        gitignore_ok = self._overlay_gitignored(project_root)
+        return {
+            "project_id": str(project_id),
+            "git_repository_id": repo["git_repository_id"],
+            "branch_name": worktree.get("branch_name"),
+            "is_dirty": worktree.get("is_dirty"),
+            "default_commit_paths": default_paths,
+            "contamination_report": safety.to_report(),
+            "gitignore_contains_overlay": gitignore_ok,
+            "manual_push_message": safety.to_report()["manual_push_message"],
+        }
+
+    def preview_safe_return_commit(
+        self,
+        *,
+        project_id: ProjectId,
+        git_repository_id: str,
+        message: str,
+        paths: list[str] | None = None,
+        include_server_cfg: bool = False,
+    ) -> CommandPreview:
+        self._require_pathway2_origin(project_id)
+        repo = self._resolve_git_repository(project_id, git_repository_id)
+        resolved_paths, safety = self._evaluate_return_commit_paths(
+            project_id=project_id,
+            repo=repo,
+            paths=paths,
+            include_server_cfg=include_server_cfg,
+        )
+        return CommandPreview(
+            "PlanSafeReturnCommit",
+            "Preview fail-closed return-path commit",
+            {
+                "project_id": str(project_id),
+                "git_repository_id": repo["git_repository_id"],
+                "message": message,
+                "paths": resolved_paths,
+                "explicit_path_commit": True,
+                "contamination_report": safety.to_report(),
+            },
+            warnings=[] if safety.allowed else ["Commit blocked by return-path secret gate"],
+            risk_level=RiskLevel.HIGH,
+        )
+
+    def dry_run_safe_return_commit(
+        self,
+        *,
+        project_id: ProjectId,
+        git_repository_id: str,
+        message: str,
+        paths: list[str] | None = None,
+        include_server_cfg: bool = False,
+    ) -> DryRunResult:
+        preview = self.preview_safe_return_commit(
+            project_id=project_id,
+            git_repository_id=git_repository_id,
+            message=message,
+            paths=paths,
+            include_server_cfg=include_server_cfg,
+        )
+        allowed = bool(preview.preview["contamination_report"]["allowed"])
+        return DryRunResult(preview.command_type, allowed, preview.preview, preview.warnings)
+
+    def execute_safe_return_commit(
+        self,
+        *,
+        project_id: ProjectId,
+        git_repository_id: str,
+        message: str,
+        paths: list[str] | None = None,
+        include_server_cfg: bool = False,
+        idempotency_key: str | None = None,
+    ) -> CommandExecutionResult:
+        preview = self.preview_safe_return_commit(
+            project_id=project_id,
+            git_repository_id=git_repository_id,
+            message=message,
+            paths=paths,
+            include_server_cfg=include_server_cfg,
+        )
+        dry_run = self.dry_run_safe_return_commit(
+            project_id=project_id,
+            git_repository_id=git_repository_id,
+            message=message,
+            paths=paths,
+            include_server_cfg=include_server_cfg,
+        )
+        if not dry_run.valid:
+            raise Pathway2ApplicationError(
+                ErrorCode.VALIDATION_FAILED,
+                "Return-path commit blocked by secret gate — fix or unstage flagged files",
+            )
+        resolved_paths = list(preview.preview["paths"])
+        return self._container.create_git_service().execute_create_commit(
+            project_id=project_id,
+            git_repository_id=git_repository_id,
+            message=message,
+            paths=resolved_paths,
+            idempotency_key=idempotency_key,
+        )
+
     def undo(self, undo_plan: UndoPlan) -> CommandExecutionResult:
         project_id_value = undo_plan.payload.get("project_id")
         project_id = ProjectId(str(project_id_value)) if project_id_value else None
@@ -751,6 +867,61 @@ class AdoptApplicationService:
         except Pathway2ApplicationError:
             return None
         return content
+
+    def _require_pathway2_origin(self, project_id: ProjectId) -> None:
+        settings = self._pathway2_settings(project_id)
+        if not settings.get(Pathway2SettingKeys.ORIGIN):
+            raise Pathway2ApplicationError(ErrorCode.PRECONDITION_FAILED, "Return-path commit requires an adopted Pathway 2 project")
+
+    def _resolve_git_repository(self, project_id: ProjectId, git_repository_id: str | None) -> dict[str, Any]:
+        repos = self._container.create_git_service().list_git_repositories(project_id)
+        if not repos:
+            raise Pathway2ApplicationError(ErrorCode.NOT_FOUND, "No git repository discovered for project")
+        if git_repository_id:
+            for repo in repos:
+                if repo["git_repository_id"] == git_repository_id:
+                    return repo
+            raise Pathway2ApplicationError(ErrorCode.NOT_FOUND, f"Git repository not found: {git_repository_id}")
+        return repos[0]
+
+    def _evaluate_return_commit_paths(
+        self,
+        *,
+        project_id: ProjectId,
+        repo: dict[str, Any],
+        paths: list[str] | None,
+        include_server_cfg: bool,
+    ):
+        worktree = self._container.create_git_service().get_worktree_status(project_id, repo["git_repository_id"])
+        project_root = Path(repo["local_path"]).resolve()
+        resolved_paths = paths or select_default_return_commit_paths(
+            file_changes=_file_changes_from_worktree(worktree),
+            include_server_cfg=include_server_cfg,
+        )
+        if any(is_overlay_path(path) for path in resolved_paths):
+            raise Pathway2ApplicationError(ErrorCode.VALIDATION_FAILED, f"{OVERLAY_FILENAME} cannot be included in a return-path commit")
+        staged_files = load_staged_files(repo_root=project_root, paths=resolved_paths, read_text=self.filesystem.read_text)
+        safety = evaluate_commit_safety(staged_files=staged_files, scanner=self.secret_scanner)
+        return resolved_paths, safety
+
+    def _overlay_gitignored(self, project_root: Path) -> bool:
+        gitignore_path = project_root / ".gitignore"
+        content = self.filesystem.read_text(gitignore_path) or ""
+        return GITIGNORE_OVERLAY_ENTRY in content
+
+
+def _file_changes_from_worktree(worktree: dict[str, Any]) -> list[Any]:
+    from types import SimpleNamespace
+
+    from backend.domain.git import ChangeStatus
+
+    changes: list[Any] = []
+    for item in worktree.get("file_changes", []):
+        status = item["change_status"]
+        if isinstance(status, str):
+            status = ChangeStatus(status)
+        changes.append(SimpleNamespace(path=item["path"], change_status=status))
+    return changes
 
 
 def _undo_settings_patch(command_type: str, *, overlay_content: str | None) -> dict[str, Any] | None:
