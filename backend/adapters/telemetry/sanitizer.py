@@ -52,6 +52,10 @@ SECRET_RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
             re.IGNORECASE,
         ),
     ),
+    (
+        "credential_url",
+        re.compile(r"(?:https?|ftp|ws)://[^:\s@]+:[^:\s@]+@", re.IGNORECASE),
+    ),
     ("cfx_license_key", re.compile(r"\bcfxk_[A-Za-z0-9_-]{20,}\b", re.IGNORECASE)),
     ("license_identifier", re.compile(r"\blicense:[0-9a-f]{32,40}\b", re.IGNORECASE)),
     ("api_key", re.compile(r"\b(?:sk-[a-zA-Z0-9_-]{20,}|ghp_[a-zA-Z0-9]{30,})\b")),
@@ -69,7 +73,7 @@ IDENTIFIER_RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
 PROJECT_DATA_RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("server_cfg", re.compile(r"\bserver\.cfg\b", re.IGNORECASE)),
     ("txdata_path", re.compile(r"\btxData\b", re.IGNORECASE)),
-    ("resources_path", re.compile(r"(?:^|[\\/])resources(?:[\\/]|$)", re.IGNORECASE)),
+    ("resources_path", re.compile(r"(?:[\\/]|%2F|%5C)resources\b|\bresources(?:[\\/]|%2F|%5C)", re.IGNORECASE)),
     ("fxserver_log", re.compile(r"\b(?:FXServer|txAdmin|server log|resource log|player connecting|player dropped)\b", re.IGNORECASE)),
     ("database_dump", re.compile(r"\b(?:INSERT INTO|CREATE TABLE|SELECT \* FROM|ALTER TABLE)\b", re.IGNORECASE)),
 )
@@ -200,7 +204,12 @@ class DeterministicTelemetrySanitizer:
         if not isinstance(value, dict):
             raise TelemetrySanitizationError(TelemetryRejectionReason.POLICY, "tags_shape", "tags must be an object")
         _reject_unknown_keys(value, ALLOWED_TAG_KEYS, "tags")
-        return {key: self._sanitize_value(item, state, f"tags.{key}") for key, item in value.items()}
+        sanitized: dict[str, Any] = {}
+        for key, item in value.items():
+            if isinstance(item, (dict, list)):
+                raise TelemetrySanitizationError(TelemetryRejectionReason.POLICY, "tag_value_shape", f"tags.{key} must be a scalar")
+            sanitized[key] = self._sanitize_value(item, state, f"tags.{key}")
+        return sanitized
 
     def _sanitize_allowed_dict(self, value: Any, state: _SanitizerState, path: str) -> dict[str, Any]:
         if not isinstance(value, dict):
@@ -230,7 +239,7 @@ class DeterministicTelemetrySanitizer:
         if isinstance(value, list):
             return [self._sanitize_value(item, state, f"{path}[]") for item in value]
         if isinstance(value, dict):
-            return self._sanitize_allowed_dict(value, state, path)
+            raise TelemetrySanitizationError(TelemetryRejectionReason.POLICY, "unknown_value_shape", f"nested objects not allowed at {path}")
         raise TelemetrySanitizationError(TelemetryRejectionReason.POLICY, "unknown_value_shape", f"unsupported value at {path}")
 
     def _rejection(
