@@ -28,6 +28,7 @@ import {
   Badge,
   Button,
   DefinitionGrid,
+  DependencyChecksTable,
   Field,
   Input,
   ProgressBar,
@@ -767,8 +768,9 @@ export function SetupView() {
                   title="Dependency checks"
                 />
                 <Alert severity="info" title="What this step does">
-                  Atlas checks that server-data exists (or will be created), whether server.cfg is present, and records a deferred database
-                  placeholder note. This is a mutating audit command — not a dry filesystem scan from the UI.
+                  Atlas checks server-data and server.cfg, then records dev-database preflight signals: Docker availability,
+                  whether 127.0.0.1:3306 is free, and whether a MySQL listener is reachable. These are informational warnings
+                  only — they never block setup or Pathway 2.
                 </Alert>
                 {dependencyError ? <ErrorState error={dependencyError} /> : null}
                 <div className="setup-step__actions">
@@ -777,30 +779,9 @@ export function SetupView() {
                   </Button>
                 </div>
                 {dependencyChecks.length > 0 ? (
-                  <div className="atlas-table-wrap">
-                    <table className="atlas-table">
-                      <thead>
-                        <tr>
-                          <th>Check</th>
-                          <th>Category</th>
-                          <th>Status</th>
-                          <th>Message</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dependencyChecks.map((check) => (
-                          <tr key={check.dependency_check_id ?? check.check_key}>
-                            <td>{check.check_key}</td>
-                            <td>{check.category}</td>
-                            <td>{check.status}</td>
-                            <td>{check.message}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <DependencyChecksTable checks={dependencyChecks} />
                 ) : (
-                  <EmptyState detail="Run checks to record preflight results for this project." title="No dependency checks yet" />
+                  <DependencyChecksTable checks={[]} />
                 )}
                 <div className="setup-step__actions">
                   <Button variant="secondary" onClick={() => goToStep("config")}>

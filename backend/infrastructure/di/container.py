@@ -11,6 +11,7 @@ from backend.adapters.filesystem import LocalProjectFilesystemInspector, LocalSe
 from backend.adapters.fivem import CfxArtifactClient
 from backend.adapters.persistence.schema import bootstrap_schema
 from backend.application.pathway2.audit_remediation import remediate_pathway2_audit_undo_secrets
+from backend.adapters.docker import CliDockerAvailabilityProbe
 from backend.adapters.process import LocalProcessSupervisor
 from backend.adapters.streams import StreamEventBridge, StreamEventPublisher
 from backend.adapters.telemetry import DeterministicTelemetrySanitizer, LocalNoopTelemetryDelivery, create_telemetry_delivery
@@ -51,6 +52,7 @@ class ApplicationContainer:
     setup_filesystem: LocalSetupFilesystem
     artifact_client: CfxArtifactClient
     process_supervisor: LocalProcessSupervisor
+    docker_probe: CliDockerAvailabilityProbe
     txadmin_detector: LocalTxAdminDetector
     telemetry_sanitizer: DeterministicTelemetrySanitizer
     telemetry_delivery: TelemetryDeliveryPort
@@ -197,6 +199,7 @@ class ApplicationContainer:
             filesystem=self.setup_filesystem,
             process_port=self.process_supervisor,
             txadmin=self.txadmin_detector,
+            docker_probe=self.docker_probe,
             stream_publisher=self.stream_publisher,
         )
         self.process_supervisor.set_on_exit(service.record_process_exit)
@@ -246,6 +249,7 @@ def create_application_container(app_data_dir: Path) -> ApplicationContainer:
         setup_filesystem=LocalSetupFilesystem(),
         artifact_client=CfxArtifactClient(),
         process_supervisor=LocalProcessSupervisor(),
+        docker_probe=CliDockerAvailabilityProbe(),
         txadmin_detector=LocalTxAdminDetector(),
         telemetry_sanitizer=DeterministicTelemetrySanitizer(),
         telemetry_delivery=LocalNoopTelemetryDelivery(),

@@ -24,5 +24,6 @@ export { ProgressBar } from "./ProgressBar";
 export { WizardStepper } from "./WizardStepper";
 export type { WizardStepItem, WizardStepStatus } from "./WizardStepper";
 export { CodeEditor } from "./CodeEditor";
+export { DependencyChecksTable } from "./DependencyChecksTable";
 export { DependencyGraphView } from "./DependencyGraphView";
 export { ProjectPicker, ProjectPickerEmpty } from "./ProjectPicker";

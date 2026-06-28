@@ -11,6 +11,12 @@ from backend.adapters.persistence.models import DependencyCheckRecord, SetupProc
 from backend.adapters.streams import StreamEventPublisher
 from backend.application.commands import CommandContext, CommandExecutionResult, CommandPreview, DryRunResult, RiskLevel, UndoPlan
 from backend.application.commands.recorder import CommandAuditRecorder
+from backend.domain.dev_db import (
+    DockerAvailabilityPort,
+    build_dev_db_port_available_check,
+    build_dev_db_reachable_check,
+    build_docker_available_check,
+)
 from backend.domain.setup import (
     ArtifactChannel,
     ArtifactInstallPlan,
@@ -135,6 +141,7 @@ class SetupApplicationService:
         filesystem: SetupFilesystemPort,
         process_port: ProcessPort,
         txadmin: TxAdminPort,
+        docker_probe: DockerAvailabilityPort,
         stream_publisher: StreamEventPublisher | None = None,
     ) -> None:
         self._container = container
@@ -142,6 +149,7 @@ class SetupApplicationService:
         self._filesystem = filesystem
         self._process_port = process_port
         self._txadmin = txadmin
+        self._docker_probe = docker_probe
         self._stream_publisher = stream_publisher
         self._recorder = CommandAuditRecorder()
 
@@ -813,8 +821,12 @@ class SetupApplicationService:
             checks.append({"check_key": "server_data_directory", "category": "filesystem", "status": "pass" if path.exists() else "warning", "message": "server-data directory exists" if path.exists() else "server-data directory will be created by setup", "details": {"path": str(path)}})
         if DependencyCategory.CONFIG.value in selected:
             checks.append({"check_key": "server_cfg", "category": "config", "status": "pass" if (path / "server.cfg").exists() else "warning", "message": "server.cfg present" if (path / "server.cfg").exists() else "server.cfg not generated yet", "details": {"path": str(path / "server.cfg")}})
+        if DependencyCategory.BINARY.value in selected:
+            checks.append(build_docker_available_check(self._docker_probe.probe()))
+        if DependencyCategory.NETWORK.value in selected:
+            checks.append(build_dev_db_port_available_check())
         if DependencyCategory.DATABASE.value in selected:
-            checks.append({"check_key": "database_placeholder", "category": "database", "status": "skipped", "message": "External DB creation is deferred; local placeholder can be prepared.", "details": {"reversible": True}})
+            checks.append(build_dev_db_reachable_check())
         return checks
 
     def _pathway2_start_block_reason(self, project_id: ProjectId) -> str | None:

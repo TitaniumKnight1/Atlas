@@ -92,7 +92,16 @@ def test_dependency_checks_and_database_prepare_are_audited_and_reversible(tmp_p
         database = service.execute_prepare_database(project_id=project_id, server_data_path=str(server_data))
         database_path = Path(str(database.result["database_path"]))
 
-        assert _count(container, DependencyCheckRecord) >= 2
+        check_keys = {item["check_key"] for item in checks.result["checks"]}
+        assert check_keys >= {
+            "server_data_directory",
+            "server_cfg",
+            "docker_available",
+            "dev_db_port_available",
+            "dev_db_reachable",
+        }
+        assert "database_placeholder" not in check_keys
+        assert _count(container, DependencyCheckRecord) >= 5
         assert database_path.exists()
         assert database.result["reversible"] is True
 
