@@ -12,7 +12,7 @@ env/
 !.env.example
 *.egg-info/
 .eggs/
-atlas-backend.spec
+/atlas-backend.spec
 dist/
 build/
 .pytest_cache/
