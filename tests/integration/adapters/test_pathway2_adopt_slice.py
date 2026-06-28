@@ -68,6 +68,23 @@ def test_adopt_repository_sets_pathway2_state_and_scorecard(tmp_path: Path) -> N
         container.close()
 
 
+def test_wizard_status_resumes_at_normalize_after_adopt(tmp_path: Path) -> None:
+    container = create_application_container(tmp_path / "app-data")
+    root = _project_root(tmp_path, "wizard-resume")
+    (root / "server.cfg").write_text(_prod_config(), encoding="utf-8")
+    try:
+        service = container.create_adopt_service()
+        result = service.execute_adopt_repository(root_path=root)
+        project_id = ProjectId(str(result.result["project_id"]))
+        wizard = service.get_wizard_status(project_id)
+        assert wizard["wizard"]["active_step"] == "normalize"
+        assert wizard["wizard"]["gates"]["adopt"] is True
+        assert wizard["wizard"]["gates"]["normalize"] is False
+        assert wizard["wizard"]["gates"]["run"] is False
+    finally:
+        container.close()
+
+
 def _fixture(tmp_path: Path):
     container = create_application_container(tmp_path / "app-data")
     root = _project_root(tmp_path, "adopt-normalize")

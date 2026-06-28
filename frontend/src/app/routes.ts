@@ -66,8 +66,8 @@ export const featureRoutes: FeatureRoute[] = [
   {
     id: "adopt",
     path: "/adopt",
-    label: "Adopt",
-    summary: "Join a team FiveM repo and prepare local overlay structure.",
+    label: "Join team",
+    summary: "Guided wizard to adopt a team FiveM repo and prepare safe local dev.",
     implemented: true,
     group: "Workspace",
     glyph: "J"

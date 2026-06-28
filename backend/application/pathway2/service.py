@@ -28,6 +28,7 @@ from backend.domain.pathway2 import (
     scan_inline_secrets,
 )
 from backend.domain.pathway2.run_gate import evaluate_pathway2_run_readiness, load_overlay_content
+from backend.domain.pathway2.wizard import build_wizard_status
 from backend.domain.pathway2.substitution import (
     apply_dev_value_to_overlay,
     build_substitution_diff,
@@ -219,6 +220,22 @@ class AdoptApplicationService:
             "unset_dev_slots": unset_dev_slots,
             "run_blocked_reason": run_blocked_reason,
         }
+
+    def get_wizard_status(self, project_id: ProjectId) -> dict[str, Any]:
+        adopt_status = self.get_adopt_status(project_id)
+        return_path: dict[str, Any] | None = None
+        state = adopt_status.get("pathway2_state") or {}
+        if state.get("origin"):
+            try:
+                return_path = self.get_return_path_status(project_id=project_id)
+            except Pathway2ApplicationError:
+                return_path = None
+        wizard = build_wizard_status(adopt_status=adopt_status, return_path=return_path)
+        payload = dict(adopt_status)
+        payload["wizard"] = wizard
+        if return_path is not None:
+            payload["return_path"] = return_path
+        return payload
 
     def preview_repo_normalization(self, *, project_id: ProjectId) -> CommandPreview:
         server_cfg, rel_path, current = self._load_server_cfg(project_id)

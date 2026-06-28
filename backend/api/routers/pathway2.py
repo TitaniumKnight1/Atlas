@@ -82,6 +82,14 @@ def get_pathway2_status(project_id: str, container: ApplicationContainer = Depen
         return _failure(error)
 
 
+@router.get("/projects/{project_id}/pathway2/wizard-status", response_model=ResponseEnvelope)
+def get_pathway2_wizard_status(project_id: str, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        return _success(container.create_adopt_service().get_wizard_status(ProjectId(project_id)))
+    except Pathway2ApplicationError as error:
+        return _failure(error)
+
+
 @router.post("/projects/{project_id}/pathway2/normalization-plan", response_model=ResponseEnvelope)
 def plan_repo_normalization(project_id: str, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
     try:

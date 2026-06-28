@@ -70,6 +70,29 @@ export async function getPathway2Status(projectId: string): Promise<BackendRespo
   return requestBackend<Pathway2Status>(`/api/v1/projects/${projectId}/pathway2/status`);
 }
 
+export type WizardStepId = "adopt" | "normalize" | "secrets" | "tuning" | "run" | "return" | "done";
+
+export interface WizardStepItem {
+  id: WizardStepId;
+  label: string;
+  status: "upcoming" | "active" | "complete" | "failed";
+}
+
+export interface Pathway2WizardStatus extends Pathway2Status {
+  wizard: {
+    active_step: WizardStepId;
+    steps: WizardStepItem[];
+    gates: Record<WizardStepId, boolean>;
+    blockers: Partial<Record<WizardStepId, string>>;
+    next_step: WizardStepId | null;
+  };
+  return_path?: ReturnPathStatus;
+}
+
+export async function getPathway2WizardStatus(projectId: string): Promise<BackendResponse<Pathway2WizardStatus>> {
+  return requestBackend<Pathway2WizardStatus>(`/api/v1/projects/${projectId}/pathway2/wizard-status`);
+}
+
 export async function previewRepoNormalization(projectId: string): Promise<BackendResponse<CommandPreviewData>> {
   return requestBackend<CommandPreviewData>(`/api/v1/projects/${projectId}/pathway2/normalization-plan`, { method: "POST" });
 }

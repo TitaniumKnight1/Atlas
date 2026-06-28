@@ -43,6 +43,7 @@ import { CommandPanel } from "../../components/CommandPanel";
 import { EmptyState, ErrorState, LoadingState, OnboardingEmptyState } from "../../components/StateViews";
 import { useAsyncTask } from "../../components/useAsyncTask";
 import { useProjectStream } from "../../components/useProjectStream";
+import { PathwayChoice } from "../onboarding/PathwayChoice";
 
 const WIZARD_STEP_DEFS = [
   { id: "project", label: "Project" },
@@ -486,6 +487,7 @@ export function SetupView() {
           eyebrow="Setup & artifacts"
           title="Stand up your FiveM server"
         />
+        <PathwayChoice current="setup" />
       </header>
 
       {projectsResource.state === "loading" ? <LoadingState title="Loading projects" detail="Checking for workspaces to set up." /> : null}
