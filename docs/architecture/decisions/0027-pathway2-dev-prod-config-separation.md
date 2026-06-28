@@ -157,6 +157,7 @@ Substitution and overlay materialization **read production secret values from th
 - Raw secrets **must not** appear in telemetry, SSE, audit persistence, or command previews.
 - Extend ADR-0009 redaction to **diff/preview payloads** for Pathway 2 commands (same `SECRET_RULES` / `redacted_preview` pattern).
 - Undo snapshots may hold prior file content on disk in Atlas snapshot stores — already true for M4a; Pathway 2 does not change the privacy class.
+- Pathway 2 undo retains **local-only pre-image snapshots** under Atlas app-data (`pathway2-undo/`); these may contain secret-bearing prior config for normalization/substitution undo. They are never committed, never sent to telemetry, and follow the same local-copy posture as M8c backups — a deliberate, documented property.
 
 ---
 

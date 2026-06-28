@@ -28,6 +28,14 @@ class ApplyDevSecretRequest(BaseModel):
     idempotency_key: str | None = None
 
 
+class ApplyDevTransformRequest(BaseModel):
+    hostname: str | None = None
+    max_clients: int | None = None
+    udp_port: int | None = None
+    tcp_port: int | None = None
+    idempotency_key: str | None = None
+
+
 class Pathway2UndoRequest(BaseModel):
     command_execution_id: str
 

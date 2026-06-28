@@ -26,6 +26,7 @@ export interface Pathway2State {
   normalized: boolean;
   secrets_substituted: boolean;
   run_ready: boolean;
+  dev_transformed: boolean;
   server_cfg_path: string | null;
   overlay_path: string | null;
 }
@@ -98,6 +99,25 @@ export async function applyDevSecret(projectId: string, slotId: string, devValue
     `/api/v1/projects/${projectId}/pathway2/dev-secret/apply`,
     jsonRequest({ slot_id: slotId, dev_value: devValue })
   );
+}
+
+export interface DevTransformOptions {
+  hostname?: string;
+  max_clients?: number;
+  udp_port?: number;
+  tcp_port?: number;
+}
+
+export async function previewDevConfigTransform(projectId: string, options?: DevTransformOptions): Promise<BackendResponse<CommandPreviewData>> {
+  return requestBackend<CommandPreviewData>(`/api/v1/projects/${projectId}/pathway2/transform-plan`, jsonRequest(options ?? {}));
+}
+
+export async function dryRunDevConfigTransform(projectId: string, options?: DevTransformOptions): Promise<BackendResponse<DryRunData>> {
+  return requestBackend<DryRunData>(`/api/v1/projects/${projectId}/pathway2/transform-dry-run`, jsonRequest(options ?? {}));
+}
+
+export async function applyDevConfigTransform(projectId: string, options?: DevTransformOptions): Promise<BackendResponse<CommandResultData>> {
+  return requestBackend<CommandResultData>(`/api/v1/projects/${projectId}/pathway2/transform/apply`, jsonRequest(options ?? {}));
 }
 
 export async function undoPathway2Command(projectId: string, commandExecutionId: string): Promise<BackendResponse<CommandResultData>> {

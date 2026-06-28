@@ -36,6 +36,13 @@ from backend.domain.pathway2.substitution import (
     plan_overlay_substitution,
     slot_preview_for_dev_value,
 )
+from backend.domain.pathway2.supervisor_fallback import (
+    build_plus_set_arguments,
+    mask_launch_arguments,
+    plus_set_preview,
+    resolve_plus_set_overrides,
+)
+from backend.domain.pathway2.transform import DevTransformOptions, build_transform_diff, default_transform_options, plan_dev_config_transform
 from backend.domain.shared_kernel import ErrorCode, ProjectId, StableIdentifier
 from backend.infrastructure.unit_of_work import RepositoryContext
 
@@ -501,6 +508,94 @@ class AdoptApplicationService:
             uow.commit()
             return result
 
+    def preview_dev_config_transform(
+        self,
+        *,
+        project_id: ProjectId,
+        options: DevTransformOptions | None = None,
+    ) -> CommandPreview:
+        self._require_substituted(project_id)
+        overlay_path, current = self._load_overlay(project_id)
+        resolved = options or self._default_transform_options(project_id)
+        proposed, meta = plan_dev_config_transform(current, resolved)
+        diff = build_transform_diff(current=current, proposed=proposed)
+        rel_overlay = str(overlay_path.relative_to(self._require_project_root(project_id))).replace("\\", "/")
+        base_content = self._base_server_cfg_content(project_id)
+        plus_set = resolve_plus_set_overrides(overlay_content=proposed, base_content=base_content)
+        return CommandPreview(
+            "PlanDevConfigTransform",
+            f"Apply dev tuning to {OVERLAY_FILENAME}",
+            {
+                "project_id": str(project_id),
+                "overlay_path": rel_overlay,
+                "diff": diff,
+                "transform": meta,
+                "plus_set_overrides": plus_set_preview(plus_set),
+                "plus_set_arguments_masked": mask_launch_arguments(build_plus_set_arguments(plus_set)),
+            },
+            warnings=[],
+            risk_level=RiskLevel.MEDIUM,
+        )
+
+    def dry_run_dev_config_transform(self, *, project_id: ProjectId, options: DevTransformOptions | None = None) -> DryRunResult:
+        preview = self.preview_dev_config_transform(project_id=project_id, options=options)
+        return DryRunResult(preview.command_type, True, preview.preview, preview.warnings)
+
+    def execute_apply_dev_config_transform(
+        self,
+        *,
+        project_id: ProjectId,
+        options: DevTransformOptions | None = None,
+        idempotency_key: str | None = None,
+    ) -> CommandExecutionResult:
+        preview = self.preview_dev_config_transform(project_id=project_id, options=options)
+        resolved = options or self._default_transform_options(project_id)
+        overlay_path, prior_overlay = self._load_overlay(project_id)
+        proposed, meta = plan_dev_config_transform(prior_overlay, resolved)
+        self.filesystem.write_text(overlay_path, proposed)
+
+        settings_patch = {
+            Pathway2SettingKeys.DEV_TRANSFORMED: True,
+            Pathway2SettingKeys.TRANSFORM_OPTIONS: meta,
+        }
+        self._container.create_project_service().update_project_settings(project_id=project_id, patch=settings_patch)
+
+        undo_root = pathway2_undo_root(self._container.app_data_dir, project_id)
+        compensation = snapshot_config_compensation(
+            undo_root=undo_root,
+            absolute_path=overlay_path,
+            prior_content=prior_overlay,
+            filesystem=self.filesystem,
+        )
+        undo_payload = pathway2_audit_undo_payload(compensation, project_id)
+        with self._container.create_unit_of_work(project_id) as uow:
+            uow.begin()
+            result = self._recorder.record_success(
+                uow=uow,
+                preview=preview,
+                project_id=project_id,
+                entity_type="Pathway2DevTransform",
+                entity_id=str(project_id),
+                summary=f"Applied dev config transform to {OVERLAY_FILENAME}",
+                result={
+                    "project_id": str(project_id),
+                    "transform": meta,
+                    "pathway2_state": _pathway2_state({**self._pathway2_settings(project_id), **settings_patch}),
+                    "diff": preview.preview["diff"],
+                    "plus_set_overrides": preview.preview["plus_set_overrides"],
+                },
+                events=[],
+                undo_plan=UndoPlan(
+                    "RevertDevConfigTransform",
+                    f"Restore prior {OVERLAY_FILENAME} before dev transform",
+                    compensation,
+                    undo_payload,
+                ),
+                idempotency_key=idempotency_key,
+            )
+            uow.commit()
+            return result
+
     def undo(self, undo_plan: UndoPlan) -> CommandExecutionResult:
         project_id_value = undo_plan.payload.get("project_id")
         project_id = ProjectId(str(project_id_value)) if project_id_value else None
@@ -631,7 +726,31 @@ class AdoptApplicationService:
     def _require_substituted(self, project_id: ProjectId) -> None:
         settings = self._pathway2_settings(project_id)
         if not settings.get(Pathway2SettingKeys.SECRETS_SUBSTITUTED):
-            raise Pathway2ApplicationError(ErrorCode.PRECONDITION_FAILED, "Apply P2-2 secret substitution before entering dev secrets")
+            raise Pathway2ApplicationError(ErrorCode.PRECONDITION_FAILED, "Apply P2-2 secret substitution first")
+
+    def _default_transform_options(self, project_id: ProjectId) -> DevTransformOptions:
+        settings = self._pathway2_settings(project_id)
+        stored = settings.get(Pathway2SettingKeys.TRANSFORM_OPTIONS)
+        if isinstance(stored, dict) and stored:
+            return DevTransformOptions(
+                hostname=str(stored.get("hostname", DevTransformOptions.hostname)),
+                max_clients=int(stored.get("max_clients", DevTransformOptions.max_clients)),
+                udp_port=int(stored.get("udp_port", DevTransformOptions.udp_port)),
+                tcp_port=int(stored.get("tcp_port", DevTransformOptions.tcp_port)),
+                dev_convars=dict(stored.get("dev_convars", DevTransformOptions().dev_convars)),
+            )
+        with self._container.session_factory() as session:
+            repository = ProjectRepository(RepositoryContext(session=session, project_id=project_id))
+            project = repository.get_project(project_id)
+            display_name = project.display_name if project else None
+        return default_transform_options(project_display_name=display_name)
+
+    def _base_server_cfg_content(self, project_id: ProjectId) -> str | None:
+        try:
+            _, _, content = self._load_server_cfg(project_id)
+        except Pathway2ApplicationError:
+            return None
+        return content
 
 
 def _undo_settings_patch(command_type: str, *, overlay_content: str | None) -> dict[str, Any] | None:
@@ -642,6 +761,8 @@ def _undo_settings_patch(command_type: str, *, overlay_content: str | None) -> d
             Pathway2SettingKeys.RUN_READY: False,
             Pathway2SettingKeys.SUBSTITUTION_SLOTS: [],
             Pathway2SettingKeys.UNSET_DEV_SLOTS: [],
+            Pathway2SettingKeys.DEV_TRANSFORMED: False,
+            Pathway2SettingKeys.TRANSFORM_OPTIONS: {},
         }
     if command_type == "RevertSecretSubstitution":
         return {
@@ -649,12 +770,19 @@ def _undo_settings_patch(command_type: str, *, overlay_content: str | None) -> d
             Pathway2SettingKeys.RUN_READY: False,
             Pathway2SettingKeys.SUBSTITUTION_SLOTS: [],
             Pathway2SettingKeys.UNSET_DEV_SLOTS: [],
+            Pathway2SettingKeys.DEV_TRANSFORMED: False,
+            Pathway2SettingKeys.TRANSFORM_OPTIONS: {},
         }
     if command_type == "RevertDevSecretApply":
         run_ready, unset = compute_run_gate(overlay_content or "")
         return {
             Pathway2SettingKeys.RUN_READY: run_ready,
             Pathway2SettingKeys.UNSET_DEV_SLOTS: unset,
+        }
+    if command_type == "RevertDevConfigTransform":
+        return {
+            Pathway2SettingKeys.DEV_TRANSFORMED: False,
+            Pathway2SettingKeys.TRANSFORM_OPTIONS: {},
         }
     return None
 
@@ -675,6 +803,7 @@ def _pathway2_state(settings: dict[str, Any]) -> dict[str, Any]:
         "normalized": bool(settings.get(Pathway2SettingKeys.NORMALIZED)),
         "secrets_substituted": bool(settings.get(Pathway2SettingKeys.SECRETS_SUBSTITUTED)),
         "run_ready": bool(settings.get(Pathway2SettingKeys.RUN_READY)),
+        "dev_transformed": bool(settings.get(Pathway2SettingKeys.DEV_TRANSFORMED)),
         "server_cfg_path": settings.get(Pathway2SettingKeys.SERVER_CFG_PATH),
         "overlay_path": settings.get(Pathway2SettingKeys.OVERLAY_PATH),
     }

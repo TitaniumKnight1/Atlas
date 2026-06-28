@@ -3,13 +3,16 @@ import { useEffect, useMemo, useState } from "react";
 import {
   adoptRepository,
   applyDevSecret,
+  applyDevConfigTransform,
   applyRepoNormalization,
   applySecretSubstitution,
   dryRunAdoptRepository,
+  dryRunDevConfigTransform,
   dryRunRepoNormalization,
   dryRunSecretSubstitution,
   getPathway2Status,
   previewAdoptRepository,
+  previewDevConfigTransform,
   previewRepoNormalization,
   previewSecretSubstitution,
   undoPathway2Command,
@@ -46,6 +49,20 @@ export function AdoptView() {
   const [status, setStatus] = useState<Pathway2Status | null>(null);
   const [statusError, setStatusError] = useState<unknown>(null);
   const [statusLoading, setStatusLoading] = useState(false);
+
+  const [transformHostname, setTransformHostname] = useState("[DEV] Atlas Local Server");
+  const [transformMaxClients, setTransformMaxClients] = useState("8");
+  const [transformPort, setTransformPort] = useState("30121");
+
+  const transformOptions = useMemo(
+    () => ({
+      hostname: transformHostname.trim() || undefined,
+      max_clients: Number.parseInt(transformMaxClients, 10) || undefined,
+      udp_port: Number.parseInt(transformPort, 10) || undefined,
+      tcp_port: Number.parseInt(transformPort, 10) || undefined
+    }),
+    [transformHostname, transformMaxClients, transformPort]
+  );
 
   const projects = projectsResource.state === "ready" ? projectsResource.data : [];
 
@@ -130,6 +147,7 @@ export function AdoptView() {
               {status?.pathway2_state.normalized ? <Badge variant="info">Normalized</Badge> : <Badge variant="neutral">Not normalized</Badge>}
               {status?.pathway2_state.secrets_substituted ? <Badge variant="info">Secrets substituted</Badge> : null}
               {status?.pathway2_state.run_ready ? <Badge variant="info">Run ready</Badge> : null}
+              {status?.pathway2_state.dev_transformed ? <Badge variant="info">Dev transformed</Badge> : null}
             </div>
             {statusLoading ? <LoadingState title="Loading adopt status" detail="Refreshing structure scorecard and secret report." /> : null}
             {statusError ? <ErrorState error={statusError} /> : null}
@@ -186,6 +204,37 @@ export function AdoptView() {
                   onApplied={() => void refreshStatus(projectId)}
                 />
               ) : null}
+            </Surface>
+          ) : null}
+
+          {status?.pathway2_state.secrets_substituted ? (
+            <Surface>
+              <SectionHeading
+                title="Apply dev config transform"
+                detail="Non-secret dev tuning: hostname, slots, ports, and dev convars written to server.cfg.local only."
+              />
+              <InputGroup>
+                <Field label="Dev hostname">
+                  <Input value={transformHostname} onChange={(event) => setTransformHostname(event.target.value)} />
+                </Field>
+                <Field label="Max clients">
+                  <Input value={transformMaxClients} onChange={(event) => setTransformMaxClients(event.target.value)} />
+                </Field>
+                <Field label="Dev port (UDP/TCP)">
+                  <Input value={transformPort} onChange={(event) => setTransformPort(event.target.value)} />
+                </Field>
+              </InputGroup>
+              <CommandPanel
+                title="Apply dev transform"
+                description="Preview shows full non-secret values. onesync uses +set at start when needed (ADR-0027)."
+                executeLabel="Apply dev transform"
+                onPreview={() => previewDevConfigTransform(projectId, transformOptions)}
+                onDryRun={() => dryRunDevConfigTransform(projectId, transformOptions)}
+                onExecute={() => applyDevConfigTransform(projectId, transformOptions)}
+                onUndo={(commandExecutionId) => undoPathway2Command(projectId, commandExecutionId)}
+                onSuccess={() => void refreshStatus(projectId)}
+                onUndoSuccess={() => void refreshStatus(projectId)}
+              />
             </Surface>
           ) : null}
         </>

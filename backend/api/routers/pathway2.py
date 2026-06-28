@@ -9,6 +9,7 @@ from backend.api.schemas.pathway2 import (
     AdoptRepositoryPlanRequest,
     AdoptRepositoryRequest,
     ApplyDevSecretRequest,
+    ApplyDevTransformRequest,
     ApplyRepoNormalizationRequest,
     ApplySecretSubstitutionRequest,
     AuditReference,
@@ -18,6 +19,7 @@ from backend.api.schemas.pathway2 import (
 )
 from backend.application.commands import CommandExecutionResult, CommandPreview, DryRunResult
 from backend.application.pathway2 import Pathway2ApplicationError
+from backend.domain.pathway2.transform import DevTransformOptions
 from backend.domain.shared_kernel import ProjectId, StableIdentifier
 from backend.infrastructure.di import ApplicationContainer
 
@@ -185,6 +187,56 @@ def apply_dev_secret(
         return _failure(error)
 
 
+@router.post("/projects/{project_id}/pathway2/transform-plan", response_model=ResponseEnvelope)
+def plan_dev_config_transform(
+    project_id: str,
+    request: ApplyDevTransformRequest,
+    container: ApplicationContainer = Depends(get_container),
+) -> ResponseEnvelope:
+    try:
+        preview = container.create_adopt_service().preview_dev_config_transform(
+            project_id=ProjectId(project_id),
+            options=_transform_options(request),
+        )
+        return _success(_preview_data(preview), warnings=preview.warnings)
+    except Pathway2ApplicationError as error:
+        return _failure(error)
+
+
+@router.post("/projects/{project_id}/pathway2/transform-dry-run", response_model=ResponseEnvelope)
+def dry_run_dev_config_transform(
+    project_id: str,
+    request: ApplyDevTransformRequest,
+    container: ApplicationContainer = Depends(get_container),
+) -> ResponseEnvelope:
+    try:
+        dry_run = container.create_adopt_service().dry_run_dev_config_transform(
+            project_id=ProjectId(project_id),
+            options=_transform_options(request),
+        )
+        return _success(_dry_run_data(dry_run), warnings=dry_run.warnings)
+    except Pathway2ApplicationError as error:
+        return _failure(error)
+
+
+@router.post("/projects/{project_id}/pathway2/transform/apply", response_model=ResponseEnvelope)
+def apply_dev_config_transform(
+    project_id: str,
+    request: ApplyDevTransformRequest,
+    container: ApplicationContainer = Depends(get_container),
+) -> ResponseEnvelope:
+    try:
+        return _command_success(
+            container.create_adopt_service().execute_apply_dev_config_transform(
+                project_id=ProjectId(project_id),
+                options=_transform_options(request),
+                idempotency_key=request.idempotency_key,
+            )
+        )
+    except Pathway2ApplicationError as error:
+        return _failure(error)
+
+
 @router.post("/projects/{project_id}/pathway2/undo", response_model=ResponseEnvelope)
 def undo_pathway2_command(
     project_id: str,
@@ -231,3 +283,15 @@ def _preview_data(preview: CommandPreview) -> dict:
 
 def _dry_run_data(dry_run: DryRunResult) -> dict:
     return {"command_type": dry_run.command_type, "valid": dry_run.valid, "simulation": dry_run.simulation}
+
+
+def _transform_options(request: ApplyDevTransformRequest) -> DevTransformOptions | None:
+    if not any(value is not None for value in (request.hostname, request.max_clients, request.udp_port, request.tcp_port)):
+        return None
+    defaults = DevTransformOptions()
+    return DevTransformOptions(
+        hostname=request.hostname or defaults.hostname,
+        max_clients=request.max_clients if request.max_clients is not None else defaults.max_clients,
+        udp_port=request.udp_port if request.udp_port is not None else defaults.udp_port,
+        tcp_port=request.tcp_port if request.tcp_port is not None else defaults.tcp_port,
+    )

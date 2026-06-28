@@ -501,7 +501,9 @@ class SetupApplicationService:
         pathway2_block = self._pathway2_start_block_reason(project_id)
         if pathway2_block:
             raise SetupApplicationError(ErrorCode.PRECONDITION_FAILED, pathway2_block)
-        plan = self._process_launch_plan(fxserver_path, server_data_path, txadmin_mode, extra_args)
+        plus_set_args = self._pathway2_plus_set_args(project_id, server_data_path)
+        plan = self._process_launch_plan(fxserver_path, server_data_path, txadmin_mode, extra_args, plus_set_args=plus_set_args)
+        masked_arguments = self._masked_launch_arguments(plan.arguments)
         return CommandPreview(
             "StartServerProcess",
             "Start supervised FXServer process",
@@ -509,7 +511,8 @@ class SetupApplicationService:
                 "project_id": str(project_id),
                 "executable_path": str(plan.executable_path),
                 "working_directory": str(plan.working_directory),
-                "arguments": plan.arguments,
+                "arguments": masked_arguments,
+                "plus_set_overrides": self._pathway2_plus_set_preview(project_id, server_data_path),
                 "mode": plan.mode,
             },
             warnings=["Stop uses terminate followed by full process-tree kill; stdin shutdown is not reliable for FXServer."],
@@ -536,9 +539,10 @@ class SetupApplicationService:
             txadmin_mode=txadmin_mode,
             extra_args=extra_args,
         )
-        plan = self._process_launch_plan(fxserver_path, server_data_path, txadmin_mode, extra_args)
+        plan = self._process_launch_plan(fxserver_path, server_data_path, txadmin_mode, extra_args, plus_set_args=self._pathway2_plus_set_args(project_id, server_data_path))
         process_run_id = StableIdentifier.new()
         status = self._process_port.start(str(process_run_id), str(project_id), plan)
+        masked_arguments = self._masked_launch_arguments(plan.arguments)
         with self._container.create_unit_of_work(project_id) as uow:
             uow.begin()
             self._require_project(uow.repository(ProjectRepository), project_id)
@@ -550,7 +554,7 @@ class SetupApplicationService:
                 launch={
                     "executable_path": str(plan.executable_path),
                     "working_directory": str(plan.working_directory),
-                    "arguments": plan.arguments,
+                    "arguments": masked_arguments,
                     "mode": plan.mode,
                 },
                 started_at=datetime.now(UTC),
@@ -757,6 +761,7 @@ class SetupApplicationService:
         server_data_path: str,
         txadmin_mode: bool,
         extra_args: list[str] | None,
+        plus_set_args: list[str] | None = None,
     ) -> ProcessLaunchPlan:
         executable = Path(fxserver_path).expanduser().resolve()
         working_directory = Path(server_data_path).expanduser().resolve()
@@ -768,6 +773,8 @@ class SetupApplicationService:
             mode = "txadmin"
         else:
             arguments = ["+exec", "server.cfg"]
+            if plus_set_args:
+                arguments.extend(plus_set_args)
             mode = "direct"
         return ProcessLaunchPlan(executable_path=executable, working_directory=working_directory, arguments=arguments, mode=mode)
 
@@ -829,6 +836,42 @@ class SetupApplicationService:
         if ready:
             return None
         return reason
+
+    def _pathway2_plus_set_args(self, project_id: ProjectId, server_data_path: str) -> list[str]:
+        project_service = self._container.create_project_service()
+        settings = {key: value for key, value in project_service.get_project_settings(project_id).items() if key.startswith("pathway2.")}
+        if not settings.get("pathway2.origin"):
+            return []
+        from backend.domain.pathway2.normalization import find_server_cfg
+        from backend.domain.pathway2.run_gate import load_overlay_content
+        from backend.domain.pathway2.supervisor_fallback import build_plus_set_arguments, resolve_plus_set_overrides
+
+        project_root = Path(server_data_path).expanduser().resolve()
+        server_cfg = find_server_cfg(project_root)
+        base_content = self._filesystem.read_text(server_cfg) if server_cfg else None
+        overlay_content = load_overlay_content(self._filesystem, project_root)
+        overrides = resolve_plus_set_overrides(overlay_content=overlay_content or "", base_content=base_content)
+        return build_plus_set_arguments(overrides)
+
+    def _pathway2_plus_set_preview(self, project_id: ProjectId, server_data_path: str) -> list[dict[str, Any]]:
+        project_service = self._container.create_project_service()
+        settings = {key: value for key, value in project_service.get_project_settings(project_id).items() if key.startswith("pathway2.")}
+        if not settings.get("pathway2.origin"):
+            return []
+        from backend.domain.pathway2.normalization import find_server_cfg
+        from backend.domain.pathway2.run_gate import load_overlay_content
+        from backend.domain.pathway2.supervisor_fallback import plus_set_preview, resolve_plus_set_overrides
+
+        project_root = Path(server_data_path).expanduser().resolve()
+        server_cfg = find_server_cfg(project_root)
+        base_content = self._filesystem.read_text(server_cfg) if server_cfg else None
+        overlay_content = load_overlay_content(self._filesystem, project_root)
+        return plus_set_preview(resolve_plus_set_overrides(overlay_content=overlay_content or "", base_content=base_content))
+
+    def _masked_launch_arguments(self, arguments: list[str]) -> list[str]:
+        from backend.domain.pathway2.supervisor_fallback import mask_launch_arguments
+
+        return mask_launch_arguments(arguments)
 
     def _require_project(self, repository: ProjectRepository, project_id: ProjectId) -> None:
         if repository.get_project(project_id) is None:
