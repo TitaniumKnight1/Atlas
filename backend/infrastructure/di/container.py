@@ -11,7 +11,7 @@ from backend.adapters.filesystem import LocalProjectFilesystemInspector, LocalSe
 from backend.adapters.fivem import CfxArtifactClient
 from backend.adapters.persistence.schema import bootstrap_schema
 from backend.application.pathway2.audit_remediation import remediate_pathway2_audit_undo_secrets
-from backend.adapters.docker import CliDockerAvailabilityProbe
+from backend.adapters.docker import CliDockerAvailabilityProbe, MySqlDockerDevDatabase
 from backend.adapters.process import LocalProcessSupervisor
 from backend.adapters.streams import StreamEventBridge, StreamEventPublisher
 from backend.adapters.telemetry import DeterministicTelemetrySanitizer, LocalNoopTelemetryDelivery, create_telemetry_delivery
@@ -28,6 +28,7 @@ from backend.application.project.service import ProjectApplicationService
 from backend.adapters.config import FiveMConfigValidator, LocalConfigSecretScanner
 from backend.adapters.git import GitPythonProvider
 from backend.application.config.service import ConfigApplicationService
+from backend.application.dev_db.service import DevDatabaseApplicationService
 from backend.application.git.service import GitApplicationService
 from backend.application.resources.service import ResourceApplicationService
 from backend.application.setup.service import SetupApplicationService
@@ -53,6 +54,7 @@ class ApplicationContainer:
     artifact_client: CfxArtifactClient
     process_supervisor: LocalProcessSupervisor
     docker_probe: CliDockerAvailabilityProbe
+    dev_database: MySqlDockerDevDatabase
     txadmin_detector: LocalTxAdminDetector
     telemetry_sanitizer: DeterministicTelemetrySanitizer
     telemetry_delivery: TelemetryDeliveryPort
@@ -206,6 +208,13 @@ class ApplicationContainer:
         self.process_supervisor.set_on_line(self._publish_server_output_line)
         return service
 
+    def create_dev_database_service(self) -> DevDatabaseApplicationService:
+        return DevDatabaseApplicationService(
+            container=self,
+            dev_db_port=self.dev_database,
+            docker_probe=self.docker_probe,
+        )
+
     def _publish_server_output_line(self, process_run_id: str, project_id: str, stream: str, line: str) -> None:
         self.stream_publisher.publish_server_output_line(
             project_id=ProjectId(project_id),
@@ -250,6 +259,7 @@ def create_application_container(app_data_dir: Path) -> ApplicationContainer:
         artifact_client=CfxArtifactClient(),
         process_supervisor=LocalProcessSupervisor(),
         docker_probe=CliDockerAvailabilityProbe(),
+        dev_database=MySqlDockerDevDatabase(),
         txadmin_detector=LocalTxAdminDetector(),
         telemetry_sanitizer=DeterministicTelemetrySanitizer(),
         telemetry_delivery=LocalNoopTelemetryDelivery(),

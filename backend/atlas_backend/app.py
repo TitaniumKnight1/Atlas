@@ -13,6 +13,7 @@ from backend.adapters.persistence.sqlite_smoke import SqliteSmokeStore
 from backend.api.routers.automation import router as automation_router
 from backend.api.routers.backup import router as backup_router
 from backend.api.routers.config import router as config_router
+from backend.api.routers.dev_db import router as dev_db_router
 from backend.api.routers.git import router as git_router
 from backend.api.routers.health import router as health_router
 from backend.api.routers.incident import router as incident_router
@@ -66,6 +67,7 @@ def create_app(app_data_dir: Path | None = None) -> FastAPI:
     app.include_router(automation_router)
     app.include_router(backup_router)
     app.include_router(pathway2_router)
+    app.include_router(dev_db_router)
     app.include_router(plugin_router)
     app.include_router(setup_router)
     app.include_router(streams_router)

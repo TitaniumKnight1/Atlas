@@ -20,12 +20,9 @@ import {
 import { formatAuditRef, getProject, listProjects, type ProjectDetail, type ProjectSummary } from "../../api/project";
 import {
   getProcessStatus,
-  listDependencyChecks,
   previewStartProcess,
-  runDependencyChecks,
   startProcess,
   stopProcess,
-  type DependencyCheck,
   type ProcessStatus
 } from "../../api/setup";
 import {
@@ -33,7 +30,6 @@ import {
   Badge,
   Button,
   DefinitionGrid,
-  DependencyChecksTable,
   Field,
   Input,
   InputGroup,
@@ -49,6 +45,7 @@ import { EmptyState, ErrorState, LoadingState } from "../../components/StateView
 import { useAsyncTask } from "../../components/useAsyncTask";
 import { useProjectStream } from "../../components/useProjectStream";
 import { PathwayChoice } from "../onboarding/PathwayChoice";
+import { DevDatabasePanel } from "./DevDatabasePanel";
 import {
   DevSecretEntryForm,
   InlineSecretsReport,
@@ -97,9 +94,6 @@ export function JoinTeamWizardView() {
   const [processPreviewSummary, setProcessPreviewSummary] = useState<string | null>(null);
   const [lastAuditRef, setLastAuditRef] = useState<string | null>(null);
   const [commitCompleted, setCommitCompleted] = useState(false);
-  const [dependencyChecks, setDependencyChecks] = useState<DependencyCheck[]>([]);
-  const [dependencyBusy, setDependencyBusy] = useState(false);
-  const [dependencyError, setDependencyError] = useState<unknown>(null);
 
   const projects = projectsResource.state === "ready" ? projectsResource.data : [];
 
@@ -177,15 +171,6 @@ export function JoinTeamWizardView() {
         .slice(-200),
     [streamEvents]
   );
-
-  useEffect(() => {
-    if (!projectId || activeStep !== "run") {
-      return;
-    }
-    void listDependencyChecks(projectId)
-      .then(setDependencyChecks)
-      .catch(() => setDependencyChecks([]));
-  }, [projectId, activeStep]);
 
   useEffect(() => {
     if (!projectId || !processRunId) {
@@ -294,24 +279,6 @@ export function JoinTeamWizardView() {
       setProcessError(error);
     } finally {
       setProcessBusy(false);
-    }
-  }
-
-  async function handleRunDevDbPreflight() {
-    if (!projectId || !serverDataPath.trim()) {
-      return;
-    }
-    setDependencyBusy(true);
-    setDependencyError(null);
-    try {
-      const result = await runDependencyChecks(projectId, { server_data_path: serverDataPath });
-      setLastAuditRef(formatAuditRef(result.auditRef) ?? null);
-      const checks = Array.isArray(result.data.checks) ? (result.data.checks as DependencyCheck[]) : [];
-      setDependencyChecks(checks);
-    } catch (error) {
-      setDependencyError(error);
-    } finally {
-      setDependencyBusy(false);
     }
   }
 
@@ -537,27 +504,13 @@ export function JoinTeamWizardView() {
                     ]}
                   />
                 </Surface>
-                <Surface kind="card">
-                  <SectionHeading
-                    title="Dev DB preflight"
-                    detail="Informational checks for Docker, port 3306, and MySQL reachability. Warnings only — they never block starting the server."
+                {projectId ? (
+                  <DevDatabasePanel
+                    projectId={projectId}
+                    serverDataPath={serverDataPath}
+                    onAuditRef={(auditRef) => setLastAuditRef(auditRef)}
                   />
-                  {dependencyError ? <ErrorState error={dependencyError} /> : null}
-                  <div className="setup-step__actions">
-                    <Button
-                      loading={dependencyBusy}
-                      variant="secondary"
-                      disabled={!serverDataPath.trim()}
-                      onClick={() => void handleRunDevDbPreflight()}
-                    >
-                      Run dev DB preflight
-                    </Button>
-                  </div>
-                  <DependencyChecksTable
-                    checks={dependencyChecks}
-                    emptyDetail="Run preflight to record Docker and dev MySQL signals for this project."
-                  />
-                </Surface>
+                ) : null}
                 <div className="setup-form-grid">
                   <Field label="FXServer executable">
                     <Input value={fxserverPath} onChange={(event) => setFxserverPath(event.target.value)} />
