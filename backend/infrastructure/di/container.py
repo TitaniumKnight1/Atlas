@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from backend.adapters.filesystem import LocalProjectFilesystemInspector, LocalSetupFilesystem
 from backend.adapters.fivem import CfxArtifactClient
 from backend.adapters.persistence.schema import bootstrap_schema
+from backend.application.pathway2.audit_remediation import remediate_pathway2_audit_undo_secrets
 from backend.adapters.process import LocalProcessSupervisor
 from backend.adapters.streams import StreamEventBridge, StreamEventPublisher
 from backend.adapters.telemetry import DeterministicTelemetrySanitizer, LocalNoopTelemetryDelivery, create_telemetry_delivery
@@ -227,6 +228,7 @@ class ApplicationContainer:
 def create_application_container(app_data_dir: Path) -> ApplicationContainer:
     engine = create_sqlite_engine(app_data_dir)
     bootstrap_schema(engine)
+    remediate_pathway2_audit_undo_secrets(engine=engine, app_data_dir=app_data_dir)
     event_bus = InProcessEventBus()
     stream_hub = ProjectStreamHub()
     stream_publisher = StreamEventPublisher(event_bus)

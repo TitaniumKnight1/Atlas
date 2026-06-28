@@ -10,9 +10,10 @@ from backend.adapters.persistence import AuditRepository, ProjectRepository
 from backend.application.commands import CommandContext, CommandExecutionResult, CommandPreview, DryRunResult, RiskLevel, UndoPlan
 from backend.application.commands.compensation import CompositeCompensation, RestorePathFromSnapshotCompensation
 from backend.application.commands.recorder import CommandAuditRecorder
-from backend.application.commands.serialization import compensation_from_storage, compensation_to_storage
+from backend.application.commands.serialization import compensation_from_storage
 from backend.application.config.service import RestoreConfigFileCompensation
-from backend.application.pathway2.compensation import pathway2_undo_root, snapshot_config_compensation
+from backend.application.pathway2.audit_remediation import validate_undo_snapshots_available
+from backend.application.pathway2.compensation import pathway2_audit_undo_payload, pathway2_undo_root, snapshot_config_compensation
 from backend.domain.pathway2 import (
     GITIGNORE_OVERLAY_ENTRY,
     OVERLAY_EXAMPLE_FILENAME,
@@ -314,7 +315,7 @@ class AdoptApplicationService:
         }
         self._container.create_project_service().update_project_settings(project_id=project_id, patch=settings_patch)
 
-        undo_payload = {**compensation_to_storage(compensation), "project_id": str(project_id)}
+        undo_payload = pathway2_audit_undo_payload(compensation, project_id)
         with self._container.create_unit_of_work(project_id) as uow:
             uow.begin()
             result = self._recorder.record_success(
@@ -394,7 +395,7 @@ class AdoptApplicationService:
             prior_content=prior_overlay,
             filesystem=self.filesystem,
         )
-        undo_payload = {**compensation_to_storage(compensation), "project_id": str(project_id)}
+        undo_payload = pathway2_audit_undo_payload(compensation, project_id)
         with self._container.create_unit_of_work(project_id) as uow:
             uow.begin()
             result = self._recorder.record_success(
@@ -471,7 +472,7 @@ class AdoptApplicationService:
             prior_content=prior_overlay,
             filesystem=self.filesystem,
         )
-        undo_payload = {**compensation_to_storage(compensation), "project_id": str(project_id)}
+        undo_payload = pathway2_audit_undo_payload(compensation, project_id)
         with self._container.create_unit_of_work(project_id) as uow:
             uow.begin()
             result = self._recorder.record_success(
@@ -503,6 +504,9 @@ class AdoptApplicationService:
     def undo(self, undo_plan: UndoPlan) -> CommandExecutionResult:
         project_id_value = undo_plan.payload.get("project_id")
         project_id = ProjectId(str(project_id_value)) if project_id_value else None
+        snapshot_block = validate_undo_snapshots_available(undo_plan.payload)
+        if snapshot_block:
+            raise Pathway2ApplicationError(ErrorCode.PRECONDITION_FAILED, snapshot_block)
         preview = CommandPreview(undo_plan.command_type, undo_plan.summary, {"undo": _redact_undo_payload(undo_plan.payload)}, risk_level=RiskLevel.HIGH)
         action = (
             compensation_from_storage(undo_plan.payload, filesystem=self.filesystem)
@@ -551,6 +555,9 @@ class AdoptApplicationService:
                 undo_payload = (audit_event.details_json or {}).get("undo")
                 if not undo_payload:
                     raise Pathway2ApplicationError(ErrorCode.PRECONDITION_FAILED, "Command execution is not undoable")
+                snapshot_block = validate_undo_snapshots_available(undo_payload)
+                if snapshot_block:
+                    raise Pathway2ApplicationError(ErrorCode.PRECONDITION_FAILED, snapshot_block)
                 action = compensation_from_storage(undo_payload, filesystem=self.filesystem)
                 return UndoPlan(
                     command_type="RevertRepoNormalization",

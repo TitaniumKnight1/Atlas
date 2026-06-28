@@ -5,7 +5,7 @@ from pathlib import Path
 
 from sqlalchemy import select
 
-from backend.adapters.persistence.models import AuditEventRecord, ProjectSettingRecord
+from backend.adapters.persistence.models import AuditEventRecord, CommandExecutionRecord, CommandPlanRecord, ProjectSettingRecord
 from backend.domain.pathway2.substitution import DEV_LICENSE_PLACEHOLDER
 from backend.domain.shared_kernel import ProjectId
 from backend.infrastructure.di import create_application_container
@@ -14,6 +14,7 @@ from backend.infrastructure.di import create_application_container
 PROD_LICENSE = "cfxk_test_production_key_value_123456"
 PROD_DB_PASSWORD = "supersecret"
 PROD_DB_HOST = "prod-db-host.example"
+DEV_LICENSE = "cfxk_dev_personal_key_for_local_only"
 
 
 def test_substitution_zero_escape_and_auto_local_fresh(tmp_path: Path) -> None:
@@ -42,6 +43,30 @@ def test_substitution_zero_escape_and_auto_local_fresh(tmp_path: Path) -> None:
 
         service.undo(result.undo_plan)
         assert "CHANGE_ME" in overlay_path.read_text(encoding="utf-8")
+    finally:
+        container.close()
+
+
+def test_full_cycle_no_raw_secrets_in_audit_and_normalization_undo(tmp_path: Path) -> None:
+    container, project_id, config_path = _imported_fixture(tmp_path)
+    service = container.create_adopt_service()
+    prior = config_path.read_text(encoding="utf-8")
+    try:
+        norm_result = service.execute_apply_repo_normalization(project_id=project_id)
+        _assert_no_secrets_in_persistence(container, project_id, (PROD_LICENSE, PROD_DB_PASSWORD, PROD_DB_HOST, DEV_LICENSE))
+
+        sub_result = service.execute_apply_secret_substitution(project_id=project_id)
+        _assert_no_secrets_in_persistence(container, project_id, (PROD_LICENSE, PROD_DB_PASSWORD, PROD_DB_HOST, DEV_LICENSE))
+
+        service.execute_apply_dev_secret(project_id=project_id, slot_id="sv_licenseKey", dev_value=DEV_LICENSE)
+        _assert_no_secrets_in_persistence(container, project_id, (PROD_LICENSE, PROD_DB_PASSWORD, PROD_DB_HOST, DEV_LICENSE))
+
+        service.undo(sub_result.undo_plan)
+        _assert_no_secrets_in_persistence(container, project_id, (PROD_LICENSE, PROD_DB_PASSWORD, PROD_DB_HOST, DEV_LICENSE))
+
+        service.undo(norm_result.undo_plan)
+        assert config_path.read_text(encoding="utf-8") == prior
+        _assert_no_secrets_in_persistence(container, project_id, (PROD_LICENSE, PROD_DB_PASSWORD, PROD_DB_HOST, DEV_LICENSE))
     finally:
         container.close()
 
@@ -86,7 +111,7 @@ def test_run_gate_blocks_until_dev_license_filled(tmp_path: Path) -> None:
         container.close()
 
 
-def _normalized_fixture(tmp_path: Path):
+def _imported_fixture(tmp_path: Path):
     container = create_application_container(tmp_path / "app-data")
     root = _project_root(tmp_path)
     config_path = root / "server.cfg"
@@ -97,6 +122,11 @@ def _normalized_fixture(tmp_path: Path):
         project_id=project_id,
         patch={"pathway2.origin": "adopted_local"},
     )
+    return container, project_id, config_path
+
+
+def _normalized_fixture(tmp_path: Path):
+    container, project_id, config_path = _imported_fixture(tmp_path)
     container.create_adopt_service().execute_apply_repo_normalization(project_id=project_id)
     return container, project_id, config_path
 
@@ -119,10 +149,21 @@ def _prod_config() -> str:
 
 
 def _assert_no_prod_secret_in_persistence(container, project_id: ProjectId) -> None:
-    needles = (PROD_LICENSE, PROD_DB_PASSWORD, PROD_DB_HOST)
+    _assert_no_secrets_in_persistence(container, project_id, (PROD_LICENSE, PROD_DB_PASSWORD, PROD_DB_HOST))
+
+
+def _assert_no_secrets_in_persistence(container, project_id: ProjectId, needles: tuple[str, ...]) -> None:
     with container.session_factory() as session:
         for record in session.execute(select(AuditEventRecord)).scalars():
             blob = json.dumps(record.details_json or {})
+            for needle in needles:
+                assert needle not in blob
+        for record in session.execute(select(CommandExecutionRecord)).scalars():
+            blob = json.dumps(record.result_json or {})
+            for needle in needles:
+                assert needle not in blob
+        for record in session.execute(select(CommandPlanRecord)).scalars():
+            blob = json.dumps(record.dry_run_plan_json or {})
             for needle in needles:
                 assert needle not in blob
         for record in session.execute(select(ProjectSettingRecord).where(ProjectSettingRecord.project_id == str(project_id))).scalars():
