@@ -8,10 +8,11 @@ from backend.adapters.config import LocalConfigSecretScanner
 from backend.adapters.git import GitPythonProvider, redact_remote_url
 from backend.adapters.persistence import AuditRepository, ProjectRepository
 from backend.application.commands import CommandContext, CommandExecutionResult, CommandPreview, DryRunResult, RiskLevel, UndoPlan
-from backend.application.commands.compensation import CompositeCompensation
+from backend.application.commands.compensation import CompositeCompensation, RestorePathFromSnapshotCompensation
 from backend.application.commands.recorder import CommandAuditRecorder
 from backend.application.commands.serialization import compensation_from_storage, compensation_to_storage
 from backend.application.config.service import RestoreConfigFileCompensation
+from backend.application.pathway2.compensation import pathway2_undo_root, snapshot_config_compensation
 from backend.domain.pathway2 import (
     GITIGNORE_OVERLAY_ENTRY,
     OVERLAY_EXAMPLE_FILENAME,
@@ -24,6 +25,15 @@ from backend.domain.pathway2 import (
     plan_repo_normalization,
     redact_config_text,
     scan_inline_secrets,
+)
+from backend.domain.pathway2.run_gate import evaluate_pathway2_run_readiness, load_overlay_content
+from backend.domain.pathway2.substitution import (
+    apply_dev_value_to_overlay,
+    build_substitution_diff,
+    build_substitution_preview,
+    compute_run_gate,
+    plan_overlay_substitution,
+    slot_preview_for_dev_value,
 )
 from backend.domain.shared_kernel import ErrorCode, ProjectId, StableIdentifier
 from backend.infrastructure.unit_of_work import RepositoryContext
@@ -176,12 +186,24 @@ class AdoptApplicationService:
         )
         inline_secrets = self._scan_repo_secrets(project_root, server_cfg)
         state = _pathway2_state(settings)
+        overlay_content = load_overlay_content(self.filesystem, project_root)
+        run_ready, run_blocked_reason = evaluate_pathway2_run_readiness(settings=settings, overlay_content=overlay_content)
+        state["run_ready"] = run_ready
+        substitution_slots = settings.get(Pathway2SettingKeys.SUBSTITUTION_SLOTS, [])
+        if not substitution_slots and settings.get(Pathway2SettingKeys.NORMALIZED) and overlay_content:
+            _, slots, _ = plan_overlay_substitution(overlay_content)
+            substitution_slots = build_substitution_preview(slots)
+        unset_dev_slots = settings.get(Pathway2SettingKeys.UNSET_DEV_SLOTS, [])
+        if not unset_dev_slots and substitution_slots:
+            _, unset_dev_slots = compute_run_gate(overlay_content)
         return {
             "project_id": str(project_id),
             "structure_scorecard": scorecard,
             "inline_secrets": inline_secrets,
             "pathway2_state": state,
-            "run_blocked_reason": None if state.get("run_ready") else "Dev secrets not yet set — complete P2-2 substitution before running.",
+            "substitution_slots": substitution_slots,
+            "unset_dev_slots": unset_dev_slots,
+            "run_blocked_reason": run_blocked_reason,
         }
 
     def preview_repo_normalization(self, *, project_id: ProjectId) -> CommandPreview:
@@ -244,13 +266,41 @@ class AdoptApplicationService:
         if gitignore_changed:
             self.filesystem.write_text(gitignore_path, new_gitignore)
 
-        compensations: list[RestoreConfigFileCompensation] = [
-            RestoreConfigFileCompensation(str(server_cfg), prior_server_cfg, self.filesystem),
-            RestoreConfigFileCompensation(str(overlay_path), prior_overlay, self.filesystem),
-            RestoreConfigFileCompensation(str(example_path), prior_example, self.filesystem),
-        ]
+        compensations: list[RestoreConfigFileCompensation | RestorePathFromSnapshotCompensation] = []
+        undo_root = pathway2_undo_root(self._container.app_data_dir, project_id)
+        compensations.append(
+            snapshot_config_compensation(
+                undo_root=undo_root,
+                absolute_path=server_cfg,
+                prior_content=prior_server_cfg,
+                filesystem=self.filesystem,
+            )
+        )
+        compensations.append(
+            snapshot_config_compensation(
+                undo_root=undo_root,
+                absolute_path=overlay_path,
+                prior_content=prior_overlay,
+                filesystem=self.filesystem,
+            )
+        )
+        compensations.append(
+            snapshot_config_compensation(
+                undo_root=undo_root,
+                absolute_path=example_path,
+                prior_content=prior_example,
+                filesystem=self.filesystem,
+            )
+        )
         if gitignore_changed:
-            compensations.append(RestoreConfigFileCompensation(str(gitignore_path), prior_gitignore, self.filesystem))
+            compensations.append(
+                snapshot_config_compensation(
+                    undo_root=undo_root,
+                    absolute_path=gitignore_path,
+                    prior_content=prior_gitignore,
+                    filesystem=self.filesystem,
+                )
+            )
         compensation = CompositeCompensation(tuple(compensations))
 
         self._container.create_config_service().execute_rescan_config_files(project_id=project_id)
@@ -295,6 +345,161 @@ class AdoptApplicationService:
             uow.commit()
             return result
 
+    def preview_secret_substitution(self, *, project_id: ProjectId) -> CommandPreview:
+        self._require_normalized(project_id)
+        overlay_path, current = self._load_overlay(project_id)
+        proposed, slots, meta = plan_overlay_substitution(current)
+        diff = build_substitution_diff(current=current, proposed=proposed)
+        return CommandPreview(
+            "PlanSecretSubstitution",
+            f"Substitute dev secrets into {OVERLAY_FILENAME}",
+            {
+                "project_id": str(project_id),
+                "overlay_path": str(overlay_path.relative_to(self._require_project_root(project_id))).replace("\\", "/"),
+                "diff": diff,
+                "slots": build_substitution_preview(slots),
+                "substitution": meta,
+            },
+            warnings=[],
+            risk_level=RiskLevel.HIGH,
+        )
+
+    def dry_run_secret_substitution(self, *, project_id: ProjectId) -> DryRunResult:
+        preview = self.preview_secret_substitution(project_id=project_id)
+        return DryRunResult(preview.command_type, bool(preview.preview["slots"]), preview.preview, preview.warnings)
+
+    def execute_apply_secret_substitution(self, *, project_id: ProjectId, idempotency_key: str | None = None) -> CommandExecutionResult:
+        preview = self.preview_secret_substitution(project_id=project_id)
+        dry_run = self.dry_run_secret_substitution(project_id=project_id)
+        if not dry_run.valid:
+            raise Pathway2ApplicationError(ErrorCode.VALIDATION_FAILED, "No substitution slots found in overlay")
+
+        overlay_path, prior_overlay = self._load_overlay(project_id)
+        proposed, slots, meta = plan_overlay_substitution(prior_overlay)
+        self.filesystem.write_text(overlay_path, proposed)
+
+        run_ready, unset = compute_run_gate(proposed)
+        settings_patch = {
+            Pathway2SettingKeys.SECRETS_SUBSTITUTED: True,
+            Pathway2SettingKeys.RUN_READY: run_ready,
+            Pathway2SettingKeys.SUBSTITUTION_SLOTS: build_substitution_preview(slots),
+            Pathway2SettingKeys.UNSET_DEV_SLOTS: unset,
+        }
+        self._container.create_project_service().update_project_settings(project_id=project_id, patch=settings_patch)
+
+        undo_root = pathway2_undo_root(self._container.app_data_dir, project_id)
+        compensation = snapshot_config_compensation(
+            undo_root=undo_root,
+            absolute_path=overlay_path,
+            prior_content=prior_overlay,
+            filesystem=self.filesystem,
+        )
+        undo_payload = {**compensation_to_storage(compensation), "project_id": str(project_id)}
+        with self._container.create_unit_of_work(project_id) as uow:
+            uow.begin()
+            result = self._recorder.record_success(
+                uow=uow,
+                preview=preview,
+                project_id=project_id,
+                entity_type="Pathway2Substitution",
+                entity_id=str(project_id),
+                summary=f"Applied secret substitution to {OVERLAY_FILENAME}",
+                result={
+                    "project_id": str(project_id),
+                    "substitution": meta,
+                    "pathway2_state": _pathway2_state({**self._pathway2_settings(project_id), **settings_patch}),
+                    "run_ready": run_ready,
+                    "unset_dev_slots": unset,
+                    "diff": preview.preview["diff"],
+                },
+                events=[],
+                undo_plan=UndoPlan(
+                    "RevertSecretSubstitution",
+                    f"Restore prior {OVERLAY_FILENAME}",
+                    compensation,
+                    undo_payload,
+                ),
+                idempotency_key=idempotency_key,
+            )
+            uow.commit()
+            return result
+
+    def preview_apply_dev_secret(self, *, project_id: ProjectId, slot_id: str, dev_value: str) -> CommandPreview:
+        self._require_substituted(project_id)
+        _, current = self._load_overlay(project_id)
+        try:
+            proposed = apply_dev_value_to_overlay(overlay_content=current, slot_id=slot_id, dev_value=dev_value)
+        except ValueError as error:
+            raise Pathway2ApplicationError(ErrorCode.VALIDATION_FAILED, str(error)) from error
+        diff = build_substitution_diff(current=current, proposed=proposed)
+        return CommandPreview(
+            "PlanApplyDevSecret",
+            f"Apply dev value for {slot_id}",
+            {
+                "project_id": str(project_id),
+                "slot_id": slot_id,
+                "masked_value": slot_preview_for_dev_value(slot_id=slot_id, dev_value=dev_value)["masked_value"],
+                "diff": diff,
+            },
+            risk_level=RiskLevel.HIGH,
+        )
+
+    def execute_apply_dev_secret(
+        self,
+        *,
+        project_id: ProjectId,
+        slot_id: str,
+        dev_value: str,
+        idempotency_key: str | None = None,
+    ) -> CommandExecutionResult:
+        preview = self.preview_apply_dev_secret(project_id=project_id, slot_id=slot_id, dev_value=dev_value)
+        overlay_path, prior_overlay = self._load_overlay(project_id)
+        proposed = apply_dev_value_to_overlay(overlay_content=prior_overlay, slot_id=slot_id, dev_value=dev_value)
+        self.filesystem.write_text(overlay_path, proposed)
+
+        run_ready, unset = compute_run_gate(proposed)
+        settings_patch = {
+            Pathway2SettingKeys.RUN_READY: run_ready,
+            Pathway2SettingKeys.UNSET_DEV_SLOTS: unset,
+        }
+        self._container.create_project_service().update_project_settings(project_id=project_id, patch=settings_patch)
+
+        undo_root = pathway2_undo_root(self._container.app_data_dir, project_id)
+        compensation = snapshot_config_compensation(
+            undo_root=undo_root,
+            absolute_path=overlay_path,
+            prior_content=prior_overlay,
+            filesystem=self.filesystem,
+        )
+        undo_payload = {**compensation_to_storage(compensation), "project_id": str(project_id)}
+        with self._container.create_unit_of_work(project_id) as uow:
+            uow.begin()
+            result = self._recorder.record_success(
+                uow=uow,
+                preview=preview,
+                project_id=project_id,
+                entity_type="Pathway2DevSecret",
+                entity_id=slot_id,
+                summary=f"Applied dev secret for {slot_id}",
+                result={
+                    "project_id": str(project_id),
+                    "slot_id": slot_id,
+                    "masked_value": preview.preview["masked_value"],
+                    "run_ready": run_ready,
+                    "unset_dev_slots": unset,
+                },
+                events=[],
+                undo_plan=UndoPlan(
+                    "RevertDevSecretApply",
+                    f"Restore prior overlay before dev secret apply for {slot_id}",
+                    compensation,
+                    undo_payload,
+                ),
+                idempotency_key=idempotency_key,
+            )
+            uow.commit()
+            return result
+
     def undo(self, undo_plan: UndoPlan) -> CommandExecutionResult:
         project_id_value = undo_plan.payload.get("project_id")
         project_id = ProjectId(str(project_id_value)) if project_id_value else None
@@ -308,13 +513,9 @@ class AdoptApplicationService:
             uow.begin()
             action_result = action.apply(CommandContext(uow=uow))
             if project_id is not None:
-                self._container.create_project_service().update_project_settings(
-                    project_id=project_id,
-                    patch={
-                        Pathway2SettingKeys.NORMALIZED: False,
-                        Pathway2SettingKeys.RUN_READY: False,
-                    },
-                )
+                patch = _undo_settings_patch(undo_plan.command_type, overlay_content=load_overlay_content(self.filesystem, self._require_project_root(project_id)))
+                if patch:
+                    self._container.create_project_service().update_project_settings(project_id=project_id, patch=patch)
                 self._container.create_config_service().execute_rescan_config_files(project_id=project_id)
             result = self._recorder.record_success(
                 uow=uow,
@@ -403,6 +604,52 @@ class AdoptApplicationService:
             rel = str(server_cfg.relative_to(project_root)).replace("\\", "/")
             findings.extend(scan_inline_secrets(path=rel, content=content, scanner=self.secret_scanner))
         return findings
+
+    def _load_overlay(self, project_id: ProjectId) -> tuple[Path, str]:
+        project_root = self._require_project_root(project_id)
+        server_cfg = find_server_cfg(project_root)
+        if server_cfg is None:
+            raise Pathway2ApplicationError(ErrorCode.NOT_FOUND, "server.cfg not found for project")
+        overlay_path = server_cfg.parent / OVERLAY_FILENAME
+        if not overlay_path.is_file():
+            raise Pathway2ApplicationError(ErrorCode.PRECONDITION_FAILED, f"{OVERLAY_FILENAME} not found; complete P2-1 normalization first")
+        content = self.filesystem.read_text(overlay_path) or ""
+        return overlay_path, content
+
+    def _require_normalized(self, project_id: ProjectId) -> None:
+        settings = self._pathway2_settings(project_id)
+        if not settings.get(Pathway2SettingKeys.NORMALIZED):
+            raise Pathway2ApplicationError(ErrorCode.PRECONDITION_FAILED, "Complete P2-1 normalization before secret substitution")
+
+    def _require_substituted(self, project_id: ProjectId) -> None:
+        settings = self._pathway2_settings(project_id)
+        if not settings.get(Pathway2SettingKeys.SECRETS_SUBSTITUTED):
+            raise Pathway2ApplicationError(ErrorCode.PRECONDITION_FAILED, "Apply P2-2 secret substitution before entering dev secrets")
+
+
+def _undo_settings_patch(command_type: str, *, overlay_content: str | None) -> dict[str, Any] | None:
+    if command_type == "RevertRepoNormalization":
+        return {
+            Pathway2SettingKeys.NORMALIZED: False,
+            Pathway2SettingKeys.SECRETS_SUBSTITUTED: False,
+            Pathway2SettingKeys.RUN_READY: False,
+            Pathway2SettingKeys.SUBSTITUTION_SLOTS: [],
+            Pathway2SettingKeys.UNSET_DEV_SLOTS: [],
+        }
+    if command_type == "RevertSecretSubstitution":
+        return {
+            Pathway2SettingKeys.SECRETS_SUBSTITUTED: False,
+            Pathway2SettingKeys.RUN_READY: False,
+            Pathway2SettingKeys.SUBSTITUTION_SLOTS: [],
+            Pathway2SettingKeys.UNSET_DEV_SLOTS: [],
+        }
+    if command_type == "RevertDevSecretApply":
+        run_ready, unset = compute_run_gate(overlay_content or "")
+        return {
+            Pathway2SettingKeys.RUN_READY: run_ready,
+            Pathway2SettingKeys.UNSET_DEV_SLOTS: unset,
+        }
+    return None
 
 
 def _ensure_gitignore_entry(prior: str | None, entry: str) -> tuple[str, bool]:

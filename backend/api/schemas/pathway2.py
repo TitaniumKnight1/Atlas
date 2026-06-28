@@ -18,6 +18,16 @@ class ApplyRepoNormalizationRequest(BaseModel):
     idempotency_key: str | None = None
 
 
+class ApplySecretSubstitutionRequest(BaseModel):
+    idempotency_key: str | None = None
+
+
+class ApplyDevSecretRequest(BaseModel):
+    slot_id: str
+    dev_value: str
+    idempotency_key: str | None = None
+
+
 class Pathway2UndoRequest(BaseModel):
     command_execution_id: str
 

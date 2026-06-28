@@ -8,7 +8,9 @@ from backend.api.dependencies import get_container
 from backend.api.schemas.pathway2 import (
     AdoptRepositoryPlanRequest,
     AdoptRepositoryRequest,
+    ApplyDevSecretRequest,
     ApplyRepoNormalizationRequest,
+    ApplySecretSubstitutionRequest,
     AuditReference,
     ErrorPayload,
     Pathway2UndoRequest,
@@ -105,6 +107,77 @@ def apply_repo_normalization(
         return _command_success(
             container.create_adopt_service().execute_apply_repo_normalization(
                 project_id=ProjectId(project_id),
+                idempotency_key=request.idempotency_key,
+            )
+        )
+    except Pathway2ApplicationError as error:
+        return _failure(error)
+
+
+@router.post("/projects/{project_id}/pathway2/substitution-plan", response_model=ResponseEnvelope)
+def plan_secret_substitution(project_id: str, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        preview = container.create_adopt_service().preview_secret_substitution(project_id=ProjectId(project_id))
+        return _success(_preview_data(preview), warnings=preview.warnings)
+    except Pathway2ApplicationError as error:
+        return _failure(error)
+
+
+@router.post("/projects/{project_id}/pathway2/substitution-dry-run", response_model=ResponseEnvelope)
+def dry_run_secret_substitution(project_id: str, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        dry_run = container.create_adopt_service().dry_run_secret_substitution(project_id=ProjectId(project_id))
+        return _success(_dry_run_data(dry_run), warnings=dry_run.warnings)
+    except Pathway2ApplicationError as error:
+        return _failure(error)
+
+
+@router.post("/projects/{project_id}/pathway2/substitution/apply", response_model=ResponseEnvelope)
+def apply_secret_substitution(
+    project_id: str,
+    request: ApplySecretSubstitutionRequest,
+    container: ApplicationContainer = Depends(get_container),
+) -> ResponseEnvelope:
+    try:
+        return _command_success(
+            container.create_adopt_service().execute_apply_secret_substitution(
+                project_id=ProjectId(project_id),
+                idempotency_key=request.idempotency_key,
+            )
+        )
+    except Pathway2ApplicationError as error:
+        return _failure(error)
+
+
+@router.post("/projects/{project_id}/pathway2/dev-secret-plan", response_model=ResponseEnvelope)
+def plan_dev_secret(
+    project_id: str,
+    request: ApplyDevSecretRequest,
+    container: ApplicationContainer = Depends(get_container),
+) -> ResponseEnvelope:
+    try:
+        preview = container.create_adopt_service().preview_apply_dev_secret(
+            project_id=ProjectId(project_id),
+            slot_id=request.slot_id,
+            dev_value=request.dev_value,
+        )
+        return _success(_preview_data(preview), warnings=preview.warnings)
+    except Pathway2ApplicationError as error:
+        return _failure(error)
+
+
+@router.post("/projects/{project_id}/pathway2/dev-secret/apply", response_model=ResponseEnvelope)
+def apply_dev_secret(
+    project_id: str,
+    request: ApplyDevSecretRequest,
+    container: ApplicationContainer = Depends(get_container),
+) -> ResponseEnvelope:
+    try:
+        return _command_success(
+            container.create_adopt_service().execute_apply_dev_secret(
+                project_id=ProjectId(project_id),
+                slot_id=request.slot_id,
+                dev_value=request.dev_value,
                 idempotency_key=request.idempotency_key,
             )
         )

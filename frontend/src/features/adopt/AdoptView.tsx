@@ -2,16 +2,21 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   adoptRepository,
+  applyDevSecret,
   applyRepoNormalization,
+  applySecretSubstitution,
   dryRunAdoptRepository,
   dryRunRepoNormalization,
+  dryRunSecretSubstitution,
   getPathway2Status,
   previewAdoptRepository,
   previewRepoNormalization,
+  previewSecretSubstitution,
   undoPathway2Command,
   type InlineSecretFinding,
   type Pathway2Status,
-  type StructureScorecard
+  type StructureScorecard,
+  type SubstitutionSlotPreview
 } from "../../api/pathway2";
 import { listProjects, type ProjectSummary } from "../../api/project";
 import {
@@ -85,7 +90,7 @@ export function AdoptView() {
     <div className="feature-stack">
       <SectionHeading
         title="Adopt team server"
-        detail="Clone or import an existing FiveM repository and prepare the ADR-0027 overlay structure. P2-2 will set dev secrets; the server stays blocked until then."
+        detail="Clone or import an existing FiveM repository, normalize the overlay structure, and substitute dev secrets locally."
       />
 
       {phase === "input" ? (
@@ -123,7 +128,8 @@ export function AdoptView() {
             <div className="inline-actions">
               <StatusPill status="running">Pathway 2 adopt</StatusPill>
               {status?.pathway2_state.normalized ? <Badge variant="info">Normalized</Badge> : <Badge variant="neutral">Not normalized</Badge>}
-              {status?.run_blocked_reason ? <Badge variant="neutral">Run blocked</Badge> : null}
+              {status?.pathway2_state.secrets_substituted ? <Badge variant="info">Secrets substituted</Badge> : null}
+              {status?.pathway2_state.run_ready ? <Badge variant="info">Run ready</Badge> : null}
             </div>
             {statusLoading ? <LoadingState title="Loading adopt status" detail="Refreshing structure scorecard and secret report." /> : null}
             {statusError ? <ErrorState error={statusError} /> : null}
@@ -151,6 +157,37 @@ export function AdoptView() {
               onUndoSuccess={() => void refreshStatus(projectId)}
             />
           </Surface>
+
+          {status?.pathway2_state.normalized ? (
+            <Surface>
+              <SectionHeading
+                title="Substitute dev secrets"
+                detail="Hybrid model: Atlas fills safe local defaults (DB, ports); you supply dev-only keys; prod integrations get optional placeholders."
+              />
+              {status.substitution_slots?.length ? (
+                <SubstitutionSlotsReport slots={status.substitution_slots} unsetDevSlots={status.unset_dev_slots ?? []} />
+              ) : null}
+              <CommandPanel
+                title="Apply secret substitution"
+                description="Writes dev values and placeholders into server.cfg.local only. Production secrets stay masked in previews."
+                executeLabel="Apply substitution"
+                onPreview={() => previewSecretSubstitution(projectId)}
+                onDryRun={() => dryRunSecretSubstitution(projectId)}
+                onExecute={() => applySecretSubstitution(projectId)}
+                onUndo={(commandExecutionId) => undoPathway2Command(projectId, commandExecutionId)}
+                onSuccess={() => void refreshStatus(projectId)}
+                onUndoSuccess={() => void refreshStatus(projectId)}
+              />
+              {status.pathway2_state.secrets_substituted && (status.unset_dev_slots?.length ?? 0) > 0 ? (
+                <DevSecretEntryForm
+                  projectId={projectId}
+                  slots={status.substitution_slots ?? []}
+                  unsetDevSlots={status.unset_dev_slots ?? []}
+                  onApplied={() => void refreshStatus(projectId)}
+                />
+              ) : null}
+            </Surface>
+          ) : null}
         </>
       ) : null}
 
@@ -223,6 +260,94 @@ function InlineSecretsReport({ findings }: { findings: InlineSecretFinding[] }) 
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+function SubstitutionSlotsReport({
+  slots,
+  unsetDevSlots
+}: {
+  slots: SubstitutionSlotPreview[];
+  unsetDevSlots: string[];
+}) {
+  return (
+    <div className="stack-gap-sm">
+      <SectionHeading title="Substitution plan" detail="Production values are masked; replacements show what will land in server.cfg.local." />
+      <ul className="plain-list">
+        {slots.map((slot) => (
+          <li key={slot.slot_id}>
+            <code>{slot.convar_key ?? slot.slot_id}</code> — {slot.handling_class.replace(/_/g, " ")} — source {slot.masked_source}
+            {unsetDevSlots.includes(slot.slot_id) ? " (needs your dev value)" : null}
+            <div className="muted-text">
+              <code>{slot.replacement_line}</code>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function DevSecretEntryForm({
+  projectId,
+  slots,
+  unsetDevSlots,
+  onApplied
+}: {
+  projectId: string;
+  slots: SubstitutionSlotPreview[];
+  unsetDevSlots: string[];
+  onApplied: () => void;
+}) {
+  const pending = slots.filter((slot) => unsetDevSlots.includes(slot.slot_id));
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [savingSlot, setSavingSlot] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+
+  async function saveSlot(slotId: string) {
+    const value = values[slotId]?.trim();
+    if (!value) {
+      return;
+    }
+    setSavingSlot(slotId);
+    setError(null);
+    try {
+      await applyDevSecret(projectId, slotId, value);
+      setValues((current) => {
+        const next = { ...current };
+        delete next[slotId];
+        return next;
+      });
+      onApplied();
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setSavingSlot(null);
+    }
+  }
+
+  return (
+    <div className="stack-gap-md">
+      <SectionHeading title="Enter dev secrets" detail="Your dev license key and similar values stay local and are masked in previews." />
+      {error ? <ErrorState error={error} /> : null}
+      {pending.map((slot) => (
+        <InputGroup key={slot.slot_id}>
+          <Field label={slot.convar_key ?? slot.slot_id} hint={`Handling: ${slot.handling_class.replace(/_/g, " ")}`}>
+            <div className="inline-actions">
+              <Input
+                type="password"
+                value={values[slot.slot_id] ?? ""}
+                onChange={(event) => setValues((current) => ({ ...current, [slot.slot_id]: event.target.value }))}
+                placeholder="Your dev-only value"
+              />
+              <Button variant="secondary" disabled={!values[slot.slot_id]?.trim() || savingSlot === slot.slot_id} onClick={() => void saveSlot(slot.slot_id)}>
+                {savingSlot === slot.slot_id ? "Saving…" : "Save to overlay"}
+              </Button>
+            </div>
+          </Field>
+        </InputGroup>
+      ))}
     </div>
   );
 }

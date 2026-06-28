@@ -9,3 +9,5 @@ class Pathway2SettingKeys:
     SERVER_CFG_PATH = "pathway2.server_cfg_path"
     OVERLAY_PATH = "pathway2.overlay_path"
     REMOTE_URL_REDACTED = "pathway2.remote_url_redacted"
+    SUBSTITUTION_SLOTS = "pathway2.substitution_slots"
+    UNSET_DEV_SLOTS = "pathway2.unset_dev_slots"

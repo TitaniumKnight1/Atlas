@@ -498,6 +498,9 @@ class SetupApplicationService:
         txadmin_mode: bool = False,
         extra_args: list[str] | None = None,
     ) -> CommandPreview:
+        pathway2_block = self._pathway2_start_block_reason(project_id)
+        if pathway2_block:
+            raise SetupApplicationError(ErrorCode.PRECONDITION_FAILED, pathway2_block)
         plan = self._process_launch_plan(fxserver_path, server_data_path, txadmin_mode, extra_args)
         return CommandPreview(
             "StartServerProcess",
@@ -806,6 +809,26 @@ class SetupApplicationService:
         if DependencyCategory.DATABASE.value in selected:
             checks.append({"check_key": "database_placeholder", "category": "database", "status": "skipped", "message": "External DB creation is deferred; local placeholder can be prepared.", "details": {"reversible": True}})
         return checks
+
+    def _pathway2_start_block_reason(self, project_id: ProjectId) -> str | None:
+        project_service = self._container.create_project_service()
+        settings = {key: value for key, value in project_service.get_project_settings(project_id).items() if key.startswith("pathway2.")}
+        if not settings.get("pathway2.origin"):
+            return None
+        from backend.domain.pathway2.run_gate import evaluate_pathway2_run_readiness, load_overlay_content
+
+        project_root = None
+        with self._container.session_factory() as session:
+            repository = ProjectRepository(RepositoryContext(session=session, project_id=project_id))
+            for path in repository.list_paths(project_id):
+                if path.path_role == "root":
+                    project_root = Path(path.absolute_path).resolve()
+                    break
+        overlay_content = load_overlay_content(self._filesystem, project_root) if project_root else None
+        ready, reason = evaluate_pathway2_run_readiness(settings=settings, overlay_content=overlay_content)
+        if ready:
+            return None
+        return reason
 
     def _require_project(self, repository: ProjectRepository, project_id: ProjectId) -> None:
         if repository.get_project(project_id) is None:
