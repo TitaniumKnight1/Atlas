@@ -160,13 +160,18 @@ class TelemetryApplicationService:
             audit_repository.record_domain_event(queued_event, published_at=now)
             uow.collect_event(queued_event)
 
-            delivery_status = self._delivery.deliver(str(event_id), decision.sanitized_payload or {})
+            delivery_status = self._delivery.deliver(
+                str(event_id),
+                decision.sanitized_payload or {},
+                event_type=decision.event_type,
+                subsystem=decision.subsystem.value,
+            )
             attempt_number = repository.add_delivery_attempt(
                 delivery_attempt_id=StableIdentifier.new(),
                 telemetry_event_id=event_id,
                 status=delivery_status,
                 attempted_at=datetime.now(UTC),
-                error_summary="Sentry SDK not configured; local no-op transport" if delivery_status.value == "skipped" else None,
+                error_summary=_delivery_error_summary(delivery_status),
             )
             if delivery_status.value == "succeeded":
                 delivered_event = telemetry_event_delivered(str(event_id), attempt_number)
@@ -190,13 +195,18 @@ class TelemetryApplicationService:
             event = repository.get_queue_event(telemetry_event_id)
             if event is None:
                 raise TelemetryApplicationError(ErrorCode.NOT_FOUND, f"Telemetry event not found: {telemetry_event_id}")
-            status = self._delivery.deliver(str(telemetry_event_id), event.event_payload_json)
+            status = self._delivery.deliver(
+                str(telemetry_event_id),
+                event.event_payload_json,
+                event_type=event.event_type,
+                subsystem=event.subsystem,
+            )
             attempt_number = repository.add_delivery_attempt(
                 delivery_attempt_id=StableIdentifier.new(),
                 telemetry_event_id=telemetry_event_id,
                 status=status,
                 attempted_at=datetime.now(UTC),
-                error_summary="Sentry SDK not configured; local no-op transport" if status.value == "skipped" else None,
+                error_summary=_delivery_error_summary(status),
             )
             uow.commit()
             return {"telemetry_event_id": str(telemetry_event_id), "attempt_number": attempt_number, "status": status.value}
@@ -342,6 +352,14 @@ def _delivery_attempt_data(record: Any) -> dict[str, Any]:
         "http_status": record.http_status,
         "error_summary": record.error_summary,
     }
+
+
+def _delivery_error_summary(status: Any) -> str | None:
+    if status.value == "succeeded":
+        return None
+    if status.value == "skipped":
+        return "Telemetry delivery skipped (disabled, no DSN, or no-op transport)"
+    return "Telemetry delivery failed"
 
 
 def _safe_module(filename: str) -> str:

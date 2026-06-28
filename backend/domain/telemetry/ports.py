@@ -11,5 +11,12 @@ class TelemetrySanitizerPort(Protocol):
 
 
 class TelemetryDeliveryPort(Protocol):
-    def deliver(self, event_id: str, payload: dict[str, object]) -> TelemetryDeliveryStatus:
+    def deliver(
+        self,
+        event_id: str,
+        payload: dict[str, object],
+        *,
+        event_type: str = "atlas.backend.unhandled_exception",
+        subsystem: str = "backend",
+    ) -> TelemetryDeliveryStatus:
         """Deliver a previously sanitized event through the configured transport."""

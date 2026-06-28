@@ -4,3 +4,4 @@ SQLAlchemy
 uvicorn
 GitPython==3.1.44
 psutil>=5.9.0
+sentry-sdk>=2.0.0

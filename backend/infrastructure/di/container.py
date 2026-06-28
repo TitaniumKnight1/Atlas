@@ -12,7 +12,7 @@ from backend.adapters.fivem import CfxArtifactClient
 from backend.adapters.persistence.schema import bootstrap_schema
 from backend.adapters.process import LocalProcessSupervisor
 from backend.adapters.streams import StreamEventBridge, StreamEventPublisher
-from backend.adapters.telemetry import DeterministicTelemetrySanitizer, LocalNoopTelemetryDelivery
+from backend.adapters.telemetry import DeterministicTelemetrySanitizer, LocalNoopTelemetryDelivery, create_telemetry_delivery
 from backend.adapters.txadmin import LocalTxAdminDetector
 from backend.application.automation.service import AutomationApplicationService
 from backend.application.backup import BackupApplicationService, BackupSchedulerService
@@ -29,6 +29,7 @@ from backend.application.git.service import GitApplicationService
 from backend.application.resources.service import ResourceApplicationService
 from backend.application.setup.service import SetupApplicationService
 from backend.application.telemetry.service import TelemetryApplicationService
+from backend.domain.telemetry import TelemetryDeliveryPort
 from backend.domain.shared_kernel.identifiers import ProjectId
 from backend.infrastructure.event_bus import InProcessEventBus
 from backend.infrastructure.streams import ProjectStreamHub
@@ -50,7 +51,7 @@ class ApplicationContainer:
     process_supervisor: LocalProcessSupervisor
     txadmin_detector: LocalTxAdminDetector
     telemetry_sanitizer: DeterministicTelemetrySanitizer
-    telemetry_delivery: LocalNoopTelemetryDelivery
+    telemetry_delivery: TelemetryDeliveryPort
     writer_lock: RLock = field(default_factory=RLock)
     _monitoring_service: MonitoringApplicationService | None = field(default=None, repr=False)
     _monitoring_retention_service: MonitoringRetentionService | None = field(default=None, repr=False)
@@ -238,6 +239,7 @@ def create_application_container(app_data_dir: Path) -> ApplicationContainer:
         telemetry_sanitizer=DeterministicTelemetrySanitizer(),
         telemetry_delivery=LocalNoopTelemetryDelivery(),
     )
+    container.telemetry_delivery = create_telemetry_delivery(container=container, sanitizer=container.telemetry_sanitizer)
     container.create_incident_service()
     container.create_automation_service()
     container.create_backup_scheduler_service()

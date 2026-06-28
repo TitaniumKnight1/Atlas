@@ -5,6 +5,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from unittest.mock import patch
 
 from sqlalchemy import func, select
 
@@ -103,6 +104,43 @@ def test_unexpected_exit_records_local_crash_without_telemetry(tmp_path: Path) -
         assert event_types[-1] == "IncidentCaptured"
         assert _count(container, TelemetryQueueRecord) == 0
         assert _count(container, TelemetryRejectionRecord) == 0
+    finally:
+        container.close()
+
+
+def test_unexpected_exit_never_invokes_sentry_even_when_telemetry_enabled(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ATLAS_SENTRY_DSN", "https://examplePublicKey@o0.ingest.sentry.io/0")
+    container, project_id = _container_with_project(tmp_path)
+    service = container.create_setup_service()
+    telemetry = container.create_telemetry_service()
+    telemetry.execute_update_preferences(patch={"telemetry_enabled": True, "crash_reporting_enabled": True})
+    script = "import time, sys\nprint('CRASHING', flush=True)\ntime.sleep(0.2)\nsys.exit(7)\n"
+    try:
+        with patch("backend.adapters.telemetry.sentry_delivery.sentry_sdk.capture_event") as mock_capture:
+            with patch("backend.adapters.telemetry.sentry_delivery.sentry_sdk.init"):
+                start = service.execute_start_server(
+                    project_id=project_id,
+                    fxserver_path=sys.executable,
+                    server_data_path=str(tmp_path),
+                    extra_args=["-c", script],
+                )
+                process_run_id = start.result["process_run_id"]
+
+                deadline = time.monotonic() + 5
+                status = service.get_process_status(project_id, process_run_id)
+                while status["state"] != "crashed" and time.monotonic() < deadline:
+                    time.sleep(0.05)
+                    status = service.get_process_status(project_id, process_run_id)
+
+                while time.monotonic() < deadline:
+                    if "IncidentCaptured" in _domain_event_types(container):
+                        break
+                    time.sleep(0.05)
+
+        assert status["state"] == "crashed"
+        assert "IncidentCaptured" in _domain_event_types(container)
+        assert _count(container, TelemetryQueueRecord) == 0
+        mock_capture.assert_not_called()
     finally:
         container.close()
 
