@@ -12,6 +12,7 @@ class LocalProjectFilesystemInspector:
         resolved = root_path.expanduser().resolve()
         candidates = [
             (ProjectPathRole.ROOT, resolved),
+            (ProjectPathRole.SERVER_DATA, resolved / "server-data"),
             (ProjectPathRole.RESOURCES, resolved / "resources"),
             (ProjectPathRole.TXDATA, resolved / "txData"),
             (ProjectPathRole.LOGS, resolved / "logs"),

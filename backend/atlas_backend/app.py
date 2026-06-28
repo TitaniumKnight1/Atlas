@@ -17,6 +17,7 @@ from backend.api.routers.git import router as git_router
 from backend.api.routers.health import router as health_router
 from backend.api.routers.incident import router as incident_router
 from backend.api.routers.monitoring import router as monitoring_router
+from backend.api.routers.pathway2 import router as pathway2_router
 from backend.api.routers.plugin import router as plugin_router
 from backend.api.routers.project import router as project_router
 from backend.api.routers.resources import router as resources_router
@@ -64,6 +65,7 @@ def create_app(app_data_dir: Path | None = None) -> FastAPI:
     app.include_router(incident_router)
     app.include_router(automation_router)
     app.include_router(backup_router)
+    app.include_router(pathway2_router)
     app.include_router(plugin_router)
     app.include_router(setup_router)
     app.include_router(streams_router)

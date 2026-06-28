@@ -4,6 +4,7 @@ export type FeatureRouteId =
   | "resources"
   | "git"
   | "config"
+  | "adopt"
   | "backup"
   | "monitoring"
   | "incidents"
@@ -61,6 +62,15 @@ export const featureRoutes: FeatureRoute[] = [
     implemented: true,
     group: "Workspace",
     glyph: "G"
+  },
+  {
+    id: "adopt",
+    path: "/adopt",
+    label: "Adopt",
+    summary: "Join a team FiveM repo and prepare local overlay structure.",
+    implemented: true,
+    group: "Workspace",
+    glyph: "J"
   },
   {
     id: "config",

@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { AdoptView } from "../features/adopt/AdoptView";
 import { AutomationView, useAutomationNavCount } from "../features/automation/AutomationView";
 import { BackupView } from "../features/backup/BackupView";
 import { ConfigView } from "../features/config/ConfigView";
@@ -60,6 +61,8 @@ export function App() {
         <ResourceView />
       ) : activeRoute.id === "git" ? (
         <GitView />
+      ) : activeRoute.id === "adopt" ? (
+        <AdoptView />
       ) : activeRoute.id === "config" ? (
         <ConfigView />
       ) : activeRoute.id === "monitoring" ? (

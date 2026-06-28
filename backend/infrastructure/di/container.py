@@ -21,6 +21,7 @@ from backend.application.monitoring.alerts import MonitoringAlertService
 from backend.application.monitoring.retention import MonitoringRetentionService
 from backend.application.monitoring.service import MonitoringApplicationService
 from backend.application.plugin.service import PluginApplicationService
+from backend.application.pathway2.service import AdoptApplicationService
 from backend.application.project.service import ProjectApplicationService
 from backend.adapters.config import FiveMConfigValidator, LocalConfigSecretScanner
 from backend.adapters.git import GitPythonProvider
@@ -84,6 +85,14 @@ class ApplicationContainer:
         if self._plugin_service is None:
             self._plugin_service = PluginApplicationService(container=self)
         return self._plugin_service
+
+    def create_adopt_service(self) -> AdoptApplicationService:
+        return AdoptApplicationService(
+            container=self,
+            filesystem=self.setup_filesystem,
+            secret_scanner=LocalConfigSecretScanner(),
+            git_provider=GitPythonProvider(),
+        )
 
     def create_project_service(self) -> ProjectApplicationService:
         return ProjectApplicationService(container=self, filesystem_inspector=self.filesystem_inspector)
