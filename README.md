@@ -20,7 +20,7 @@ Atlas is a desktop application for building, running, and operating FiveM server
 
 It is built on three commitments that shape every feature:
 
-- **Local-first.** Your server config, secrets, logs, metrics, and backups live on your machine and are never transmitted anywhere. There is no cloud, no account, and no telemetry pipeline that ships your project data off-box. Application telemetry is disabled by default and passes through a fail-closed sanitizer when enabled.
+- **Local-first.** Your server config, secrets, logs, metrics, and backups live on your machine and are never transmitted anywhere. There is no cloud, no account, and no telemetry pipeline that ships your project data off-box. Optional Atlas error reporting is off by default, requires explicit consent, and passes through a fail-closed sanitizer when enabled.
 - **Reversible.** Every operation that changes your server — installing a resource, editing config, restoring a backup — can be previewed before it runs and undone after. Atlas shows you exactly what it will do, then lets you take it back.
 - **Honest.** Atlas tells you the truth about its own limitations. When a metric isn't reachable, it says "not available" instead of faking a number. When the plugin sandbox can't contain malicious code, it says so plainly instead of claiming a security guarantee it can't keep.
 

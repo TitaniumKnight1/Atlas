@@ -28,6 +28,7 @@ class UpdateTelemetryPreferencesRequest(BaseModel):
     telemetry_enabled: bool | None = None
     crash_reporting_enabled: bool | None = None
     plugin_telemetry_enabled: bool | None = None
+    record_consent_prompt_shown: bool | None = None
     updated_by: str | None = None
 
 

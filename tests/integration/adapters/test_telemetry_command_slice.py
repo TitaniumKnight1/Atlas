@@ -29,6 +29,8 @@ def test_preferences_default_disabled_and_updates_are_audited(tmp_path: Path) ->
         assert default["telemetry_enabled"] is False
         assert default["crash_reporting_enabled"] is False
         assert default["plugin_telemetry_enabled"] is False
+        assert default["error_reporting_available"] is False
+        assert default["consent_prompt_pending"] is False
 
         result = service.execute_update_preferences(
             patch={"telemetry_enabled": True, "crash_reporting_enabled": True},
@@ -112,6 +114,27 @@ def test_project_data_rejection_never_stores_raw_payload(tmp_path: Path) -> None
         assert "C:\\servers\\rp" not in serialized
         assert "bank" not in serialized
         assert "server.cfg" not in serialized
+    finally:
+        container.close()
+
+
+def test_consent_prompt_state_with_dsn(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ATLAS_SENTRY_DSN", "https://examplePublicKey@o0.ingest.sentry.io/0")
+    container = create_application_container(tmp_path / "app-data")
+    try:
+        service = container.create_telemetry_service()
+        prefs = service.get_preferences()
+        assert prefs["error_reporting_available"] is True
+        assert prefs["consent_prompt_pending"] is True
+
+        service.execute_update_preferences(
+            patch={"telemetry_enabled": False, "crash_reporting_enabled": False},
+            record_consent_prompt_shown=True,
+            updated_by="test-user",
+        )
+        after = service.get_preferences()
+        assert after["consent_prompt_pending"] is False
+        assert after["last_prompted_at"] is not None
     finally:
         container.close()
 

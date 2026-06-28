@@ -8,6 +8,7 @@ from backend.adapters.telemetry.delivery import LocalNoopTelemetryDelivery
 from backend.adapters.telemetry.sentry_delivery import SentryTelemetryDelivery
 from backend.adapters.persistence.telemetry_repository import preference_record_to_domain
 from backend.domain.telemetry import TelemetryDeliveryPort, TelemetryDeliveryStatus, TelemetryPreferences, TelemetrySanitizerPort, TelemetrySubsystem
+from backend.infrastructure.sentry_dsn import resolve_sentry_dsn
 
 
 class PreferenceGatedTelemetryDelivery:
@@ -71,7 +72,7 @@ def create_telemetry_delivery(
     sanitizer: TelemetrySanitizerPort,
 ) -> TelemetryDeliveryPort:
     noop = LocalNoopTelemetryDelivery()
-    dsn = os.environ.get("ATLAS_SENTRY_DSN", "").strip()
+    dsn = resolve_sentry_dsn()
     if not dsn:
         return noop
 

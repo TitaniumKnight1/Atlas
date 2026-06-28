@@ -178,11 +178,16 @@
 }
 
 .shell-sidebar__foot {
-  display: flex;
-  align-items: center;
+  display: grid;
   gap: var(--space-3);
   padding: var(--space-3);
   border-top: 1px solid var(--atlas-border-subtle);
+}
+
+.shell-sidebar__foot-user {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
 }
 
 .shell-user {
@@ -415,6 +420,23 @@
     border-right: 0;
     border-bottom: 1px solid var(--atlas-border-subtle);
   }
+}
+
+.error-reporting-settings {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.error-reporting-settings .eyebrow {
+  margin: 0;
+}
+
+.atlas-consent-copy p {
+  margin: 0 0 var(--space-3);
+}
+
+.atlas-consent-copy p:last-child {
+  margin-bottom: 0;
 }
 
 @media (max-width: 620px) {

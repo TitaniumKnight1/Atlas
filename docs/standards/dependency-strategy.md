@@ -64,4 +64,4 @@ From [docs/atlas-brief.md](../atlas-brief.md) and architecture docs:
 - Python package manager: `uv`, `poetry`, or plain `pip` + `venv`?
 - Node package manager: `npm`, `pnpm`, or `yarn`?
 - Whether Monaco and xterm.js are bundled at frontend or loaded dynamically.
-- Whether Sentry SDKs are added to frontend, backend, or both with separate sanitization paths.
+- Whether Sentry SDKs are added to frontend, backend, or both with separate sanitization paths. Backend transport is implemented; see [docs/BUILDING.md](../BUILDING.md) for maintainer build-time DSN injection.

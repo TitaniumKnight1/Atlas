@@ -51,6 +51,7 @@ def update_telemetry_preferences(
             patch=patch,
             project_id=ProjectId(request.project_id) if request.project_id else None,
             updated_by=request.updated_by,
+            record_consent_prompt_shown=bool(request.record_consent_prompt_shown),
         )
         return _command_success(result)
     except TelemetryApplicationError as error:

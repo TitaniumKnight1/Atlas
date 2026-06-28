@@ -23,6 +23,7 @@ from backend.domain.telemetry import (
     telemetry_preferences_updated,
     telemetry_rejected,
 )
+from backend.infrastructure.sentry_dsn import resolve_sentry_dsn
 
 
 class TelemetryApplicationError(RuntimeError):
@@ -59,6 +60,7 @@ class TelemetryApplicationService:
         patch: dict[str, bool],
         project_id: ProjectId | None = None,
         updated_by: str | None = None,
+        record_consent_prompt_shown: bool = False,
     ) -> CommandExecutionResult:
         allowed_keys = {"telemetry_enabled", "crash_reporting_enabled", "plugin_telemetry_enabled"}
         unknown = sorted(set(patch) - allowed_keys)
@@ -85,6 +87,7 @@ class TelemetryApplicationService:
                 plugin_telemetry_enabled=updated.plugin_telemetry_enabled,
                 updated_at=datetime.now(UTC),
                 updated_by=updated_by,
+                last_prompted_at=datetime.now(UTC) if record_consent_prompt_shown else None,
             )
             preferences = preference_record_to_domain(record, project_id)
             preview = CommandPreview(
@@ -327,6 +330,8 @@ def _preferences_data(preferences: TelemetryPreferences) -> dict[str, Any]:
         "last_prompted_at": preferences.last_prompted_at,
         "updated_at": preferences.updated_at,
         "updated_by": preferences.updated_by,
+        "error_reporting_available": bool(resolve_sentry_dsn()),
+        "consent_prompt_pending": bool(resolve_sentry_dsn()) and preferences.last_prompted_at is None,
     }
 
 

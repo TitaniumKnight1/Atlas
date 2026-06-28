@@ -1,14 +1,17 @@
 import type { ReactNode } from "react";
 
+import { ErrorReportingSettings } from "../components/ErrorReportingSettings";
 import { StatusPill } from "../components";
 import type { FeatureRouteId } from "./routes";
 import { featureRoutes } from "./routes";
 import type { BackendStatus } from "./useBackendStatus";
+import type { ErrorReportingState } from "./useErrorReporting";
 
 interface AppShellProps {
   activePath: string;
   activeLabel: string;
   backendStatus: BackendStatus;
+  errorReporting: ErrorReportingState;
   navCounts?: Partial<Record<FeatureRouteId, number>>;
   onNavigate: (path: string) => void;
   children: ReactNode;
@@ -16,7 +19,7 @@ interface AppShellProps {
 
 const GROUPS = ["Workspace", "Operate"] as const;
 
-export function AppShell({ activePath, activeLabel, backendStatus, navCounts, onNavigate, children }: AppShellProps) {
+export function AppShell({ activePath, activeLabel, backendStatus, errorReporting, navCounts, onNavigate, children }: AppShellProps) {
   const countsUnavailable = backendStatus.state !== "ready";
 
   return (
@@ -71,12 +74,26 @@ export function AppShell({ activePath, activeLabel, backendStatus, navCounts, on
         </nav>
 
         <div className="shell-sidebar__foot">
-          <span className="shell-user" aria-hidden="true">
-            AT
-          </span>
-          <div>
-            <strong>Atlas local</strong>
-            <small>Review foundation</small>
+          <ErrorReportingSettings
+            available={errorReporting.preferences?.error_reporting_available ?? false}
+            busy={errorReporting.loading}
+            enabled={
+              Boolean(
+                errorReporting.preferences?.telemetry_enabled && errorReporting.preferences?.crash_reporting_enabled
+              )
+            }
+            onChange={(enabled) => {
+              void errorReporting.setErrorReportingEnabled(enabled);
+            }}
+          />
+          <div className="shell-sidebar__foot-user">
+            <span className="shell-user" aria-hidden="true">
+              AT
+            </span>
+            <div>
+              <strong>Atlas local</strong>
+              <small>Review foundation</small>
+            </div>
           </div>
         </div>
       </aside>

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from typing import Any
 
 import sentry_sdk
@@ -8,6 +7,7 @@ from sentry_sdk.types import Event, Hint
 
 from backend.adapters.telemetry.sanitizer import DeterministicTelemetrySanitizer
 from backend.domain.shared_kernel import Severity
+from backend.infrastructure.sentry_dsn import resolve_sentry_dsn
 from backend.domain.telemetry import (
     SanitizationState,
     TelemetryDeliveryStatus,
@@ -139,9 +139,9 @@ def _init_sentry(dsn: str) -> None:
 class SentryTelemetryDelivery:
     """Delivers pre-sanitized Atlas telemetry events to Sentry with defense-in-depth re-scrubbing."""
 
-    def __init__(self, *, sanitizer: TelemetrySanitizerPort | None = None) -> None:
+    def __init__(self, *, sanitizer: TelemetrySanitizerPort | None = None, dsn: str | None = None) -> None:
         self._sanitizer = sanitizer or DeterministicTelemetrySanitizer()
-        self._dsn = os.environ.get("ATLAS_SENTRY_DSN", "").strip()
+        self._dsn = (dsn if dsn is not None else resolve_sentry_dsn()).strip()
 
     @property
     def is_configured(self) -> bool:

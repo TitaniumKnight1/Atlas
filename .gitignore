@@ -61,5 +61,6 @@ Desktop.ini
 
 # Secrets and local overrides
 secrets/
+backend/infrastructure/build_config_generated.py
 *.pem
 *.key
