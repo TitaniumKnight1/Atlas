@@ -3,5 +3,6 @@ pydantic
 SQLAlchemy
 uvicorn
 GitPython==3.1.44
+httpx>=0.27.0
 psutil>=5.9.0
 sentry-sdk>=2.0.0

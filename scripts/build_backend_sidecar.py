@@ -13,6 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SPEC_FILE = ROOT / "scripts" / "atlas-backend.spec"
 BINARIES_DIR = ROOT / "src-tauri" / "binaries"
 STALE_ROOT_SPEC = ROOT / "atlas-backend.spec"
+RUNTIME_REQUIREMENTS = ROOT / "backend" / "requirements.txt"
+SIDECAR_VENV = ROOT / "build" / "sidecar-venv"
 
 
 def resolve_target_triple() -> str:
@@ -39,6 +41,43 @@ def sidecar_binary_path(target_triple: str | None = None) -> Path:
     triple = target_triple or resolve_target_triple()
     extension = ".exe" if sys.platform == "win32" else ""
     return BINARIES_DIR / f"atlas-backend-{triple}{extension}"
+
+
+def _sidecar_venv_python() -> Path:
+    if sys.platform == "win32":
+        return SIDECAR_VENV / "Scripts" / "python.exe"
+    return SIDECAR_VENV / "bin" / "python"
+
+
+def _ensure_sidecar_build_env() -> Path:
+    """Create an isolated venv with Atlas runtime deps + PyInstaller only."""
+    python = _sidecar_venv_python()
+    if not python.is_file():
+        print(f"Creating isolated sidecar build venv at {SIDECAR_VENV}")
+        SIDECAR_VENV.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run([sys.executable, "-m", "venv", str(SIDECAR_VENV)], cwd=ROOT, check=True)
+
+    subprocess.run(
+        [str(python), "-m", "pip", "install", "--upgrade", "pip"],
+        cwd=ROOT,
+        check=True,
+    )
+    subprocess.run(
+        [
+            str(python),
+            "-m",
+            "pip",
+            "install",
+            "-r",
+            str(RUNTIME_REQUIREMENTS),
+            "pyinstaller>=6.11.0",
+            "pyinstaller-hooks-contrib>=2024.10",
+        ],
+        cwd=ROOT,
+        check=True,
+    )
+    print(f"Sidecar build uses isolated venv: {python}")
+    return python
 
 
 def _install_sidecar_for_local_targets(built_binary: Path) -> None:
@@ -85,6 +124,8 @@ def _write_build_config(dsn: str) -> None:
 def main() -> None:
     if not SPEC_FILE.is_file():
         raise RuntimeError(f"Missing PyInstaller spec: {SPEC_FILE}")
+    if not RUNTIME_REQUIREMENTS.is_file():
+        raise RuntimeError(f"Missing runtime requirements: {RUNTIME_REQUIREMENTS}")
 
     target_triple = resolve_target_triple()
     output_path = sidecar_binary_path(target_triple)
@@ -101,12 +142,14 @@ def main() -> None:
     else:
         print("No ATLAS_SENTRY_DSN in build environment; sidecar will have no baked DSN.")
 
+    build_python = _ensure_sidecar_build_env()
+
     env = os.environ.copy()
     env["PYTHONPATH"] = str(ROOT)
 
     subprocess.run(
         [
-            sys.executable,
+            str(build_python),
             "-m",
             "PyInstaller",
             "--noconfirm",
