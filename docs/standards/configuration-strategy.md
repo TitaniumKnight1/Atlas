@@ -55,6 +55,15 @@ Each Atlas project may define environment profiles (`local`, `staging`, `product
 
 Profiles are Atlas metadata layered over the same physical project paths, not separate cloud environments.
 
+## Pathway 2 Dev/Prod Separation (ADR-0027)
+
+For team-repo local dev (Pathway 2), FiveM config separation uses FXServer's `exec` directive:
+
+- **Tracked:** `server.cfg` — shared ensures and framework settings; secrets as placeholders; ends with `exec server.cfg.local`.
+- **Gitignored:** `server.cfg.local` — license key, DB/API convars, endpoints, hostname, slot limits, and other machine-local overrides.
+
+Atlas inbound flows extract production secrets into the overlay and normalize the base. Return-path safety relies on gitignore (structural) plus pre-commit secret scanning (defense-in-depth). See [ADR-0027](../architecture/decisions/0027-pathway2-dev-prod-config-separation.md).
+
 ## Secrets Handling
 
 - Never log secrets in Atlas telemetry.
