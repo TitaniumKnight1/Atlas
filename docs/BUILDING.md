@@ -6,13 +6,24 @@ Atlas can optionally report **Atlas application errors only** (crashes and bugs 
 
 ### Build-time DSN injection
 
-The maintainer's Sentry DSN is **never committed to source**. It is injected at **build time** from the build environment:
+The maintainer's Sentry DSN is **never committed to source**. It is injected at **build time** from the build environment.
+
+**Recommended (local release builds):** copy `.env.release.example` to `.env.release` (gitignored), set your real DSN there, then build. `scripts/build_backend_sidecar.py` loads `.env.release` automatically when `ATLAS_SENTRY_DSN` is not already set in the shell.
 
 ```bash
-# Example — use your real DSN only in CI or local release builds, never in git
+cp .env.release.example .env.release   # Windows: copy .env.release.example .env.release
+# Edit .env.release — set ATLAS_SENTRY_DSN to your Sentry project DSN
+python scripts/build_backend_sidecar.py
+```
+
+**CI / shell export** (same variable, no file):
+
+```bash
 export ATLAS_SENTRY_DSN="https://<public-key>@<org>.ingest.sentry.io/<project-id>"
 python scripts/build_backend_sidecar.py
 ```
+
+Precedence for the build: existing shell/CI `ATLAS_SENTRY_DSN` wins over `.env.release`.
 
 `scripts/build_backend_sidecar.py` writes `backend/infrastructure/build_config_generated.py` (gitignored) with the DSN constant, then runs PyInstaller. That generated module is bundled into the distributed sidecar binary.
 

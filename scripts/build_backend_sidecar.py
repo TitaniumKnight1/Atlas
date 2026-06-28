@@ -57,6 +57,22 @@ def _install_sidecar_for_local_targets(built_binary: Path) -> None:
         shutil.copy2(built_binary, dest_dir / f"atlas-backend{extension}")
 
 
+def _load_release_env() -> None:
+    """Load maintainer-only release secrets from .env.release if present."""
+    release_env = ROOT / ".env.release"
+    if not release_env.is_file():
+        return
+    for line in release_env.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, _, value = stripped.partition("=")
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
 def _write_build_config(dsn: str) -> None:
     generated = ROOT / "backend" / "infrastructure" / "build_config_generated.py"
     generated.write_text(
@@ -77,6 +93,7 @@ def main() -> None:
     if STALE_ROOT_SPEC.exists():
         STALE_ROOT_SPEC.unlink()
 
+    _load_release_env()
     build_dsn = os.environ.get("ATLAS_SENTRY_DSN", "").strip()
     _write_build_config(build_dsn)
     if build_dsn:
