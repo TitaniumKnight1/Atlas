@@ -45,6 +45,8 @@ from backend.domain.pathway2.supervisor_fallback import (
     resolve_plus_set_overrides,
 )
 from backend.domain.pathway2.commit_safety import (
+    build_normalization_path_candidates,
+    classify_commit_scope,
     evaluate_commit_safety,
     is_overlay_path,
     load_staged_files,
@@ -655,24 +657,30 @@ class AdoptApplicationService:
         worktree = git_service.get_worktree_status(project_id, repo["git_repository_id"])
         project_root = Path(repo["local_path"]).resolve()
         file_changes = _file_changes_from_worktree(worktree)
+        server_cfg_rel = self._pathway2_settings(project_id).get(Pathway2SettingKeys.SERVER_CFG_PATH)
+        normalization_paths = build_normalization_path_candidates(server_cfg_rel=server_cfg_rel)
         include_server_cfg = server_cfg_eligible_for_return_commit(
             file_changes=file_changes,
             project_root=project_root,
             read_text=self.filesystem.read_text,
+            normalization_paths=normalization_paths,
         )
         default_paths = select_default_return_commit_paths(
             file_changes=file_changes,
             include_server_cfg=include_server_cfg,
+            normalization_paths=normalization_paths,
         )
         staged_files = load_staged_files(repo_root=project_root, paths=default_paths, read_text=self.filesystem.read_text)
         safety = evaluate_commit_safety(staged_files=staged_files, scanner=self.secret_scanner)
         gitignore_ok = self._overlay_gitignored(project_root)
+        commit_scope = classify_commit_scope(paths=default_paths, normalization_paths=normalization_paths)
         return {
             "project_id": str(project_id),
             "git_repository_id": repo["git_repository_id"],
             "branch_name": worktree.get("branch_name"),
             "is_dirty": worktree.get("is_dirty"),
             "default_commit_paths": default_paths,
+            "commit_scope": commit_scope,
             "contamination_report": safety.to_report(),
             "gitignore_contains_overlay": gitignore_ok,
             "manual_push_message": safety.to_report()["manual_push_message"],
@@ -955,6 +963,8 @@ class AdoptApplicationService:
         worktree = self._container.create_git_service().get_worktree_status(project_id, repo["git_repository_id"])
         project_root = Path(repo["local_path"]).resolve()
         file_changes = _file_changes_from_worktree(worktree)
+        server_cfg_rel = self._pathway2_settings(project_id).get(Pathway2SettingKeys.SERVER_CFG_PATH)
+        normalization_paths = build_normalization_path_candidates(server_cfg_rel=server_cfg_rel)
         resolved_paths = paths or select_default_return_commit_paths(
             file_changes=file_changes,
             include_server_cfg=include_server_cfg
@@ -963,7 +973,9 @@ class AdoptApplicationService:
                 file_changes=file_changes,
                 project_root=project_root,
                 read_text=self.filesystem.read_text,
+                normalization_paths=normalization_paths,
             ),
+            normalization_paths=normalization_paths,
         )
         if any(is_overlay_path(path) for path in resolved_paths):
             raise Pathway2ApplicationError(ErrorCode.VALIDATION_FAILED, f"{OVERLAY_FILENAME} cannot be included in a return-path commit")

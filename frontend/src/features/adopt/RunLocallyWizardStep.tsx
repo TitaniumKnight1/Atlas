@@ -402,7 +402,7 @@ export function RunLocallyWizardStep({
                   </Alert>
                 ) : (
                   <Alert severity="success" title="Ready to continue">
-                    FXServer started successfully. You can proceed to return work.
+                    FXServer started successfully. You can finish setup and open server monitoring.
                   </Alert>
                 )}
               </>
@@ -417,7 +417,7 @@ export function RunLocallyWizardStep({
           Back
         </Button>
         <Button variant="primary" disabled={!canContinue} onClick={onContinue}>
-          Continue to return work
+          Continue to finish setup
         </Button>
       </div>
     </section>

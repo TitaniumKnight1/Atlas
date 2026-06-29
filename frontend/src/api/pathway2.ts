@@ -178,12 +178,20 @@ export async function applyDevConfigTransform(projectId: string, options?: DevTr
   return requestBackend<CommandResultData>(`/api/v1/projects/${projectId}/pathway2/transform/apply`, jsonRequest(options ?? {}));
 }
 
+export interface ReturnPathCommitScope {
+  normalization_paths: string[];
+  dev_change_paths: string[];
+  normalization_only: boolean;
+  total_paths: number;
+}
+
 export interface ReturnPathStatus {
   project_id: string;
   git_repository_id: string;
   branch_name: string | null;
   is_dirty: boolean;
   default_commit_paths: string[];
+  commit_scope?: ReturnPathCommitScope;
   contamination_report: ContaminationReport;
   gitignore_contains_overlay: boolean;
   manual_push_message: string;

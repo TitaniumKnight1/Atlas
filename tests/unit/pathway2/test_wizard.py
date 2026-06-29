@@ -84,6 +84,18 @@ def test_derive_active_step_resume_run() -> None:
     ) == "run"
 
 
+def test_derive_active_step_done_after_server_started() -> None:
+    assert derive_active_step(
+        origin="adopted",
+        normalized=True,
+        secrets_substituted=True,
+        dev_transformed=True,
+        run_ready=True,
+        unset_dev_slots=[],
+        server_started=True,
+    ) == "done"
+
+
 def test_wizard_run_blocked_until_dev_secrets_filled() -> None:
     wizard = build_wizard_status(
         adopt_status=_adopt_status(
@@ -122,6 +134,7 @@ def test_wizard_run_complete_after_server_started() -> None:
     )
     status["pathway2_state"]["server_started"] = True
     wizard = build_wizard_status(adopt_status=status)
+    assert wizard["active_step"] == "done"
     assert wizard["gates"]["done"] is True
     assert "run" not in wizard["blockers"] or "start your server" not in wizard["blockers"].get("run", "").lower()
 

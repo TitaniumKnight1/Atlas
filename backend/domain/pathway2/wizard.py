@@ -28,6 +28,7 @@ def derive_active_step(
     dev_transformed: bool,
     run_ready: bool,
     unset_dev_slots: list[str],
+    server_started: bool = False,
 ) -> WizardStepId:
     if not origin:
         return "adopt"
@@ -37,7 +38,9 @@ def derive_active_step(
         return "secrets"
     if not dev_transformed:
         return "tuning"
-    return "run"
+    if not server_started:
+        return "run"
+    return "done"
 
 
 def _step_complete(
@@ -95,12 +98,15 @@ def build_wizard_status(
         dev_transformed=dev_transformed,
         run_ready=run_ready,
         unset_dev_slots=unset_dev_slots,
+        server_started=server_started,
     )
 
     steps: list[dict[str, str]] = []
     for step_id, label in WIZARD_STEP_DEFS:
         if step_id == active_step:
             status: WizardStepStatus = "active"
+        elif step_id == "return" and active_step == "done":
+            status = "upcoming"
         elif _step_complete(
             step_id,
             origin=origin,
@@ -183,7 +189,7 @@ def _next_enabled_step(active_step: WizardStepId, gates: dict[str, bool]) -> Wiz
             return step_id
         if gates.get(step_id):
             return step_id
-        if step_id in {"normalize", "secrets", "run", "return"}:
+        if step_id in {"normalize", "secrets", "run"}:
             return step_id
     return "done"
 
@@ -214,7 +220,6 @@ def _build_blockers(
         blockers["run"] = run_blocked_reason
     elif run_ready and not server_started:
         blockers["run"] = "Start your server to continue — this confirms your local setup works."
-        blockers["return"] = "Start your server on the Run locally step before returning work."
     if return_path and not contamination.get("allowed"):
         summary = contamination.get("summary_lines") or []
         findings = contamination.get("findings") or []

@@ -85,6 +85,25 @@ def test_default_paths_include_placeholder_server_cfg_when_requested() -> None:
     assert "server.cfg.local" not in paths
 
 
+def test_default_paths_exclude_bulk_untracked_import_tree() -> None:
+    changes = [
+        SimpleNamespace(path="server.cfg", change_status=ChangeStatus.MODIFIED),
+        SimpleNamespace(path=".gitignore", change_status=ChangeStatus.UNTRACKED),
+        SimpleNamespace(path="server.cfg.local.example", change_status=ChangeStatus.UNTRACKED),
+    ]
+    changes.extend(
+        SimpleNamespace(path=f"resources/pkg{i}/file.lua", change_status=ChangeStatus.UNTRACKED)
+        for i in range(1000)
+    )
+    paths = select_default_return_commit_paths(
+        file_changes=changes,
+        include_server_cfg=True,
+        normalization_paths={".gitignore", "server.cfg", "server.cfg.local.example"},
+    )
+    assert len(paths) == 3
+    assert paths == [".gitignore", "server.cfg", "server.cfg.local.example"]
+
+
 def test_server_cfg_eligible_for_return_commit_requires_placeholders(tmp_path) -> None:
     root = tmp_path / "repo"
     root.mkdir()

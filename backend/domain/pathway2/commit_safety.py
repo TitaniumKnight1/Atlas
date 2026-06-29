@@ -5,7 +5,12 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from backend.domain.git import ChangeStatus
-from backend.domain.pathway2.normalization import GITIGNORE_OVERLAY_ENTRY, OVERLAY_FILENAME, PLACEHOLDER
+from backend.domain.pathway2.normalization import (
+    GITIGNORE_OVERLAY_ENTRY,
+    OVERLAY_EXAMPLE_FILENAME,
+    OVERLAY_FILENAME,
+    PLACEHOLDER,
+)
 
 """
 Return-path safety gate (Pathway 2 P2-4).
@@ -50,7 +55,7 @@ class CommitSafetyResult:
     def to_report(self) -> dict[str, Any]:
         gate_status = "PASS" if self.allowed else "BLOCKED"
         summary_lines = [
-            f"Files to commit: {len(self.staged_paths)}",
+            f"Paths in safe commit set: {len(self.staged_paths)}",
             f"Secret scan: {gate_status}",
             f"{OVERLAY_FILENAME} excluded (gitignored)",
         ]
@@ -99,24 +104,68 @@ def is_overlay_path(path: str) -> bool:
     return normalized.endswith(f"/{OVERLAY_FILENAME}") or normalized == OVERLAY_FILENAME or normalized.endswith(f"/{GITIGNORE_OVERLAY_ENTRY}")
 
 
+RETURN_PATH_UNTRACKED_ALLOWLIST = frozenset({".gitignore", OVERLAY_EXAMPLE_FILENAME})
+
+
+def build_normalization_path_candidates(*, server_cfg_rel: str | None) -> set[str]:
+    """Paths Atlas may touch during adopt normalization — never the whole imported tree."""
+    candidates: set[str] = {".gitignore"}
+    if not server_cfg_rel:
+        return candidates
+    rel = server_cfg_rel.replace("\\", "/")
+    candidates.add(rel)
+    candidates.add(str(Path(rel).with_name(OVERLAY_EXAMPLE_FILENAME)).replace("\\", "/"))
+    return candidates
+
+
+def classify_commit_scope(*, paths: list[str], normalization_paths: set[str]) -> dict[str, Any]:
+    normalization = [
+        path
+        for path in paths
+        if path in normalization_paths
+        or Path(path).name in RETURN_PATH_UNTRACKED_ALLOWLIST
+        or _is_server_cfg_path(path)
+    ]
+    dev_changes = [path for path in paths if path not in normalization]
+    return {
+        "normalization_paths": normalization,
+        "dev_change_paths": dev_changes,
+        "normalization_only": len(dev_changes) == 0,
+        "total_paths": len(paths),
+    }
+
+
 def select_default_return_commit_paths(
     *,
     file_changes: list[Any],
     include_server_cfg: bool = False,
+    normalization_paths: set[str] | None = None,
 ) -> list[str]:
-    """Explicit return-path commit scope — never blanket `git add -A`."""
+    """Explicit return-path commit scope — never blanket `git add -A`.
+
+    Untracked files from a freshly imported tree (no git baseline) are excluded except
+    Atlas normalization artifacts. Tracked modifications/deletions are dev-facing changes.
+    """
+    normalization_paths = normalization_paths or set()
     selected: list[str] = []
     for change in file_changes:
+        path = change.path.replace("\\", "/")
+        if change.change_status == ChangeStatus.UNTRACKED:
+            if path in normalization_paths or Path(path).name in RETURN_PATH_UNTRACKED_ALLOWLIST:
+                selected.append(path)
+            elif include_server_cfg and _is_server_cfg_path(path):
+                selected.append(path)
+            continue
         if change.change_status == ChangeStatus.DELETED:
-            if is_overlay_path(change.path):
+            if is_overlay_path(path):
                 continue
-            selected.append(change.path)
+            selected.append(path)
             continue
-        if is_overlay_path(change.path):
+        if is_overlay_path(path):
             continue
-        if _is_server_cfg_path(change.path) and not include_server_cfg:
+        if _is_server_cfg_path(path) and not include_server_cfg:
             continue
-        selected.append(change.path)
+        selected.append(path)
     return sorted(dict.fromkeys(selected))
 
 
@@ -125,16 +174,19 @@ def server_cfg_eligible_for_return_commit(
     file_changes: list[Any],
     project_root: Path,
     read_text: Any,
+    normalization_paths: set[str] | None = None,
 ) -> bool:
     """Include tracked server.cfg in return-path scope only when placeholders-only on disk."""
     from backend.domain.git import ChangeStatus
 
+    normalization_paths = normalization_paths or set()
     for change in file_changes:
-        if not _is_server_cfg_path(change.path):
+        path = change.path.replace("\\", "/")
+        if not _is_server_cfg_path(path) and path not in normalization_paths:
             continue
         if change.change_status == ChangeStatus.DELETED:
             continue
-        absolute = project_root / change.path
+        absolute = project_root / path
         if not absolute.is_file():
             continue
         content = read_text(absolute) or ""

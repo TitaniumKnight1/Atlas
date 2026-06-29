@@ -56,6 +56,30 @@ def test_safe_return_commit_blocks_real_server_cfg(tmp_path: Path) -> None:
         container.close()
 
 
+def test_return_path_excludes_bulk_untracked_without_git_baseline(tmp_path: Path) -> None:
+    container, project_id, repo_id, root = _pathway2_git_fixture(tmp_path, initial_commit=False)
+    adopt = container.create_adopt_service()
+    git = container.create_git_service()
+    try:
+        adopt.execute_apply_repo_normalization(project_id=project_id)
+        for index in range(200):
+            resource_dir = root / "resources" / f"bulk{index}"
+            resource_dir.mkdir(parents=True, exist_ok=True)
+            (resource_dir / "fxmanifest.lua").write_text("fx_version 'cerulean'\n", encoding="utf-8")
+        container.create_project_service().update_project_settings(
+            project_id=project_id,
+            patch={"pathway2.server_cfg_path": "server.cfg"},
+        )
+        status = adopt.get_return_path_status(project_id=project_id, git_repository_id=repo_id)
+        assert len(status["default_commit_paths"]) <= 4
+        assert "server.cfg.local" not in status["default_commit_paths"]
+        assert status["commit_scope"]["normalization_only"] is True
+        assert status["contamination_report"]["gate_status"] == "PASS"
+        assert len(status["contamination_report"]["staged_paths"]) <= 4
+    finally:
+        container.close()
+
+
 def test_return_path_includes_placeholder_server_cfg_after_normalization(tmp_path: Path) -> None:
     container, project_id, repo_id, root = _pathway2_git_fixture(tmp_path)
     adopt = container.create_adopt_service()
@@ -102,7 +126,7 @@ def test_safe_return_commit_excludes_overlay_and_commits_safe_resource(tmp_path:
         container.close()
 
 
-def _pathway2_git_fixture(tmp_path: Path):
+def _pathway2_git_fixture(tmp_path: Path, *, initial_commit: bool = True):
     container = create_application_container(tmp_path / "app-data")
     root = tmp_path / "return-path-project"
     (root / "resources" / "demo").mkdir(parents=True)
@@ -112,8 +136,9 @@ def _pathway2_git_fixture(tmp_path: Path):
     (root / "server.cfg.local").write_text(f'sv_licenseKey "{PROD_LICENSE}"\n', encoding="utf-8")
     (root / "resources" / "demo" / "fxmanifest.lua").write_text("fx_version 'cerulean'\n", encoding="utf-8")
     repo = Repo(root)
-    repo.index.add([".gitignore", "server.cfg", "resources/demo/fxmanifest.lua"])
-    repo.index.commit("initial")
+    if initial_commit:
+        repo.index.add([".gitignore", "server.cfg", "resources/demo/fxmanifest.lua"])
+        repo.index.commit("initial")
     project_id = ProjectId(container.create_project_service().execute_import_project(root_path=root).result["project_id"])
     container.create_project_service().update_project_settings(project_id=project_id, patch={"pathway2.origin": "adopted_local"})
     container.create_git_service().execute_discover_git_repositories(project_id=project_id)

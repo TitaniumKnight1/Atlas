@@ -124,9 +124,6 @@ export function JoinTeamWizardView() {
       if (options?.syncActiveStep !== false) {
         setActiveStep(response.data.wizard.active_step as LocalWizardStepId);
       }
-      if (response.data.return_path?.contamination_report.gate_status === "PASS") {
-        setCommitCompleted(false);
-      }
     } catch (error) {
       setStatusError(error);
     } finally {
@@ -478,63 +475,51 @@ export function JoinTeamWizardView() {
                 onServerDataPathChange={setServerDataPath}
                 onRefresh={() => void refreshWizardStatus(projectId)}
                 onBack={() => goToStep("tuning")}
-                onContinue={() => goToStep("return")}
+                onContinue={() => goToStep("done")}
               />
-            ) : null}
-
-            {activeStep === "return" ? (
-              <section className="wizard-step">
-                <div className="wizard-step__content">
-                  <SectionHeading
-                    title="Return path (safe commit)"
-                    detail="Explicit-path commits only — never blanket git add. Atlas can commit placeholder-only server.cfg and .gitignore updates; server.cfg.local and secrets are gitignored and blocked by the fail-closed gate. Atlas commits locally; you push manually (ADR-0010)."
-                  />
-                  {blockers.return ? <WizardGateAlert title="Commit blocked" detail={blockers.return} /> : null}
-                  <ReturnPathPanel
-                    projectId={projectId}
-                    initialReturnPath={wizardStatus?.return_path}
-                    onStatusChange={() => {
-                      setCommitCompleted(true);
-                      void refreshWizardStatus(projectId);
-                    }}
-                  />
-                </div>
-                <div className="wizard-step__footer">
-                  <Button variant="secondary" onClick={() => goToStep("run")}>
-                    Back
-                  </Button>
-                  <Button variant="primary" onClick={() => goToStep("done")}>
-                    Finish
-                  </Button>
-                </div>
-              </section>
             ) : null}
 
             {activeStep === "done" ? (
               <section className="wizard-step">
                 <div className="wizard-step__content">
-                  <SectionHeading title="You're set up for local team development" detail="Summary of what Atlas prepared." />
+                  <SectionHeading
+                    title="You're set up for local team development"
+                    detail="Your server is running under Atlas supervision. Make feature changes in your repo when you're ready — return work is a later step, not part of setup."
+                  />
                   <Alert severity="success" title="Pathway 2 complete">
                     <ul className="plain-list">
                       <li>Adopted team repo with overlay structure (server.cfg.local is gitignored).</li>
                       <li>Production secrets substituted — your dev values stay local and masked in previews.</li>
-                      <li>Server started locally — your setup is verified before return work.</li>
+                      <li>Server started locally — your setup is verified.</li>
                       <li>
-                        Tracked server.cfg now uses placeholders plus an exec server.cfg.local trailer — that safe normalization (and
-                        .gitignore) is what you can commit back to the team when ready. Your overlay and dev secrets never leave this
-                        machine; the fail-closed gate blocks them.
+                        Tracked server.cfg uses placeholders plus an exec server.cfg.local trailer. That safe normalization is
+                        available to share with your team later — your overlay and dev secrets never leave this machine.
                       </li>
                     </ul>
                   </Alert>
-                  <Alert severity="info" title="About local commits">
-                    Nothing is committed automatically. When you are ready, use Return work to commit explicit paths only (normalized
-                    server.cfg, .gitignore, and your resource changes). Atlas never pushes — use your git tool on your branch (ADR-0010).
-                  </Alert>
+                  <Surface kind="card">
+                    <SectionHeading
+                      title="Return work later (optional)"
+                      detail="When you have changes to share with your team, use the safe return commit below. Atlas never pushes — you push your branch manually (ADR-0010)."
+                    />
+                    <ReturnPathPanel
+                      projectId={projectId}
+                      initialReturnPath={wizardStatus?.return_path}
+                      presentation="optional"
+                      onStatusChange={() => {
+                        setCommitCompleted(true);
+                        void refreshWizardStatus(projectId, { syncActiveStep: false });
+                      }}
+                    />
+                  </Surface>
                   {commitCompleted ? <Badge variant="info">Local commit recorded</Badge> : null}
                 </div>
                 <div className="wizard-step__footer">
-                  <Button variant="secondary" onClick={() => goToStep("return")}>
-                    Back to return work
+                  <Button variant="secondary" onClick={() => goToStep("run")}>
+                    Back to run locally
+                  </Button>
+                  <Button variant="primary" onClick={() => (window.location.hash = "#/monitoring")}>
+                    Open server monitoring
                   </Button>
                 </div>
               </section>

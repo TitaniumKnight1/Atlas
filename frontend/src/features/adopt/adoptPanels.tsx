@@ -309,11 +309,13 @@ export function ContaminationReportView({ report }: { report: ContaminationRepor
 export function ReturnPathPanel({
   projectId,
   initialReturnPath,
-  onStatusChange
+  onStatusChange,
+  presentation = "wizard"
 }: {
   projectId: string;
   initialReturnPath?: ReturnPathStatus | null;
   onStatusChange?: () => void;
+  presentation?: "wizard" | "optional";
 }) {
   const [returnStatus, setReturnStatus] = useState<ReturnPathStatus | null>(initialReturnPath ?? null);
   const [statusError, setStatusError] = useState<unknown>(null);
@@ -359,6 +361,9 @@ export function ReturnPathPanel({
   );
 
   const commitBlocked = returnStatus?.contamination_report.allowed === false;
+  const commitScope = returnStatus?.commit_scope;
+  const normalizationOnly = commitScope?.normalization_only ?? false;
+  const pathCount = returnStatus?.default_commit_paths.length ?? 0;
   const commitBlockReason =
     returnStatus?.contamination_report.findings[0] != null
       ? `Remove the secret in ${returnStatus.contamination_report.findings[0].path}:${returnStatus.contamination_report.findings[0].line} before committing.`
@@ -384,6 +389,13 @@ export function ReturnPathPanel({
       {statusError ? <ErrorState error={statusError} /> : null}
       {returnStatus ? (
         <>
+          {presentation === "optional" && normalizationOnly ? (
+            <Alert severity="info" title="No dev changes to return yet">
+              {pathCount > 0
+                ? `Atlas prepared ${pathCount} safe normalization file${pathCount === 1 ? "" : "s"} (placeholder server.cfg, .gitignore, etc.) you can share with your team when you choose. Your secrets and server.cfg.local stay local and are never committed.`
+                : "You have not made feature changes yet. When you do, use the safe return commit below — your secrets and server.cfg.local stay local and are never committed."}
+            </Alert>
+          ) : null}
           <DefinitionGrid
             items={[
               ["Branch", returnStatus.branch_name ?? "detached"],
@@ -409,9 +421,9 @@ export function ReturnPathPanel({
               <Input value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} />
             </Field>
           </InputGroup>
-          {commitRequest ? (
+          {commitRequest && pathCount > 0 ? (
             <CommandPanel
-              title="Safe return commit"
+              title={presentation === "optional" ? "Share safe normalization (optional)" : "Safe return commit"}
               description={returnStatus.manual_push_message}
               executeLabel="Commit locally"
               presentation="guided"
