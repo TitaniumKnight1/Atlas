@@ -1411,6 +1411,20 @@ pre {
   line-height: var(--leading-snug);
 }
 
+.config-findings-grid {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.config-finding-card {
+  border-left: 3px solid var(--atlas-border-strong);
+}
+
+.config-remediation-panel {
+  margin-top: var(--space-3);
+  width: 100%;
+}
+
 .live-stream-log {
   max-height: 12rem;
 }

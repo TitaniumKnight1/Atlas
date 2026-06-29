@@ -124,6 +124,15 @@ class ApplicationContainer:
             secret_scanner=LocalConfigSecretScanner(),
         )
 
+    def create_config_remediation_service(self) -> ConfigRemediationService:
+        from backend.application.config.remediation_service import ConfigRemediationService
+
+        return ConfigRemediationService(
+            container=self,
+            filesystem=self.setup_filesystem,
+            secret_scanner=LocalConfigSecretScanner(),
+        )
+
     def create_resource_service(self) -> ResourceApplicationService:
         return ResourceApplicationService(container=self, filesystem=self.setup_filesystem)
 

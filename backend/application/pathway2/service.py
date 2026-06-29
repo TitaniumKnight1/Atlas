@@ -7,6 +7,7 @@ from typing import Any
 from backend.adapters.config import LocalConfigSecretScanner
 from backend.adapters.git import GitPythonProvider, redact_remote_url
 from backend.adapters.persistence import AuditRepository, ProjectRepository
+from backend.application.config.structural_validation import enrich_validation_payload, run_structural_validation
 from backend.application.commands import CommandContext, CommandExecutionResult, CommandPreview, DryRunResult, RiskLevel, UndoPlan
 from backend.application.commands.compensation import CompositeCompensation, RestorePathFromSnapshotCompensation
 from backend.application.commands.recorder import CommandAuditRecorder
@@ -77,12 +78,13 @@ class AdoptApplicationService:
 
     def preview_adopt_repository(self, *, root_path: Path, remote_url: str | None = None) -> CommandPreview:
         resolved = root_path.expanduser().resolve()
-        warnings: list[str] = []
-        if remote_url and resolved.exists() and any(resolved.iterdir()):
-            warnings.append("Destination exists and is not empty; clone may fail.")
         server_cfg = find_server_cfg(resolved)
         content = self.filesystem.read_text(server_cfg) if server_cfg else None
         scorecard = build_structure_scorecard(root=resolved, server_cfg_content=content)
+        config_validation, validation_warnings = self._structural_validation_block(resolved)
+        warnings: list[str] = list(validation_warnings)
+        if remote_url and resolved.exists() and any(resolved.iterdir()):
+            warnings.append("Destination exists and is not empty; clone may fail.")
         if not scorecard["looks_like_fivem_server"]:
             warnings.append("Path does not look like a FiveM server yet; import may still proceed after clone.")
         return CommandPreview(
@@ -92,6 +94,7 @@ class AdoptApplicationService:
                 "root_path": str(resolved),
                 "remote_url": redact_remote_url(remote_url) if remote_url else None,
                 "structure_scorecard": scorecard,
+                "config_validation": config_validation,
             },
             warnings=warnings,
             risk_level=RiskLevel.MEDIUM,
@@ -148,6 +151,7 @@ class AdoptApplicationService:
             resource_count=resource_scan.get("total"),
         )
         inline_secrets = self._scan_repo_secrets(project_root or resolved, server_cfg)
+        config_validation, adopt_validation_warnings = self._structural_validation_block(project_root or resolved)
 
         settings_patch = {
             Pathway2SettingKeys.ORIGIN: "adopted_clone" if remote_url else "adopted_local",
@@ -168,10 +172,11 @@ class AdoptApplicationService:
                 "project_id": str(project_id),
                 "structure_scorecard": scorecard,
                 "inline_secrets": inline_secrets,
+                "config_validation": config_validation,
                 "pathway2_state": _pathway2_state(settings_patch),
                 "run_blocked_reason": "Dev secrets not yet set — complete P2-2 substitution before running.",
             },
-            warnings=preview.warnings,
+            warnings=[*preview.warnings, *[w for w in adopt_validation_warnings if w not in preview.warnings]],
             risk_level=RiskLevel.MEDIUM,
         )
         return CommandExecutionResult(
@@ -200,6 +205,7 @@ class AdoptApplicationService:
             resource_count=resource_count,
         )
         inline_secrets = self._scan_repo_secrets(project_root, server_cfg)
+        config_validation, _ = self._structural_validation_block(project_root)
         state = _pathway2_state(settings)
         overlay_content = load_overlay_content(self.filesystem, project_root)
         run_ready, run_blocked_reason = evaluate_pathway2_run_readiness(settings=settings, overlay_content=overlay_content)
@@ -215,6 +221,7 @@ class AdoptApplicationService:
             "project_id": str(project_id),
             "structure_scorecard": scorecard,
             "inline_secrets": inline_secrets,
+            "config_validation": config_validation,
             "pathway2_state": state,
             "substitution_slots": substitution_slots,
             "unset_dev_slots": unset_dev_slots,
@@ -243,7 +250,8 @@ class AdoptApplicationService:
         diff = build_normalization_diff(current=current, proposed=normalized_base, path=rel_path)
         overlay_diff = redact_config_text(overlay_content)
         inline_secrets = scan_inline_secrets(path=rel_path, content=current, scanner=self.secret_scanner)
-        warnings: list[str] = []
+        config_validation, validation_warnings = self._structural_validation_block(self._require_project_root(project_id))
+        warnings: list[str] = list(validation_warnings)
         if meta["secrets_placeholderized"] == 0 and not meta["endpoints_moved"]:
             warnings.append("No inline secrets or endpoints detected to relocate; exec trailer will still be appended if missing.")
         return CommandPreview(
@@ -256,6 +264,7 @@ class AdoptApplicationService:
                 "overlay_preview": overlay_diff,
                 "overlay_path": OVERLAY_FILENAME,
                 "inline_secrets": inline_secrets,
+                "config_validation": config_validation,
                 "normalization": meta,
                 "gitignore_entry": GITIGNORE_OVERLAY_ENTRY,
             },
@@ -831,6 +840,11 @@ class AdoptApplicationService:
         if not repos:
             return None
         return repos[0].get("remote_url")
+
+    def _structural_validation_block(self, root: Path) -> tuple[dict[str, Any], list[str]]:
+        result = run_structural_validation(root=root, filesystem=self.filesystem, secret_scanner=self.secret_scanner)
+        payload = enrich_validation_payload(result, root_path=str(root))
+        return payload, result.warning_summary()
 
     def _scan_repo_secrets(self, project_root: Path, server_cfg: Path | None) -> list[dict[str, Any]]:
         findings: list[dict[str, Any]] = []

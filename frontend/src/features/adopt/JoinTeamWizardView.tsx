@@ -50,6 +50,7 @@ import { EmptyState, ErrorState, LoadingState } from "../../components/StateView
 import { useAsyncTask } from "../../components/useAsyncTask";
 import { useProjectStream } from "../../components/useProjectStream";
 import { PathwayChoice } from "../onboarding/PathwayChoice";
+import { ConfigFindingsPanel } from "../config/ConfigFindingsPanel";
 import { DevDatabasePanel } from "./DevDatabasePanel";
 import {
   DevSecretEntryForm,
@@ -371,6 +372,14 @@ export function JoinTeamWizardView() {
             {activeStep === "adopt" ? (
               <section className="wizard-step">
                 <div className="wizard-step__content">
+                  {wizardStatus?.config_validation ? (
+                    <ConfigFindingsPanel
+                      compact
+                      projectId={projectId ?? undefined}
+                      validation={wizardStatus.config_validation}
+                      showInlineSecretHint
+                    />
+                  ) : null}
                   <SectionHeading title="Structure scorecard" detail="Atlas must detect a FiveM server before proceeding to normalization." />
                   {scorecard ? <StructureScorecardView compact scorecard={scorecard} /> : null}
                   {wizardStatus?.inline_secrets?.length ? <InlineSecretsReport findings={wizardStatus.inline_secrets} /> : null}

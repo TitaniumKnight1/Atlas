@@ -7,6 +7,7 @@ from backend.api.schemas.config import (
     ApplyConfigChangeRequest,
     AuditReference,
     ConfigChangePlanRequest,
+    ConfigRemediationRequest,
     ErrorPayload,
     RescanConfigRequest,
     ResponseEnvelope,
@@ -15,6 +16,7 @@ from backend.api.schemas.config import (
 )
 from backend.application.commands import CommandExecutionResult, CommandPreview, DryRunResult
 from backend.application.config import ConfigApplicationError
+from backend.application.config.remediation_service import ConfigRemediationError
 from backend.domain.shared_kernel import ProjectId
 from backend.infrastructure.di import ApplicationContainer
 
@@ -122,11 +124,83 @@ def get_diff(project_id: str, config_file_id: str, snapshot_id: str | None = Non
         return _failure(error)
 
 
+@router.post("/projects/{project_id}/config-remediation/comment-dangling/preview", response_model=ResponseEnvelope)
+def preview_comment_dangling(project_id: str, request: ConfigRemediationRequest, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        preview = container.create_config_remediation_service().preview_comment_out_dangling_ensure(
+            project_id=ProjectId(project_id), finding_id=request.finding_id
+        )
+        return _success(_preview_data(preview), warnings=preview.warnings)
+    except ConfigRemediationError as error:
+        return _remediation_failure(error)
+
+
+@router.post("/projects/{project_id}/config-remediation/comment-dangling/dry-run", response_model=ResponseEnvelope)
+def dry_run_comment_dangling(project_id: str, request: ConfigRemediationRequest, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        dry_run = container.create_config_remediation_service().dry_run_comment_out_dangling_ensure(
+            project_id=ProjectId(project_id), finding_id=request.finding_id
+        )
+        return _success(_dry_run_data(dry_run), warnings=dry_run.warnings)
+    except ConfigRemediationError as error:
+        return _remediation_failure(error)
+
+
+@router.post("/projects/{project_id}/config-remediation/comment-dangling/apply", response_model=ResponseEnvelope)
+def apply_comment_dangling(project_id: str, request: ConfigRemediationRequest, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        return _command_success(
+            container.create_config_remediation_service().execute_comment_out_dangling_ensure(
+                project_id=ProjectId(project_id), finding_id=request.finding_id
+            )
+        )
+    except ConfigRemediationError as error:
+        return _remediation_failure(error)
+
+
+@router.post("/projects/{project_id}/config-remediation/rewrite-absolute-path/preview", response_model=ResponseEnvelope)
+def preview_rewrite_absolute_path(project_id: str, request: ConfigRemediationRequest, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        preview = container.create_config_remediation_service().preview_rewrite_absolute_path(
+            project_id=ProjectId(project_id), finding_id=request.finding_id
+        )
+        return _success(_preview_data(preview), warnings=preview.warnings)
+    except ConfigRemediationError as error:
+        return _remediation_failure(error)
+
+
+@router.post("/projects/{project_id}/config-remediation/rewrite-absolute-path/dry-run", response_model=ResponseEnvelope)
+def dry_run_rewrite_absolute_path(project_id: str, request: ConfigRemediationRequest, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        dry_run = container.create_config_remediation_service().dry_run_rewrite_absolute_path(
+            project_id=ProjectId(project_id), finding_id=request.finding_id
+        )
+        return _success(_dry_run_data(dry_run), warnings=dry_run.warnings)
+    except ConfigRemediationError as error:
+        return _remediation_failure(error)
+
+
+@router.post("/projects/{project_id}/config-remediation/rewrite-absolute-path/apply", response_model=ResponseEnvelope)
+def apply_rewrite_absolute_path(project_id: str, request: ConfigRemediationRequest, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        return _command_success(
+            container.create_config_remediation_service().execute_rewrite_absolute_path(
+                project_id=ProjectId(project_id), finding_id=request.finding_id
+            )
+        )
+    except ConfigRemediationError as error:
+        return _remediation_failure(error)
+
+
 def _success(data: dict | list[dict], warnings: list[str] | None = None) -> ResponseEnvelope:
     return ResponseEnvelope(ok=True, data=data, warnings=warnings or [])
 
 
 def _failure(error: ConfigApplicationError) -> ResponseEnvelope:
+    return ResponseEnvelope(ok=False, error=ErrorPayload(code=error.code.value, message=str(error)))
+
+
+def _remediation_failure(error: ConfigRemediationError) -> ResponseEnvelope:
     return ResponseEnvelope(ok=False, error=ErrorPayload(code=error.code.value, message=str(error)))
 
 

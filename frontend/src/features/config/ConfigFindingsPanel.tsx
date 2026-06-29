@@ -1,0 +1,208 @@
+import { useMemo, useState } from "react";
+
+import type { ConfigFinding, ConfigValidationBlock } from "../../api/configValidation";
+import { findingTypeLabel, formatFindingLocation } from "../../api/configValidation";
+import {
+  previewCommentOutDanglingEnsure,
+  dryRunCommentOutDanglingEnsure,
+  applyCommentOutDanglingEnsure,
+  previewRewriteAbsolutePath,
+  dryRunRewriteAbsolutePath,
+  applyRewriteAbsolutePath
+} from "../../api/configRemediation";
+import { undoCommandExecution } from "../../api/project";
+import { Alert, Badge, Button, SectionHeading, Surface } from "../../components";
+import { CommandPanel } from "../../components/CommandPanel";
+
+interface ConfigFindingsPanelProps {
+  validation: ConfigValidationBlock | null | undefined;
+  projectId?: string;
+  compact?: boolean;
+  showInlineSecretHint?: boolean;
+}
+
+export function ConfigFindingsPanel({
+  validation,
+  projectId,
+  compact = false,
+  showInlineSecretHint = true
+}: ConfigFindingsPanelProps) {
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
+
+  const findings = validation?.findings ?? [];
+  const hasValidated = validation?.status === "validated";
+  const skipped = validation?.status === "skipped_no_server_cfg";
+  const notRun = !validation || validation.status === "not_run";
+
+  const errorCount = useMemo(() => findings.filter((item) => item.severity === "error").length, [findings]);
+  const warningCount = useMemo(() => findings.filter((item) => item.severity === "warning").length, [findings]);
+
+  async function copyText(label: string, text: string) {
+    await navigator.clipboard.writeText(text);
+    setCopyStatus(label);
+    window.setTimeout(() => setCopyStatus(null), 2000);
+  }
+
+  if (notRun) {
+    return (
+      <Alert severity="info" title="Config not yet validated">
+        Run Preview to scan server.cfg for structural issues (dangling ensures, missing manifests, absolute paths, inline secrets).
+      </Alert>
+    );
+  }
+
+  if (skipped) {
+    return (
+      <Alert severity="warn" title="Structural validation skipped">
+        No server.cfg found at this path — Atlas could not run structural validation.
+      </Alert>
+    );
+  }
+
+  if (hasValidated && findings.length === 0) {
+    return (
+      <Alert severity="success" title="No structural issues found">
+        Atlas validated server.cfg and resources/ — no dangling references, missing manifests, absolute paths, or inline secrets detected.
+      </Alert>
+    );
+  }
+
+  return (
+    <div className="stack-gap-md">
+      <div className="atlas-row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+        <SectionHeading
+          title="Config findings"
+          detail={
+            compact
+              ? `${findings.length} issue${findings.length === 1 ? "" : "s"} detected.`
+              : "Structural problems in server.cfg and resources/. Secrets are masked everywhere."
+          }
+        />
+        <div className="inline-actions">
+          {errorCount > 0 ? <Badge variant="danger">{errorCount} error{errorCount === 1 ? "" : "s"}</Badge> : null}
+          {warningCount > 0 ? <Badge variant="warn">{warningCount} warning{warningCount === 1 ? "" : "s"}</Badge> : null}
+          {validation?.all_issues_prompt ? (
+            <Button type="button" variant="secondary" onClick={() => void copyText("all", validation.all_issues_prompt ?? "")}>
+              Copy all issues as prompt
+            </Button>
+          ) : null}
+        </div>
+      </div>
+      {copyStatus ? <p className="muted-copy">Copied {copyStatus === "all" ? "all issues prompt" : "fix prompt"}.</p> : null}
+      <div className="config-findings-grid">
+        {findings.map((finding) => (
+          <ConfigFindingCard
+            key={finding.finding_id}
+            finding={finding}
+            fixPrompt={validation?.fix_prompts?.[finding.finding_id]}
+            projectId={projectId}
+            showInlineSecretHint={showInlineSecretHint}
+            onCopyPrompt={(text) => void copyText(finding.finding_id, text)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ConfigFindingCard({
+  finding,
+  fixPrompt,
+  projectId,
+  showInlineSecretHint,
+  onCopyPrompt
+}: {
+  finding: ConfigFinding;
+  fixPrompt?: string;
+  projectId?: string;
+  showInlineSecretHint: boolean;
+  onCopyPrompt: (text: string) => void;
+}) {
+  const severityVariant = finding.severity === "error" ? "danger" : finding.severity === "warning" ? "warn" : "neutral";
+
+  return (
+    <Surface kind="card" className="config-finding-card">
+      <div className="atlas-row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div className="stack-gap-sm">
+          <div className="inline-actions">
+            <Badge variant={severityVariant}>{finding.severity}</Badge>
+            <Badge variant="info">{findingTypeLabel(finding.type)}</Badge>
+          </div>
+          <p>
+            <code>{formatFindingLocation(finding)}</code>
+          </p>
+          <p>{finding.message}</p>
+          {finding.type === "INLINE_SECRET" && showInlineSecretHint ? (
+            <p className="muted-copy">Use the Join-team adopt flow (P2-2 substitution) to relocate secrets — Atlas does not auto-rewrite secrets on Import.</p>
+          ) : null}
+        </div>
+      </div>
+      <div className="inline-actions" style={{ marginTop: "var(--space-3)" }}>
+        {fixPrompt ? (
+          <Button type="button" variant="secondary" onClick={() => onCopyPrompt(fixPrompt)}>
+            Copy fix prompt
+          </Button>
+        ) : null}
+        {projectId && finding.remediation.auto_fix_available && finding.remediation.auto_fix_kind === "comment_out_ensure" ? (
+          <RemediationCommandPanel
+            title="Comment out dangling ensure"
+            description="Reversible: comments out the broken ensure/start line so the server can boot."
+            findingId={finding.finding_id}
+            onPreview={() => previewCommentOutDanglingEnsure(projectId, finding.finding_id)}
+            onDryRun={() => dryRunCommentOutDanglingEnsure(projectId, finding.finding_id)}
+            onExecute={() => applyCommentOutDanglingEnsure(projectId, finding.finding_id)}
+            onUndo={(commandExecutionId) => undoCommandExecution(commandExecutionId)}
+          />
+        ) : null}
+        {projectId && finding.remediation.auto_fix_available && finding.remediation.auto_fix_kind === "rewrite_absolute_path" ? (
+          <RemediationCommandPanel
+            title="Rewrite absolute path"
+            description="Preview the portable path rewrite and confirm before applying. Undo restores the original line."
+            findingId={finding.finding_id}
+            onPreview={() => previewRewriteAbsolutePath(projectId, finding.finding_id)}
+            onDryRun={() => dryRunRewriteAbsolutePath(projectId, finding.finding_id)}
+            onExecute={() => applyRewriteAbsolutePath(projectId, finding.finding_id)}
+            onUndo={(commandExecutionId) => undoCommandExecution(commandExecutionId)}
+          />
+        ) : null}
+      </div>
+    </Surface>
+  );
+}
+
+function RemediationCommandPanel({
+  title,
+  description,
+  findingId,
+  onPreview,
+  onDryRun,
+  onExecute,
+  onUndo
+}: {
+  title: string;
+  description: string;
+  findingId: string;
+  onPreview: () => ReturnType<typeof previewCommentOutDanglingEnsure>;
+  onDryRun: () => ReturnType<typeof dryRunCommentOutDanglingEnsure>;
+  onExecute: () => ReturnType<typeof applyCommentOutDanglingEnsure>;
+  onUndo: (commandExecutionId: string) => ReturnType<typeof undoCommandExecution>;
+}) {
+  return (
+    <div className="config-remediation-panel">
+      <CommandPanel
+        presentation="guided"
+        title={title}
+        description={description}
+        previewLabel="Preview safe fix"
+        executeLabel="Apply safe fix"
+        onPreview={onPreview}
+        onDryRun={onDryRun}
+        onExecute={onExecute}
+        onUndo={onUndo}
+      />
+      <span className="muted-copy" hidden>
+        {findingId}
+      </span>
+    </div>
+  );
+}

@@ -1,10 +1,12 @@
 import { jsonRequest, requestBackend, type BackendResponse } from "./backend";
+import type { ConfigValidationBlock } from "./configValidation";
 import type { CommandPreviewData, CommandResultData, DryRunData } from "./project";
 
 export interface Pathway2Status {
   project_id: string;
   structure_scorecard: StructureScorecard;
   inline_secrets: InlineSecretFinding[];
+  config_validation?: ConfigValidationBlock;
   pathway2_state: Pathway2State;
   substitution_slots?: SubstitutionSlotPreview[];
   unset_dev_slots?: string[];

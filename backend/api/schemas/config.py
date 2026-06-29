@@ -42,3 +42,8 @@ class ValidationRunRequest(BaseModel):
 
 class SecretScanRequest(BaseModel):
     config_file_id: str | None = None
+
+
+class ConfigRemediationRequest(BaseModel):
+    finding_id: str
+

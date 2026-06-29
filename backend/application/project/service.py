@@ -5,6 +5,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from backend.adapters.config import LocalConfigSecretScanner
+from backend.application.config.structural_validation import enrich_validation_payload, run_structural_validation
+from backend.application.commands.serialization import compensation_from_storage
 from backend.adapters.persistence import AuditRepository, ProjectRepository
 from backend.application.commands import (
     CommandContext,
@@ -53,7 +56,7 @@ class ArchiveImportedProjectCompensation:
         return {"project_id": str(self.project_id), "status": ProjectStatus.ARCHIVED.value, "archived_at": archived_at.isoformat()}
 
 
-def rehydrate_compensating_action(payload: dict[str, Any]) -> CompensatingAction:
+def rehydrate_compensating_action(payload: dict[str, Any], *, filesystem: Any = None) -> CompensatingAction:
     action_type = payload.get("action_type")
     if action_type == "archive_imported_project":
         project_id = payload.get("project_id")
@@ -63,6 +66,10 @@ def rehydrate_compensating_action(payload: dict[str, Any]) -> CompensatingAction
             ProjectId(str(project_id)),
             reason=str(payload.get("reason", "Undo imported project metadata")),
         )
+    if action_type in {"restore_config_file", "restore_path_from_snapshot", "composite_compensation"}:
+        if filesystem is None:
+            raise ProjectApplicationError(ErrorCode.PRECONDITION_FAILED, "Filesystem is required to undo this command")
+        return compensation_from_storage(payload, filesystem=filesystem)
     raise ProjectApplicationError(ErrorCode.PRECONDITION_FAILED, f"Command execution is not undoable: unsupported action {action_type!r}")
 
 
@@ -74,6 +81,7 @@ class ProjectApplicationService:
 
     def preview_import_project(self, root_path: Path, template_id: str | None = None) -> CommandPreview:
         detected_paths = self._inspect_import_root(root_path)
+        config_validation, validation_warnings = self._structural_validation_block(root_path)
         return CommandPreview(
             command_type="ImportProject",
             summary=f"Import project metadata from {root_path}",
@@ -81,8 +89,20 @@ class ProjectApplicationService:
                 "root_path": str(root_path.expanduser().resolve()),
                 "template_id": template_id,
                 "detected_paths": [_path_dict(path) for path in detected_paths],
+                "config_validation": config_validation,
             },
+            warnings=validation_warnings,
         )
+
+    def _structural_validation_block(self, root_path: Path) -> tuple[dict[str, Any], list[str]]:
+        result = run_structural_validation(
+            root=root_path,
+            filesystem=self._container.setup_filesystem,
+            secret_scanner=LocalConfigSecretScanner(),
+        )
+        resolved = str(root_path.expanduser().resolve())
+        payload = enrich_validation_payload(result, root_path=resolved)
+        return payload, result.warning_summary()
 
     def dry_run_import_project(self, root_path: Path, template_id: str | None = None) -> DryRunResult:
         preview = self.preview_import_project(root_path, template_id)
@@ -238,10 +258,15 @@ class ProjectApplicationService:
                             f"Command execution {command_execution_id} was already undone",
                         )
 
-                action = rehydrate_compensating_action(undo_payload)
+                action = rehydrate_compensating_action(undo_payload, filesystem=self._container.setup_filesystem)
+                undo_command_type = (
+                    "UndoImportProject"
+                    if undo_payload.get("action_type") == "archive_imported_project"
+                    else str(undo_payload.get("undo_command_type") or "UndoCommand")
+                )
                 return UndoPlan(
-                    command_type="UndoImportProject",
-                    summary=str(undo_payload.get("reason", "Undo prior command")),
+                    command_type=undo_command_type,
+                    summary=str(undo_payload.get("reason", undo_payload.get("summary", "Undo prior command"))),
                     action=action,
                     payload=undo_payload,
                 )

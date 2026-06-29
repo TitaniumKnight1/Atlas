@@ -21,6 +21,7 @@ interface CommandPanelProps {
   onUndo?: (commandExecutionId: string) => Promise<BackendResponse<CommandResultData>>;
   onSuccess?: (result: BackendResponse<CommandResultData>) => void;
   onUndoSuccess?: (result: BackendResponse<CommandResultData>) => void;
+  onPreviewReady?: (preview: BackendResponse<CommandPreviewData>) => void;
 }
 
 type Phase = "idle" | "previewing" | "ready" | "executing" | "success" | "undoing" | "undone" | "error";
@@ -44,7 +45,8 @@ export function CommandPanel({
   onExecute,
   onUndo,
   onSuccess,
-  onUndoSuccess
+  onUndoSuccess,
+  onPreviewReady
 }: CommandPanelProps) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [preview, setPreview] = useState<BackendResponse<CommandPreviewData> | null>(null);
@@ -62,6 +64,7 @@ export function CommandPanel({
       const dryRunResult = await onDryRun();
       setPreview(previewResult);
       setDryRun(dryRunResult);
+      onPreviewReady?.(previewResult);
       setPhase("ready");
     } catch (caught) {
       setError(caught);
@@ -170,7 +173,7 @@ export function CommandPanel({
               items={[
                 ["Command", preview.data.command_type],
                 ["Risk", preview.data.risk_level],
-                ["Warnings", preview.warnings.join(", ") || "None"]
+                ["Warnings", formatWarningsLabel(preview.data.preview, preview.warnings)]
               ]}
             />
             {!compactPreview ? <pre className="command-json">{JSON.stringify(preview.data.preview, null, 2)}</pre> : null}
@@ -423,4 +426,21 @@ function formatStepStatus(status: CommandStepStatus) {
     return "not attempted";
   }
   return status;
+}
+
+function formatWarningsLabel(previewPayload: Record<string, unknown>, warnings: string[]): string {
+  if (warnings.length > 0) {
+    return warnings.join(", ");
+  }
+  const configValidation = previewPayload.config_validation as { status?: string; finding_count?: number } | undefined;
+  if (!configValidation || configValidation.status === "not_run") {
+    return "Config not yet validated";
+  }
+  if (configValidation.status === "validated" && (configValidation.finding_count ?? 0) === 0) {
+    return "No structural issues found";
+  }
+  if (configValidation.status === "skipped_no_server_cfg") {
+    return "No server.cfg — validation skipped";
+  }
+  return "None";
 }

@@ -17,6 +17,7 @@ import {
   type ProjectSummary,
   type SettingsData
 } from "../../api/project";
+import type { ConfigValidationBlock } from "../../api/configValidation";
 import {
   Badge,
   Button,
@@ -35,6 +36,7 @@ import {
   ViewWorkspace
 } from "../../components";
 import { CommandPanel } from "../../components/CommandPanel";
+import { ConfigFindingsPanel } from "../config/ConfigFindingsPanel";
 import { EmptyState, ErrorState, LoadingState, OnboardingEmptyState } from "../../components/StateViews";
 import { useAsyncTask } from "../../components/useAsyncTask";
 import { useProjectStream } from "../../components/useProjectStream";
@@ -60,6 +62,7 @@ export function ProjectView() {
   const [environmentName, setEnvironmentName] = useState("local");
   const [environmentDisplayName, setEnvironmentDisplayName] = useState("Local");
   const [lastMutation, setLastMutation] = useState<string | null>(null);
+  const [importConfigValidation, setImportConfigValidation] = useState<ConfigValidationBlock | null>(null);
 
   const projects = projectsResource.state === "ready" ? projectsResource.data : [];
 
@@ -195,9 +198,18 @@ export function ProjectView() {
                 onDryRun={() => dryRunImportProject(importPath)}
                 onExecute={() => importProject({ root_path: importPath })}
                 onUndo={(commandExecutionId) => undoCommandExecution(commandExecutionId)}
+                onPreviewReady={(response) => {
+                  const block = response.data.preview.config_validation as ConfigValidationBlock | undefined;
+                  setImportConfigValidation(block ?? null);
+                }}
                 onSuccess={(result) => void refreshAfterMutation(String(result.data.project_id ?? ""))}
                 onUndoSuccess={() => void refreshAfterMutation()}
               />
+              {importConfigValidation ? (
+                <div style={{ marginTop: "var(--space-4)" }}>
+                  <ConfigFindingsPanel validation={importConfigValidation} showInlineSecretHint />
+                </div>
+              ) : null}
             </div>
           </Surface>
 
