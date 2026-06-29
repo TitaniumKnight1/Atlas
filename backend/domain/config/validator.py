@@ -17,7 +17,7 @@ from backend.domain.config.structural import (
     StructuralValidationStatus,
 )
 from backend.domain.config.types import FindingSeverity, SecretFinding
-from backend.domain.pathway2.normalization import EXEC_LINE, find_server_cfg
+from backend.domain.config.server_cfg_discovery import EXEC_LINE, find_server_cfg
 
 ENSURE_PATTERN = re.compile(r"^\s*(?:ensure|start)\s+([^\s#;]+)", re.IGNORECASE)
 ABSOLUTE_PATH_PATTERN = re.compile(

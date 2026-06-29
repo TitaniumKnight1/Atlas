@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from backend.domain.config.server_cfg_discovery import EXEC_LINE, find_server_cfg
 from backend.adapters.config.validator import unified_diff
 from backend.adapters.telemetry.sanitizer import SECRET_RULES
 
@@ -13,19 +14,10 @@ EXEC_TRAILER = "exec server.cfg.local"
 GITIGNORE_OVERLAY_ENTRY = "server.cfg.local"
 PLACEHOLDER = "CHANGE_ME"
 
-EXEC_LINE = re.compile(r"^\s*exec\s+", re.IGNORECASE)
 ENDPOINT_UDP = re.compile(r"^\s*endpoint_add_udp\s+", re.IGNORECASE)
 ENDPOINT_TCP = re.compile(r"^\s*endpoint_add_tcp\s+", re.IGNORECASE)
 LICENSE_LINE = re.compile(r"^\s*sv_licenseKey\s+", re.IGNORECASE)
 SET_LINE = re.compile(r"^\s*set\s+(\S+)", re.IGNORECASE)
-
-
-def find_server_cfg(root: Path) -> Path | None:
-    resolved = root.expanduser().resolve()
-    for candidate in (resolved / "server.cfg", resolved / "server-data" / "server.cfg"):
-        if candidate.is_file():
-            return candidate
-    return None
 
 
 def plan_repo_normalization(content: str) -> tuple[str, str, dict[str, Any]]:

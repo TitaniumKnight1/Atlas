@@ -9,10 +9,9 @@ from backend.infrastructure.sentry_dsn import resolve_sentry_dsn
 
 
 @pytest.fixture(autouse=True)
-def clear_generated_module() -> None:
-    sys.modules.pop("backend.infrastructure.build_config_generated", None)
+def clear_generated_module(isolate_baked_sentry_dsn: None) -> None:
+    """Keep test-local baked DSN overrides working on top of the global isolation stub."""
     yield
-    sys.modules.pop("backend.infrastructure.build_config_generated", None)
 
 
 def test_resolve_returns_none_without_baked_or_env(monkeypatch: pytest.MonkeyPatch) -> None:
