@@ -47,6 +47,11 @@ def plan_repo_normalization(content: str) -> tuple[str, str, dict[str, Any]]:
             overlay_secret_lines.append(placeholder_line)
             secrets_placeholderized += 1
             continue
+        if _line_is_tracked_secret_placeholder(line):
+            base_lines.append(line)
+            overlay_secret_lines.append(line)
+            secrets_placeholderized += 1
+            continue
         base_lines.append(line)
 
     while base_lines and not base_lines[-1].strip():
@@ -137,6 +142,18 @@ def _line_needs_secret_placeholder(line: str) -> bool:
         if pattern.search(line):
             return True
     return False
+
+
+def _line_is_tracked_secret_placeholder(line: str) -> bool:
+    if PLACEHOLDER not in line:
+        return False
+    if LICENSE_LINE.match(line):
+        return True
+    set_match = SET_LINE.match(line)
+    if not set_match:
+        return False
+    key = set_match.group(1).lower()
+    return any(token in key for token in ("mysql", "postgres", "mariadb", "mongodb", "connection", "database", "webhook", "dsn", "secret", "token", "api"))
 
 
 def _placeholderize_line(line: str) -> str:

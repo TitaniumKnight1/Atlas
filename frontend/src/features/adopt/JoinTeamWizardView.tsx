@@ -54,6 +54,7 @@ import { PathwayChoice } from "../onboarding/PathwayChoice";
 import { ConfigFindingsPanel } from "../config/ConfigFindingsPanel";
 import { DevDatabasePanel } from "./DevDatabasePanel";
 import {
+  DevSecretsStepHero,
   DevSecretEntryForm,
   InlineSecretsReport,
   Pathway2StatusBadges,
@@ -362,12 +363,6 @@ export function JoinTeamWizardView() {
                   validation={adoptPreviewValidation}
                   showInlineSecretHint
                   lastCheckedAt={adoptValidationCheckedAt}
-                  onRefresh={async () => {
-                    const response = await previewAdoptRepository(rootPath.trim(), remoteUrl.trim() || undefined);
-                    const block = response.data.preview.config_validation as ConfigValidationBlock | undefined;
-                    setAdoptPreviewValidation(block ?? null);
-                    setAdoptValidationCheckedAt(new Date().toLocaleString());
-                  }}
                 />
               </div>
             ) : null}
@@ -408,26 +403,31 @@ export function JoinTeamWizardView() {
           ) : null}
 
           <div className="setup-wizard__body">
-            {statusLoading ? <LoadingState title="Loading wizard status" detail="Reading Pathway 2 state and guard rails." /> : null}
-            {statusError ? <ErrorState error={statusError} onRetry={() => void refreshWizardStatus(projectId)} /> : null}
+            {statusLoading && !wizardStatus ? (
+              <div className="wizard-step wizard-step--status">
+                <LoadingState title="Loading wizard status" detail="Reading Pathway 2 state and guard rails." />
+              </div>
+            ) : null}
+            {statusError && !wizardStatus ? (
+              <div className="wizard-step wizard-step--status">
+                <ErrorState error={statusError} onRetry={() => projectId && void refreshWizardStatus(projectId)} />
+              </div>
+            ) : null}
 
+            {wizardStatus && !statusLoading ? (
+              <>
             {activeStep === "adopt" ? (
               <section className="wizard-step">
                 <div className="wizard-step__content">
-                  <ConfigFindingsPanel
-                    compact
-                    projectId={projectId ?? undefined}
-                    validation={wizardStatus?.config_validation ?? null}
-                    showInlineSecretHint
-                    lastCheckedAt={wizardValidationCheckedAt}
-                    onRefresh={
-                      projectId
-                        ? async () => {
-                            await refreshWizardStatus(projectId);
-                          }
-                        : undefined
-                    }
-                  />
+                  {wizardStatus && !statusLoading ? (
+                    <ConfigFindingsPanel
+                      compact
+                      projectId={projectId ?? undefined}
+                      validation={wizardStatus.config_validation ?? null}
+                      showInlineSecretHint
+                      lastCheckedAt={wizardValidationCheckedAt}
+                    />
+                  ) : null}
                   <SectionHeading title="Structure scorecard" detail="Atlas must detect a FiveM server before proceeding to normalization." />
                   {scorecard ? <StructureScorecardView compact scorecard={scorecard} /> : null}
                   {wizardStatus?.inline_secrets?.length ? <InlineSecretsReport findings={wizardStatus.inline_secrets} /> : null}
@@ -436,6 +436,15 @@ export function JoinTeamWizardView() {
                   ) : null}
                 </div>
                 <div className="wizard-step__footer">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={statusLoading}
+                    loading={statusLoading}
+                    onClick={() => projectId && void refreshWizardStatus(projectId)}
+                  >
+                    Re-run changes
+                  </Button>
                   <Button variant="primary" disabled={!gates?.adopt} onClick={() => goToStep("normalize")}>
                     Continue to normalize
                   </Button>
@@ -478,32 +487,37 @@ export function JoinTeamWizardView() {
             {activeStep === "secrets" ? (
               <section className="wizard-step">
                 <div className="wizard-step__content">
-                  <SectionHeading
-                    title="Substitute dev secrets"
-                    detail="Hybrid model: Atlas fills safe local defaults; you supply dev-only keys. Set all dev slots before running."
-                  />
-                  {wizardStatus?.substitution_slots?.length ? (
-                    <SubstitutionSlotsReport slots={wizardStatus.substitution_slots} unsetDevSlots={wizardStatus.unset_dev_slots ?? []} />
+                  {wizardStatus.wizard.secrets_step ? (
+                    <DevSecretsStepHero guidance={wizardStatus.wizard.secrets_step} />
                   ) : null}
-                  {blockers.secrets ? <WizardGateAlert title="Dev secrets required" detail={blockers.secrets} /> : null}
-                  <CommandPanel
-                    title="Apply secret substitution"
-                    description="Writes dev values and placeholders into server.cfg.local only. Production secrets stay masked in previews."
-                    executeLabel="Apply substitution"
-                    presentation="guided"
-                    disabled={!pathwayState?.normalized}
-                    onPreview={() => previewSecretSubstitution(projectId)}
-                    onDryRun={() => dryRunSecretSubstitution(projectId)}
-                    onExecute={() => applySecretSubstitution(projectId)}
-                    onUndo={(commandExecutionId) => undoPathway2Command(projectId, commandExecutionId)}
-                    onSuccess={() => void refreshWizardStatus(projectId)}
-                    onUndoSuccess={() => void refreshWizardStatus(projectId)}
-                  />
-                  {pathwayState?.secrets_substituted && (wizardStatus?.unset_dev_slots?.length ?? 0) > 0 ? (
+                  {wizardStatus.wizard.secrets_step?.show_substitution_command ? (
+                    <>
+                      {wizardStatus.substitution_slots?.length ? (
+                        <SubstitutionSlotsReport
+                          slots={wizardStatus.substitution_slots}
+                          unsetDevSlots={wizardStatus.unset_dev_slots ?? []}
+                        />
+                      ) : null}
+                      <CommandPanel
+                        title="Apply secret substitution"
+                        description="Writes dev values and placeholders into server.cfg.local only. Production secrets stay masked in previews."
+                        executeLabel="Apply substitution"
+                        presentation="guided"
+                        disabled={!pathwayState?.normalized}
+                        onPreview={() => previewSecretSubstitution(projectId)}
+                        onDryRun={() => dryRunSecretSubstitution(projectId)}
+                        onExecute={() => applySecretSubstitution(projectId)}
+                        onUndo={(commandExecutionId) => undoPathway2Command(projectId, commandExecutionId)}
+                        onSuccess={() => void refreshWizardStatus(projectId)}
+                        onUndoSuccess={() => void refreshWizardStatus(projectId)}
+                      />
+                    </>
+                  ) : null}
+                  {wizardStatus.wizard.secrets_step?.show_dev_entry_form ? (
                     <DevSecretEntryForm
                       projectId={projectId}
-                      slots={wizardStatus?.substitution_slots ?? []}
-                      unsetDevSlots={wizardStatus?.unset_dev_slots ?? []}
+                      slots={wizardStatus.substitution_slots ?? []}
+                      unsetDevSlots={wizardStatus.unset_dev_slots ?? []}
                       onApplied={() => void refreshWizardStatus(projectId)}
                     />
                   ) : null}
@@ -693,6 +707,8 @@ export function JoinTeamWizardView() {
                   </Button>
                 </div>
               </section>
+            ) : null}
+              </>
             ) : null}
           </div>
         </Surface>

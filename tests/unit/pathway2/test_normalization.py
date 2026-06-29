@@ -29,3 +29,19 @@ def test_redact_unified_diff_masks_secret_values() -> None:
     diff = redact_unified_diff(unified_diff(before, after, "server.cfg"))
     assert "cfxk_test_production_key_value_123456" not in diff
     assert "CHANGE_ME" in diff
+
+
+def test_plan_repo_normalization_copies_existing_change_me_secrets_to_overlay() -> None:
+    content = (
+        'endpoint_add_udp "0.0.0.0:30120"\n'
+        'endpoint_add_tcp "0.0.0.0:30120"\n'
+        'sv_licenseKey "CHANGE_ME"\n'
+        'set mysql_connection_string "CHANGE_ME"\n'
+        "ensure qb-core\n"
+    )
+    normalized, overlay, meta = plan_repo_normalization(content)
+    assert 'sv_licenseKey "CHANGE_ME"' in normalized
+    assert 'set mysql_connection_string "CHANGE_ME"' in normalized
+    assert 'sv_licenseKey "CHANGE_ME"' in overlay
+    assert 'set mysql_connection_string "CHANGE_ME"' in overlay
+    assert meta["secrets_placeholderized"] == 2

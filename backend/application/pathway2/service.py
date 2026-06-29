@@ -406,7 +406,14 @@ class AdoptApplicationService:
 
     def dry_run_secret_substitution(self, *, project_id: ProjectId) -> DryRunResult:
         preview = self.preview_secret_substitution(project_id=project_id)
-        return DryRunResult(preview.command_type, bool(preview.preview["slots"]), preview.preview, preview.warnings)
+        slots = preview.preview["slots"]
+        warnings = list(preview.warnings)
+        if not slots:
+            warnings.append(
+                "No CHANGE_ME placeholders in server.cfg.local. Re-run normalization or add secret placeholders before applying."
+            )
+            return DryRunResult(preview.command_type, False, preview.preview, warnings)
+        return DryRunResult(preview.command_type, True, preview.preview, warnings)
 
     def execute_apply_secret_substitution(self, *, project_id: ProjectId, idempotency_key: str | None = None) -> CommandExecutionResult:
         preview = self.preview_secret_substitution(project_id=project_id)

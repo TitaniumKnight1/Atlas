@@ -24,8 +24,10 @@ import {
   SectionHeading,
   StatusPill,
   Surface,
-  TechnicalDetails
+  TechnicalDetails,
+  Alert
 } from "../../components";
+import type { SecretsStepGuidance } from "../../api/pathway2";
 import { CommandPanel } from "../../components/CommandPanel";
 import { EmptyState, ErrorState, LoadingState } from "../../components/StateViews";
 
@@ -366,6 +368,26 @@ export function Pathway2StatusBadges({
       {runReady ? <Badge variant="info">Run ready</Badge> : null}
       {devTransformed ? <Badge variant="info">Dev transformed</Badge> : null}
     </div>
+  );
+}
+
+export function DevSecretsStepHero({ guidance }: { guidance: SecretsStepGuidance }) {
+  const variant =
+    guidance.phase === "ready"
+      ? "success"
+      : guidance.phase === "apply_substitution"
+        ? "info"
+        : guidance.phase === "set_dev_license"
+          ? "warn"
+          : "info";
+
+  return (
+    <Alert severity={variant} title={guidance.title}>
+      <p>{guidance.detail}</p>
+      <p className="muted-copy" style={{ marginTop: "var(--space-2)" }}>
+        Next: {guidance.primary_action}
+      </p>
+    </Alert>
   );
 }
 

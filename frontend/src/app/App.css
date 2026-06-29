@@ -380,17 +380,50 @@ body,
 .project-card {
   display: flex;
   width: 100%;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-3);
+  align-items: stretch;
+  gap: var(--space-2);
+  padding: 0;
   border: 1px solid var(--atlas-border-subtle);
   border-radius: var(--radius-md);
   color: var(--atlas-text-muted);
   background: var(--atlas-surface-2);
   text-align: left;
-  cursor: pointer;
   box-shadow: var(--shadow-1), var(--hairline-top);
+}
+
+.project-card__select {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.project-card__remove {
+  flex: 0 0 auto;
+  align-self: center;
+  margin-right: var(--space-2);
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 1px solid var(--atlas-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--atlas-text-faint);
+  background: transparent;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.project-card__remove:hover {
+  border-color: var(--atlas-danger-border, var(--atlas-border-strong));
+  color: var(--atlas-danger-text, var(--atlas-text-strong));
+  background: var(--atlas-danger-softer, var(--atlas-surface-3));
 }
 
 .project-card:hover {
@@ -481,7 +514,20 @@ body,
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-4);
-  overflow-y: auto;
+  overflow: hidden;
+}
+
+.setup-wizard__body > .wizard-step {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.wizard-step--status {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
 }
 
 .setup-step {

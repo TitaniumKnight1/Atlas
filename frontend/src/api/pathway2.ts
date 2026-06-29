@@ -80,6 +80,15 @@ export interface WizardStepItem {
   status: "upcoming" | "active" | "complete" | "failed";
 }
 
+export interface SecretsStepGuidance {
+  phase: "apply_substitution" | "set_dev_license" | "overlay_missing_placeholders" | "ready" | "blocked";
+  title: string;
+  detail: string;
+  show_substitution_command: boolean;
+  show_dev_entry_form: boolean;
+  primary_action: string;
+}
+
 export interface Pathway2WizardStatus extends Pathway2Status {
   wizard: {
     active_step: WizardStepId;
@@ -87,6 +96,7 @@ export interface Pathway2WizardStatus extends Pathway2Status {
     gates: Record<WizardStepId, boolean>;
     blockers: Partial<Record<WizardStepId, string>>;
     next_step: WizardStepId | null;
+    secrets_step: SecretsStepGuidance;
   };
   return_path?: ReturnPathStatus;
 }

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from backend.domain.pathway2.secrets_step import derive_secrets_step_guidance
+
 WizardStepId = Literal["adopt", "normalize", "secrets", "tuning", "run", "return", "done"]
 WizardStepStatus = Literal["upcoming", "active", "complete", "failed"]
 
@@ -135,12 +137,25 @@ def build_wizard_status(
         "done": bool(origin) and normalized and run_ready,
     }
 
+    substitution_slots = list(adopt_status.get("substitution_slots") or [])
+    secrets_step = derive_secrets_step_guidance(
+        normalized=normalized,
+        secrets_substituted=secrets_substituted,
+        run_ready=run_ready,
+        unset_dev_slots=unset_dev_slots,
+        run_blocked_reason=run_blocked_reason,
+        substitution_slot_count=len(substitution_slots),
+    )
+    if secrets_step["phase"] not in {"ready"}:
+        blockers["secrets"] = secrets_step["detail"]
+
     return {
         "active_step": active_step,
         "steps": steps,
         "gates": gates,
         "blockers": blockers,
         "next_step": _next_enabled_step(active_step, gates),
+        "secrets_step": secrets_step,
     }
 
 
