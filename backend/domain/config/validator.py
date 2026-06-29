@@ -20,6 +20,17 @@ from backend.domain.config.types import FindingSeverity, SecretFinding
 from backend.domain.config.server_cfg_discovery import EXEC_LINE, find_server_cfg
 
 ENSURE_PATTERN = re.compile(r"^\s*(?:ensure|start)\s+([^\s#;]+)", re.IGNORECASE)
+# Shipped with FXServer artifacts — not expected under the project resources/ tree.
+BUILTIN_SERVER_RESOURCES = frozenset(
+    {
+        "baseevents",
+        "hardcap",
+        "mapmanager",
+        "monitor",
+        "sessionmanager",
+        "spawnmanager",
+    }
+)
 ABSOLUTE_PATH_PATTERN = re.compile(
     r'(?:"([^"]*(?:[A-Za-z]:[\\/]|/home/|/Users/)[^"]*)"|\'([^\']*(?:[A-Za-z]:[\\/]|/home/|/Users/)[^\']*)\')'
 )
@@ -59,10 +70,17 @@ class ConfigValidator:
             primary_path=server_cfg_path,
             primary_rel=rel_cfg,
             primary_content=server_cfg_content,
+            exec_contents={},
+        )
+        all_ensured_names = self._collect_ensure_refs(
+            root=root,
+            primary_path=server_cfg_path,
+            primary_rel=rel_cfg,
+            primary_content=server_cfg_content,
             exec_contents=exec_contents or {},
         )
         findings.extend(self._find_dangling_refs(ensured_names, resource_index))
-        findings.extend(self._find_missing_manifests(root, resource_index, ensured_names))
+        findings.extend(self._find_missing_manifests(root, resource_index, all_ensured_names))
         findings.extend(self._find_absolute_paths(rel_cfg, server_cfg_content))
         for exec_rel, content in (exec_contents or {}).items():
             findings.extend(self._find_absolute_paths(exec_rel, content))
@@ -100,6 +118,8 @@ class ConfigValidator:
     ) -> list[ConfigFinding]:
         findings: list[ConfigFinding] = []
         for resource_name, refs in sorted(ensured.items()):
+            if resource_name in BUILTIN_SERVER_RESOURCES:
+                continue
             present, confidence = resource_index.resource_present(resource_name)
             if present:
                 continue

@@ -46,11 +46,44 @@ def test_prevailrp_fixture_detects_all_rough_edges(tmp_path: Path) -> None:
     assert ConfigFindingType.DANGLING_RESOURCE_REFERENCE.value in types
     dangling = [item for item in payload["findings"] if item["type"] == ConfigFindingType.DANGLING_RESOURCE_REFERENCE.value]
     assert len(dangling) == 2
+    assert all(item["path"] == "server.cfg" for item in dangling)
     assert any(item["type"] == ConfigFindingType.MISSING_MANIFEST.value for item in payload["findings"])
     assert any(item["type"] == ConfigFindingType.ABSOLUTE_PATH.value for item in payload["findings"])
     secrets = [item for item in payload["findings"] if item["type"] == ConfigFindingType.INLINE_SECRET.value]
     assert len(secrets) == 2
     assert all("FAKEpass" not in item.get("context", {}).get("redacted_preview", "") for item in secrets)
+    assert payload["finding_count"] <= 10
+
+
+def test_nested_resource_subfolders_not_flagged_as_missing_manifest(tmp_path: Path) -> None:
+    root = tmp_path / "nested-server"
+    root.mkdir()
+    resource = root / "resources" / "[jobs]" / "my-job"
+    (resource / "data").mkdir(parents=True)
+    (resource / "data" / "config.lua").write_text("return {}\n", encoding="utf-8")
+    (resource / "fxmanifest.lua").write_text("fx_version 'cerulean'\n", encoding="utf-8")
+    (root / "server.cfg").write_text('sv_licenseKey "cfxk_test_placeholder_key_value"\nensure my-job\n', encoding="utf-8")
+    result = run_structural_validation(root=root, filesystem=_LocalFs(), secret_scanner=LocalConfigSecretScanner())
+    missing = [item for item in result.findings if item.type == ConfigFindingType.MISSING_MANIFEST]
+    assert missing == []
+
+
+def test_exec_fragment_dangling_ensure_not_flagged(tmp_path: Path) -> None:
+    root = tmp_path / "exec-server"
+    root.mkdir()
+    resources = root / "resources"
+    resources.mkdir()
+    (resources / "ox_lib").mkdir()
+    (resources / "ox_lib" / "fxmanifest.lua").write_text("fx_version 'cerulean'\n", encoding="utf-8")
+    (root / "fragments").mkdir()
+    (root / "fragments" / "extra.cfg").write_text("ensure ghost_resource\n", encoding="utf-8")
+    (root / "server.cfg").write_text(
+        'sv_licenseKey "cfxk_test_placeholder_key_value"\nexec fragments/extra.cfg\nensure ox_lib\n',
+        encoding="utf-8",
+    )
+    result = run_structural_validation(root=root, filesystem=_LocalFs(), secret_scanner=LocalConfigSecretScanner())
+    dangling = [item for item in result.findings if item.type == ConfigFindingType.DANGLING_RESOURCE_REFERENCE]
+    assert dangling == []
 
 
 def test_junctioned_resource_not_flagged_dangling(tmp_path: Path) -> None:
@@ -117,7 +150,27 @@ def test_adopt_status_includes_config_validation(tmp_path: Path) -> None:
         status = container.create_adopt_service().get_adopt_status(ProjectId(str(project_id)))
         validation = status["config_validation"]
         assert validation["finding_count"] >= 5
+        assert validation["finding_count"] <= 10
         assert any(item["type"] == "MISSING_MANIFEST" for item in validation["findings"])
+    finally:
+        container.close()
+
+
+def test_adopt_execute_completes_with_nested_resource_tree(tmp_path: Path) -> None:
+    container = create_application_container(tmp_path / "app-data")
+    root = tmp_path / "nested-adopt"
+    root.mkdir()
+    _write_prevailrp_fixture(root)
+    resource = root / "resources" / "[jobs]" / "my-job"
+    nested = resource / "modules" / "deep" / "child"
+    nested.mkdir(parents=True)
+    (nested / "logic.lua").write_text("return {}\n", encoding="utf-8")
+    (resource / "fxmanifest.lua").write_text("fx_version 'cerulean'\n", encoding="utf-8")
+    try:
+        adopt = container.create_adopt_service().execute_adopt_repository(root_path=root)
+        validation = adopt.result["config_validation"]
+        assert validation["finding_count"] <= 12
+        assert adopt.result["project_id"]
     finally:
         container.close()
 

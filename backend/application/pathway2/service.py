@@ -121,8 +121,7 @@ class AdoptApplicationService:
         remote_url: str | None = None,
         idempotency_key: str | None = None,
     ) -> CommandExecutionResult:
-        preview = self.preview_adopt_repository(root_path=root_path, remote_url=remote_url)
-        resolved = Path(str(preview.preview["root_path"]))
+        resolved = root_path.expanduser().resolve()
         if remote_url:
             if resolved.exists() and any(resolved.iterdir()):
                 raise Pathway2ApplicationError(ErrorCode.VALIDATION_FAILED, "Destination path exists and is not empty")
@@ -151,7 +150,7 @@ class AdoptApplicationService:
             resource_count=resource_scan.get("total"),
         )
         inline_secrets = self._scan_repo_secrets(project_root or resolved, server_cfg)
-        config_validation, adopt_validation_warnings = self._structural_validation_block(project_root or resolved)
+        config_validation, adopt_validation_warnings = self._structural_validation_block(project_root or resolved, for_response=True)
 
         settings_patch = {
             Pathway2SettingKeys.ORIGIN: "adopted_clone" if remote_url else "adopted_local",
@@ -166,9 +165,10 @@ class AdoptApplicationService:
 
         adopt_preview = CommandPreview(
             "AdoptRepository",
-            preview.summary,
+            f"Adopt FiveM repository at {resolved}",
             {
-                **preview.preview,
+                "root_path": str(resolved),
+                "remote_url": redact_remote_url(remote_url) if remote_url else None,
                 "project_id": str(project_id),
                 "structure_scorecard": scorecard,
                 "inline_secrets": inline_secrets,
@@ -176,7 +176,7 @@ class AdoptApplicationService:
                 "pathway2_state": _pathway2_state(settings_patch),
                 "run_blocked_reason": "Dev secrets not yet set — complete P2-2 substitution before running.",
             },
-            warnings=[*preview.warnings, *[w for w in adopt_validation_warnings if w not in preview.warnings]],
+            warnings=adopt_validation_warnings,
             risk_level=RiskLevel.MEDIUM,
         )
         return CommandExecutionResult(
@@ -841,9 +841,9 @@ class AdoptApplicationService:
             return None
         return repos[0].get("remote_url")
 
-    def _structural_validation_block(self, root: Path) -> tuple[dict[str, Any], list[str]]:
+    def _structural_validation_block(self, root: Path, *, for_response: bool = False) -> tuple[dict[str, Any], list[str]]:
         result = run_structural_validation(root=root, filesystem=self.filesystem, secret_scanner=self.secret_scanner)
-        payload = enrich_validation_payload(result, root_path=str(root))
+        payload = enrich_validation_payload(result, root_path=str(root), for_response=for_response)
         return payload, result.warning_summary()
 
     def _scan_repo_secrets(self, project_root: Path, server_cfg: Path | None) -> list[dict[str, Any]]:
