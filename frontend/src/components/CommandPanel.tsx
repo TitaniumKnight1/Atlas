@@ -11,6 +11,8 @@ interface CommandPanelProps {
   title: string;
   description: string;
   previewLabel?: string;
+  /** Shown on the preview button after the first successful preview. Defaults to "Re-run changes". */
+  rerunPreviewLabel?: string;
   executeLabel: string;
   disabled?: boolean;
   /** guided: human summary + collapsed JSON (wizard). detailed: legacy debug-first layout. */
@@ -37,6 +39,7 @@ export function CommandPanel({
   title,
   description,
   previewLabel = "Preview changes",
+  rerunPreviewLabel = "Re-run changes",
   executeLabel,
   disabled,
   presentation = "detailed",
@@ -104,12 +107,32 @@ export function CommandPanel({
     }
   }
 
-  const isBusy = phase === "previewing" || phase === "executing" || phase === "undoing";
+  const dryRunBlocked = dryRun != null && !dryRun.data.valid;
   const canUndo = Boolean(onUndo && result?.data.undo_plan && result.data.command_execution_id && phase !== "undone");
   const commandSteps = buildCommandSteps({ phase, preview: Boolean(preview), dryRun: Boolean(dryRun), result: Boolean(result), canUndo });
   const planSteps = extractPlanSteps(preview?.data.preview) ?? extractPlanSteps(dryRun?.data.simulation) ?? extractPlanSteps(result?.data);
   const compactPreview = preview ? isCompactPayload(preview.data.preview) : false;
-  const allWarnings = [...(preview?.warnings ?? []), ...(dryRun && !dryRun.data.valid ? ["Dry-run validation failed"] : [])];
+  const allWarnings = [...(preview?.warnings ?? []), ...(dryRunBlocked ? ["Dry-run validation failed"] : [])];
+
+  const primaryLabel =
+    phase === "success" ? "Applied" : phase === "ready" || phase === "executing" ? executeLabel : previewLabel;
+  const primaryLoading = phase === "previewing" || phase === "executing";
+  const isBusy = phase === "previewing" || phase === "executing" || phase === "undoing";
+  const showRerun = Boolean(preview) && phase !== "previewing" && phase !== "executing" && phase !== "undoing";
+  const primaryEnabled =
+    !disabled &&
+    !primaryLoading &&
+    phase !== "success" &&
+    phase !== "undoing" &&
+    (phase === "ready" ? !dryRunBlocked : true);
+
+  function handlePrimaryAction() {
+    if (phase === "ready" && !dryRunBlocked) {
+      void executeCommand();
+      return;
+    }
+    void previewCommand();
+  }
 
   return (
     <section className={guided ? "command-panel command-panel--guided" : "command-panel"}>
@@ -124,34 +147,33 @@ export function CommandPanel({
         </div>
       </div>
 
-      {!guided ? (
-        <div className="command-panel__steps" aria-label="Command progress">
+      <div className="command-panel__steps command-panel__steps--passive" aria-label="Command progress">
           {commandSteps.map((step) => (
-            <CommandStep key={step.label} step={step} />
+            <CommandStep key={step.label} step={step} passive />
           ))}
         </div>
-      ) : preview || phase !== "idle" ? (
-        <div className="command-panel__steps" aria-label="Command progress">
-          {commandSteps.map((step) => (
-            <CommandStep key={step.label} step={step} />
-          ))}
-        </div>
-      ) : null}
 
       <div className="command-panel__body">
         <div className="command-panel__actions">
-          <Button type="button" variant="secondary" onClick={previewCommand} disabled={disabled || isBusy} loading={phase === "previewing"}>
-            {previewLabel}
-          </Button>
           <Button
             type="button"
             variant="primary"
-            onClick={executeCommand}
-            disabled={disabled || phase !== "ready" || isBusy || (dryRun != null && !dryRun.data.valid)}
-            loading={phase === "executing"}
+            onClick={handlePrimaryAction}
+            disabled={!primaryEnabled}
+            loading={primaryLoading}
           >
-            {executeLabel}
+            {primaryLabel}
           </Button>
+          {showRerun ? (
+            <Button type="button" variant="secondary" onClick={previewCommand} disabled={disabled || isBusy}>
+              {rerunPreviewLabel}
+            </Button>
+          ) : null}
+          {canUndo ? (
+            <Button type="button" variant="secondary" onClick={undoCommand} disabled={isBusy} loading={phase === "undoing"}>
+              Undo
+            </Button>
+          ) : null}
         </div>
 
         {phase === "previewing" ? <LoadingState title="Previewing command" detail="Validating through the backend without persisting changes." /> : null}
@@ -225,18 +247,11 @@ export function CommandPanel({
                 ["Undo", result.data.undo_plan ? "Undo plan available" : "No undo plan"]
               ]}
             />
-            {result.data.undo_plan ? (
-              <div className="command-panel__actions">
-                <Button type="button" variant="secondary" onClick={undoCommand} disabled={!canUndo || isBusy} loading={phase === "undoing"}>
-                  Undo
-                </Button>
-                {!guided ? (
-                  <p className="note">
-                    Undo references execution <code>{String(result.data.command_execution_id)}</code>. Atlas rehydrates the
-                    compensating action from the stored audit record server-side.
-                  </p>
-                ) : null}
-              </div>
+            {result.data.undo_plan && !guided && canUndo ? (
+              <p className="note">
+                Undo references execution <code>{String(result.data.command_execution_id)}</code>. Atlas rehydrates the
+                compensating action from the stored audit record server-side.
+              </p>
             ) : null}
           </div>
         ) : null}
@@ -320,7 +335,7 @@ function DefinitionGridBase({ items }: { items: Array<[string, string]> }) {
   );
 }
 
-function CommandStep({ step }: { step: CommandPlanStep }) {
+function CommandStep({ step, passive = false }: { step: CommandPlanStep; passive?: boolean }) {
   const className =
     step.status === "succeeded"
       ? "command-step command-step--done"
@@ -333,7 +348,7 @@ function CommandStep({ step }: { step: CommandPlanStep }) {
             : "command-step";
 
   return (
-    <span className={className}>
+    <span className={passive ? `${className} command-step--passive` : className} aria-hidden={passive}>
       <span className="command-step__mark" aria-hidden="true">
         {step.status === "succeeded" ? "ok" : step.status === "failed" ? "x" : step.status === "held" ? "!" : ""}
       </span>

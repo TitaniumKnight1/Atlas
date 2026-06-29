@@ -154,6 +154,7 @@ export function DevLicenseEntryPanel({
   onApplied: () => void;
 }) {
   const [licenseKey, setLicenseKey] = useState("");
+  const [showLicenseKey, setShowLicenseKey] = useState(false);
   const showForm = licenseKeyPending(unsetDevSlots);
   const formatWarning = !licenseKey.trim() || licenseKey.trim().startsWith("cfxk_") ? null : (
     <Alert severity="warn" title="Unusual key format">
@@ -178,14 +179,19 @@ export function DevLicenseEntryPanel({
       {formatWarning}
       <InputGroup>
         <Field label="Cfx.re dev license key" hint="Starts with cfxk_; stored locally in the gitignored overlay.">
-          <Input
-            type="text"
-            autoComplete="off"
-            spellCheck={false}
-            value={licenseKey}
-            onChange={(event) => setLicenseKey(event.target.value)}
-            placeholder="cfxk_…"
-          />
+          <div className="inline-actions">
+            <Input
+              type={showLicenseKey ? "text" : "password"}
+              autoComplete="off"
+              spellCheck={false}
+              value={licenseKey}
+              onChange={(event) => setLicenseKey(event.target.value)}
+              placeholder="cfxk_…"
+            />
+            <Button type="button" variant="secondary" onClick={() => setShowLicenseKey((current) => !current)}>
+              {showLicenseKey ? "Hide" : "Show"}
+            </Button>
+          </div>
         </Field>
       </InputGroup>
       <CommandPanel

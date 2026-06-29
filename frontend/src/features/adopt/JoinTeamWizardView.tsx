@@ -321,7 +321,7 @@ export function JoinTeamWizardView() {
         ) : null}
       </ViewPageHeader>
 
-      <ViewPageBody className={projectId ? undefined : "view-page__body--scroll"}>
+      <ViewPageBody className={projectId ? "view-page__body--fill" : "view-page__body--scroll"}>
       {!projectId ? (
         <>
           <PathwayChoice current="join" />
@@ -419,7 +419,7 @@ export function JoinTeamWizardView() {
             ) : null}
 
             {wizardStatus ? (
-              <>
+              <div className="setup-wizard__step-host">
             {statusError ? (
               <ErrorState error={statusError} onRetry={() => projectId && void refreshWizardStatus(projectId)} />
             ) : null}
@@ -720,7 +720,7 @@ export function JoinTeamWizardView() {
                 </div>
               </section>
             ) : null}
-              </>
+              </div>
             ) : null}
           </div>
         </Surface>

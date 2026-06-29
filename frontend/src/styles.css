@@ -1232,6 +1232,19 @@ pre {
   border-bottom: 1px solid var(--atlas-border-subtle);
 }
 
+.command-panel__steps--passive {
+  pointer-events: none;
+  user-select: none;
+}
+
+.command-step--passive {
+  cursor: default;
+}
+
+.command-step--passive.command-step--held {
+  border-style: dashed;
+}
+
 .command-panel__steps {
   display: flex;
   flex-wrap: wrap;
@@ -1351,7 +1364,9 @@ pre {
 }
 
 .command-json {
-  max-height: 18rem;
+  max-height: min(18rem, 40vh);
+  overflow: auto;
+  margin: 0;
 }
 
 .atlas-disclosure {
@@ -1383,6 +1398,8 @@ pre {
 }
 
 .atlas-disclosure__body {
+  max-height: min(18rem, 40vh);
+  overflow: auto;
   padding: 0 var(--space-4) var(--space-4);
 }
 
@@ -1409,6 +1426,18 @@ pre {
 
 .command-summary li {
   line-height: var(--leading-snug);
+}
+
+.config-validation-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--atlas-border);
+  border-radius: var(--radius-md);
+  background: var(--atlas-surface-muted, var(--atlas-surface));
 }
 
 .config-findings-grid {
