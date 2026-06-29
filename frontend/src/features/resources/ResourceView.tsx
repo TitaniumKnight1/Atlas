@@ -34,7 +34,11 @@ import {
   StatusPill,
   Surface,
   Tabs,
-  type StatusKind
+  type StatusKind,
+  ViewPage,
+  ViewPageBody,
+  ViewPageHeader,
+  ViewWorkspace
 } from "../../components";
 import { CommandPanel } from "../../components/CommandPanel";
 import { EmptyState, ErrorState, LoadingState } from "../../components/StateViews";
@@ -129,15 +133,17 @@ export function ResourceView() {
   };
 
   return (
-    <div className="feature-page">
-      <header className="feature-header atlas-panel">
+    <ViewPage>
+      <ViewPageHeader>
         <SectionHeading
           detail="Inventory, dependency graph, lifecycle commands, and batch rollback — all through the backend command rail with graph-safety warnings."
           eyebrow="Resource manager"
           title="Install, enable, and reason about resources"
         />
-      </header>
+      </ViewPageHeader>
 
+      <ViewPageBody>
+      <ViewWorkspace>
       <Surface className="project-layout" kind="panel" padded={false}>
         <ProjectPicker
           loading={projectsResource.state === "loading"}
@@ -395,7 +401,9 @@ export function ResourceView() {
           )}
         </section>
       </Surface>
-    </div>
+      </ViewWorkspace>
+      </ViewPageBody>
+    </ViewPage>
   );
 }
 

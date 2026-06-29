@@ -1,7 +1,19 @@
+/*
+  Shell layout: fill the viewport; scroll only inside shell-main / view bodies.
+  Views use view-page + view-page__body (see components/layout/ViewPage.tsx).
+*/
+html,
+body,
+#root {
+  height: 100dvh;
+  overflow: hidden;
+}
+
 .atlas-shell {
-  min-height: 100vh;
+  height: 100dvh;
   display: grid;
   grid-template-columns: 248px minmax(0, 1fr);
+  overflow: hidden;
   background: var(--atlas-bg-base);
 }
 
@@ -207,11 +219,14 @@
   display: flex;
   min-width: 0;
   min-height: 0;
+  height: 100dvh;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .shell-topbar {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-5);
@@ -263,36 +278,88 @@
 }
 
 .shell-main {
+  display: flex;
+  flex: 1;
   min-width: 0;
-  overflow: auto;
-  padding: clamp(var(--space-4), 3vw, var(--space-6));
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  padding: var(--space-4);
 }
 
+/* View page: fill shell-main; compact header; scrollable body */
+.view-page,
 .feature-page {
-  display: grid;
-  gap: var(--space-5);
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
+.view-page__header,
 .feature-header {
-  padding: clamp(var(--space-5), 3vw, var(--space-6));
+  flex-shrink: 0;
+  padding: var(--space-4) var(--space-5);
 }
 
+.view-page__header p,
 .feature-header p {
-  max-width: 52rem;
+  max-width: none;
+}
+
+.view-page__body,
+.feature-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: var(--space-4);
+  overflow: hidden;
+}
+
+.view-page__body--scroll {
+  overflow: auto;
+}
+
+.view-workspace,
+.feature-workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.view-split {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 1100px) {
+  .view-split--2 {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    align-items: start;
+  }
 }
 
 .project-layout {
   display: grid;
-  grid-template-columns: minmax(15rem, 19rem) minmax(0, 1fr);
+  grid-template-columns: minmax(14rem, 17rem) minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
 }
 
 .project-sidebar {
   display: grid;
   align-content: start;
-  gap: var(--space-4);
-  padding: var(--space-4);
+  gap: var(--space-3);
+  min-height: 0;
+  padding: var(--space-3) var(--space-4);
   border-right: 1px solid var(--atlas-border-subtle);
+  overflow-y: auto;
 }
 
 .project-main,
@@ -304,7 +371,10 @@
 
 .project-main {
   min-width: 0;
+  min-height: 0;
   padding: var(--space-4);
+  overflow-y: auto;
+  align-content: start;
 }
 
 .project-card {
@@ -350,7 +420,7 @@
 }
 
 .workspace-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
 }
 
 .workspace-panel--wide {
@@ -358,13 +428,21 @@
 }
 
 .setup-wizard {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
   overflow: hidden;
 }
 
 .setup-wizard__body {
   display: grid;
+  flex: 1;
+  min-height: 0;
   gap: var(--space-4);
-  padding: var(--space-5);
+  padding: var(--space-4);
+  overflow-y: auto;
+  align-content: start;
 }
 
 .setup-step {
@@ -399,9 +477,16 @@
 @media (max-width: 920px) {
   .atlas-shell {
     grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .shell-workspace {
+    height: auto;
+    min-height: 0;
   }
 
   .shell-sidebar {
+    max-height: 42vh;
     border-right: 0;
     border-bottom: 1px solid var(--atlas-border-subtle);
   }

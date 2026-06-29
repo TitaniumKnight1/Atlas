@@ -28,7 +28,11 @@ import {
   SectionHeading,
   StatusPill,
   Surface,
-  Table
+  Table,
+  ViewPage,
+  ViewPageBody,
+  ViewPageHeader,
+  ViewWorkspace
 } from "../../components";
 import { CommandPanel } from "../../components/CommandPanel";
 import { EmptyState, ErrorState, LoadingState, OnboardingEmptyState } from "../../components/StateViews";
@@ -121,15 +125,17 @@ export function ProjectView() {
   );
 
   return (
-    <div className="feature-page">
-      <header className="feature-header atlas-panel">
+    <ViewPage>
+      <ViewPageHeader>
         <SectionHeading
           detail="Projects are local metadata over your server paths. Atlas previews commands first, then writes through the backend command rail."
           eyebrow="Project context"
           title="Choose the workspace Atlas controls"
         />
-      </header>
+      </ViewPageHeader>
 
+      <ViewPageBody>
+      <ViewWorkspace>
       <Surface className="project-layout" kind="panel" padded={false}>
         <section className="project-sidebar">
           <SectionHeading detail="Persisted local workspaces." title="Projects" />
@@ -325,6 +331,8 @@ export function ProjectView() {
           ) : null}
         </section>
       </Surface>
-    </div>
+      </ViewWorkspace>
+      </ViewPageBody>
+    </ViewPage>
   );
 }

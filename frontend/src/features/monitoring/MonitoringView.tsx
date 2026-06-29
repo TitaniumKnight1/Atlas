@@ -32,6 +32,10 @@ import {
   Tabs,
   TimeSeriesChart,
   Toast,
+  ViewPage,
+  ViewPageBody,
+  ViewPageHeader,
+  ViewWorkspace,
   rollupToRangePoints,
   useMonitoringStream,
   type LiveMetricSeries
@@ -343,15 +347,16 @@ export function MonitoringView() {
         : "Unknown";
 
   return (
-    <div className="feature-page">
-      <header className="feature-header atlas-panel">
+    <ViewPage>
+      <ViewPageHeader>
         <SectionHeading
           detail="Live metrics stream on the coalesce-tolerant metrics topic; alert events on the guaranteed alerts topic. Historical views use M6b rollups with min/max ranges."
           eyebrow="Monitoring"
           title="Watch health, metrics, and runtime signals"
         />
-      </header>
+      </ViewPageHeader>
 
+      <ViewPageBody>
       {backendStatus.state === "connecting" ? (
         <LoadingState detail="Waiting for the local backend before subscribing to metric streams." title="Backend connecting" />
       ) : null}
@@ -361,6 +366,7 @@ export function MonitoringView() {
         </Alert>
       ) : null}
 
+      <ViewWorkspace>
       <Surface className="project-layout" kind="panel" padded={false}>
         <ProjectPicker
           loading={projectsResource.state === "loading"}
@@ -630,6 +636,8 @@ export function MonitoringView() {
           )}
         </section>
       </Surface>
-    </div>
+      </ViewWorkspace>
+      </ViewPageBody>
+    </ViewPage>
   );
 }

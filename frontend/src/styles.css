@@ -143,12 +143,15 @@
 
 html {
   min-width: 320px;
+  height: 100%;
   background: var(--atlas-bg-base);
 }
 
 body {
   margin: 0;
   min-width: 320px;
+  height: 100%;
+  overflow: hidden;
   color: var(--atlas-text);
   background:
     radial-gradient(1200px 600px at 80% -10%, var(--atlas-accent-softer), transparent 60%),
@@ -1520,8 +1523,14 @@ pre {
 
 .metric-card-grid {
   display: grid;
-  gap: var(--space-4);
-  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+}
+
+@media (min-width: 1200px) {
+  .metric-card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  }
 }
 
 .metric-card {

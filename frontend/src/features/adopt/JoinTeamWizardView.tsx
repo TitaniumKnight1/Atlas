@@ -38,7 +38,11 @@ import {
   Surface,
   WizardStepper,
   type StatusKind,
-  type WizardStepItem
+  type WizardStepItem,
+  ViewPage,
+  ViewPageBody,
+  ViewPageHeader,
+  ViewWorkspace
 } from "../../components";
 import { CommandPanel } from "../../components/CommandPanel";
 import { EmptyState, ErrorState, LoadingState } from "../../components/StateViews";
@@ -285,18 +289,19 @@ export function JoinTeamWizardView() {
   const processStatusKind: StatusKind = mapProcessState(processStatus?.state);
 
   return (
-    <div className="feature-page">
-      <header className="feature-header atlas-panel">
+    <ViewPage>
+      <ViewPageHeader>
         <SectionHeading
           eyebrow="Pathway 2"
           title="Join a team server"
           detail="Guided onboarding: adopt a team repo, normalize overlay structure, substitute dev secrets, tune local config, run under supervision, and return work safely."
         />
         <PathwayChoice current="join" />
-      </header>
+      </ViewPageHeader>
 
+      <ViewPageBody className="view-page__body--scroll">
       {!projectId ? (
-        <>
+        <div className="view-split view-split--2">
           <Surface>
             <SectionHeading title="Clone or adopt" detail="Provide a local destination and optional remote URL. Atlas clones, imports, and scores the structure." />
             <InputGroup>
@@ -336,9 +341,14 @@ export function JoinTeamWizardView() {
                 ))}
               </div>
             </Surface>
-          ) : null}
-        </>
+          ) : (
+            <Surface kind="card">
+              <EmptyState detail="Adopt a repository to begin the join-team wizard." title="No adopted projects yet" />
+            </Surface>
+          )}
+        </div>
       ) : (
+        <ViewWorkspace>
         <Surface className="setup-wizard" kind="panel" padded={false}>
           <WizardStepper steps={wizardSteps} ariaLabel="Join team wizard progress" />
 
@@ -625,8 +635,10 @@ export function JoinTeamWizardView() {
             </nav>
           </div>
         </Surface>
+        </ViewWorkspace>
       )}
-    </div>
+      </ViewPageBody>
+    </ViewPage>
   );
 }
 

@@ -27,3 +27,4 @@ export { CodeEditor } from "./CodeEditor";
 export { DependencyChecksTable } from "./DependencyChecksTable";
 export { DependencyGraphView } from "./DependencyGraphView";
 export { ProjectPicker, ProjectPickerEmpty } from "./ProjectPicker";
+export { ViewPage, ViewPageBody, ViewPageHeader, ViewWorkspace } from "./layout/ViewPage";
