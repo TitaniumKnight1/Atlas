@@ -91,6 +91,18 @@ def humanize_launch_error(error: BaseException, fxserver_path: str = "") -> str:
             "or check the file isn't blocked by Windows."
         )
 
+    if winerror == 267 or errno == 267 or "directory name is invalid" in lowered:
+        return (
+            "That working folder doesn't exist or isn't valid for FXServer. "
+            "Atlas runs from the directory containing your tracked server.cfg — "
+            "for most team repos that's the project root, not an invented server-data subfolder."
+        )
+
+    if winerror == 3 or errno == 3 or "system cannot find the path" in lowered:
+        return (
+            "That path doesn't exist. Pick the folder that already contains your tracked server.cfg."
+        )
+
     if "not a valid win32 application" in lowered:
         return "That file is not a valid Windows executable. Point Atlas at FXServer.exe from the FiveM server artifact."
 
@@ -104,13 +116,6 @@ def humanize_launch_error(error: BaseException, fxserver_path: str = "") -> str:
 
 
 def validate_server_data_path(path: str) -> tuple[bool, str | None, str | None]:
-    stripped = (path or "").strip()
-    if not stripped:
-        return False, "Set your server-data folder first.", None
-    try:
-        resolved = Path(stripped).expanduser().resolve()
-    except OSError as error:
-        return False, humanize_launch_error(error, stripped), None
-    if resolved.exists() and not resolved.is_dir():
-        return False, f"Server-data path must be a folder: {stripped}", None
-    return True, None, str(resolved)
+    from backend.domain.setup.server_working_dir import validate_server_working_directory
+
+    return validate_server_working_directory(path)

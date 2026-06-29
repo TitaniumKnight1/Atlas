@@ -167,10 +167,21 @@ export interface FxserverValidateResult {
   resolved_path: string | null;
 }
 
+export interface ServerWorkingDirResult {
+  working_directory: string;
+  server_cfg_path: string;
+  server_cfg_relative: string;
+  project_root: string;
+}
+
 export async function detectFxserver(projectId: string): Promise<BackendResponse<FxserverDetectResult>> {
   return requestBackend<FxserverDetectResult>(`/api/v1/projects/${projectId}/setup/fxserver/detect`);
 }
 
 export async function validateFxserverPath(projectId: string, fxserverPath: string): Promise<BackendResponse<FxserverValidateResult>> {
   return requestBackend<FxserverValidateResult>(`/api/v1/projects/${projectId}/setup/fxserver/validate`, jsonRequest({ fxserver_path: fxserverPath }));
+}
+
+export async function resolveServerWorkingDirectory(projectId: string): Promise<BackendResponse<ServerWorkingDirResult>> {
+  return requestBackend<ServerWorkingDirResult>(`/api/v1/projects/${projectId}/setup/server-working-dir`);
 }

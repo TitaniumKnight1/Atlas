@@ -4,6 +4,7 @@ import { formatAuditRef } from "../../api/project";
 import {
   detectFxserver,
   getProcessStatus,
+  resolveServerWorkingDirectory,
   startProcess,
   stopProcess,
   validateFxserverPath,
@@ -160,6 +161,27 @@ export function RunLocallyWizardStep({
   const canContinue = serverStartedPersisted || serverRunning;
   const canStart = secretsReady && fxserverValidated && Boolean(fxserverPath.trim()) && Boolean(serverDataPath.trim());
 
+  useEffect(() => {
+    if (!projectId || !secretsReady) {
+      return;
+    }
+    let cancelled = false;
+    async function loadWorkingDirectory() {
+      try {
+        const response = await resolveServerWorkingDirectory(projectId);
+        if (!cancelled && response.data.working_directory) {
+          onServerDataPathChange(response.data.working_directory);
+        }
+      } catch {
+        /* leave empty — user can browse; never invent server-data */
+      }
+    }
+    void loadWorkingDirectory();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, secretsReady, onServerDataPathChange]);
+
   async function handleLocateFxserver() {
     setPickerBusy(true);
     setProcessError(null);
@@ -177,7 +199,7 @@ export function RunLocallyWizardStep({
   async function handleBrowseServerData() {
     setPickerBusy(true);
     try {
-      const picked = await pickFolder("Choose server-data folder");
+      const picked = await pickFolder("Choose folder containing server.cfg");
       if (picked) {
         onServerDataPathChange(picked);
       }
@@ -313,9 +335,12 @@ export function RunLocallyWizardStep({
 
             {ladderPhase === "found" ? (
               <>
-                <Field label="Server-data folder" hint="Folder containing server.cfg and resources (not the FXServer artifact).">
+                <Field
+                  label="Server working folder"
+                  hint="Folder containing your tracked server.cfg — usually the project root for team repos like PrevailRP."
+                >
                   <div className="inline-actions">
-                    <Input value={serverDataPath} readOnly placeholder="Choose your server-data folder" />
+                    <Input value={serverDataPath} readOnly placeholder="Resolving from tracked server.cfg…" />
                     <Button type="button" variant="secondary" disabled={pickerBusy} onClick={() => void handleBrowseServerData()}>
                       Browse…
                     </Button>

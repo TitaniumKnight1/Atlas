@@ -153,7 +153,7 @@ export function JoinTeamWizardView() {
         const detail = await getProject(activeProjectId);
         if (!cancelled) {
           setProjectDetail(detail);
-          setServerDataPath(resolveServerDataPath(detail));
+          setServerDataPath("");
         }
       } catch {
         if (!cancelled) {
@@ -543,16 +543,4 @@ export function JoinTeamWizardView() {
       </ViewPageBody>
     </ViewPage>
   );
-}
-
-function resolveServerDataPath(detail: ProjectDetail): string {
-  const serverData = detail.paths.find((path) => path.path_role === "server_data");
-  if (serverData) {
-    return serverData.absolute_path;
-  }
-  const root = detail.paths.find((path) => path.path_role === "root");
-  if (root) {
-    return `${root.absolute_path}\\server-data`;
-  }
-  return "";
 }

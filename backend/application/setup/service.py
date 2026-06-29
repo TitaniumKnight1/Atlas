@@ -513,6 +513,17 @@ class SetupApplicationService:
         valid, message, resolved = validate_fxserver_path(fxserver_path)
         return {"valid": valid, "message": message, "resolved_path": resolved}
 
+    def resolve_server_working_directory(self, *, project_id: ProjectId) -> dict[str, Any]:
+        project_root = self._project_root_path(project_id)
+        if project_root is None:
+            raise SetupApplicationError(ErrorCode.NOT_FOUND, f"Project root not found: {project_id}")
+        from backend.domain.setup.server_working_dir import resolve_tracked_server_working_directory
+
+        valid, message, data = resolve_tracked_server_working_directory(project_root)
+        if not valid or data is None:
+            raise SetupApplicationError(ErrorCode.PRECONDITION_FAILED, message or "Could not resolve server working directory.")
+        return data
+
     def preview_start_server(
         self,
         *,
@@ -814,10 +825,21 @@ class SetupApplicationService:
             if not valid or not resolved_exe:
                 raise SetupApplicationError(ErrorCode.VALIDATION_FAILED, message or "Invalid FXServer path.")
             executable = Path(resolved_exe)
-        valid_data, data_message, resolved_data = validate_server_data_path(server_data_path)
-        if not valid_data or not resolved_data:
-            raise SetupApplicationError(ErrorCode.VALIDATION_FAILED, data_message or "Invalid server-data path.")
-        working_directory = Path(resolved_data)
+        stripped_data = (server_data_path or "").strip()
+        if not stripped_data:
+            raise SetupApplicationError(ErrorCode.VALIDATION_FAILED, "Set the folder containing your tracked server.cfg.")
+        try:
+            working_directory = Path(stripped_data).expanduser().resolve()
+        except OSError as error:
+            raise SetupApplicationError(ErrorCode.VALIDATION_FAILED, humanize_launch_error(error, stripped_data)) from error
+        if extra_args is not None:
+            if not working_directory.is_dir():
+                raise SetupApplicationError(ErrorCode.VALIDATION_FAILED, f"Working folder must be a directory: {stripped_data}")
+        else:
+            valid_data, data_message, resolved_data = validate_server_data_path(server_data_path)
+            if not valid_data or not resolved_data:
+                raise SetupApplicationError(ErrorCode.VALIDATION_FAILED, data_message or "Invalid server working directory.")
+            working_directory = Path(resolved_data)
         if extra_args is not None:
             arguments = extra_args
             mode = "custom"

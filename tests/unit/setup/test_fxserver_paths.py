@@ -57,3 +57,10 @@ def test_humanize_launch_error_maps_permission_denied() -> None:
     error.winerror = 5  # type: ignore[attr-defined]
     message = humanize_launch_error(error, r"C:\FXServer\FXServer.exe")
     assert "permission denied" in message.lower()
+
+
+def test_humanize_launch_error_maps_invalid_directory() -> None:
+    error = OSError("[WinError 267] The directory name is invalid")
+    error.winerror = 267  # type: ignore[attr-defined]
+    message = humanize_launch_error(error)
+    assert "working folder" in message.lower() or "server.cfg" in message.lower()

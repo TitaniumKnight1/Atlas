@@ -192,6 +192,14 @@ def get_setup_run(project_id: str, setup_run_id: str, container: ApplicationCont
         return _failure(error)
 
 
+@router.get("/projects/{project_id}/setup/server-working-dir", response_model=ResponseEnvelope)
+def resolve_server_working_directory(project_id: str, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        return _success(container.create_setup_service().resolve_server_working_directory(project_id=ProjectId(project_id)))
+    except SetupApplicationError as error:
+        return _failure(error)
+
+
 @router.get("/projects/{project_id}/setup/fxserver/detect", response_model=ResponseEnvelope)
 def detect_fxserver(project_id: str, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
     try:

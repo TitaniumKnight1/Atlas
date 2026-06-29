@@ -18,8 +18,16 @@ export function humanizeProcessStartError(error: unknown): { title: string; deta
   if (lowered.includes("not found") || lowered.includes("cannot find the file")) {
     return { title: "FXServer not found", detail: message, raw: message };
   }
-  if (lowered.includes("server-data")) {
-    return { title: "Server-data path required", detail: message, raw: message };
+  if (lowered.includes("server-data") || lowered.includes("server.cfg") || lowered.includes("working folder")) {
+    return { title: "Working folder required", detail: message, raw: message };
+  }
+  if (lowered.includes("directory name is invalid") || lowered.includes("winerror 267")) {
+    return {
+      title: "Working folder not found",
+      detail:
+        "That folder doesn't exist. Atlas runs FXServer from the directory containing your tracked server.cfg — for most team repos that's the project root.",
+      raw: message
+    };
   }
 
   return { title: "Could not start server", detail: message, raw: message };
