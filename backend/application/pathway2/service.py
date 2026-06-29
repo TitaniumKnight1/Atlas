@@ -491,6 +491,14 @@ class AdoptApplicationService:
             risk_level=RiskLevel.HIGH,
         )
 
+    def dry_run_apply_dev_secret(self, *, project_id: ProjectId, slot_id: str, dev_value: str) -> DryRunResult:
+        preview = self.preview_apply_dev_secret(project_id=project_id, slot_id=slot_id, dev_value=dev_value)
+        warnings = list(preview.warnings)
+        stripped = dev_value.strip()
+        if stripped and not stripped.startswith("cfxk_"):
+            warnings.append("Dev license keys usually start with cfxk_; continue only if you are sure this value is correct.")
+        return DryRunResult(preview.command_type, True, preview.preview, warnings)
+
     def execute_apply_dev_secret(
         self,
         *,

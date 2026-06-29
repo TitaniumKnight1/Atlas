@@ -71,6 +71,56 @@ def test_full_cycle_no_raw_secrets_in_audit_and_normalization_undo(tmp_path: Pat
         container.close()
 
 
+def test_dev_license_apply_preview_masks_key_and_undo_restores_placeholder(tmp_path: Path) -> None:
+    container, project_id, config_path = _normalized_fixture(tmp_path)
+    service = container.create_adopt_service()
+    try:
+        service.execute_apply_secret_substitution(project_id=project_id)
+        overlay_path = config_path.parent / "server.cfg.local"
+        base_path = config_path
+
+        preview = service.preview_apply_dev_secret(
+            project_id=project_id,
+            slot_id="sv_licenseKey",
+            dev_value=DEV_LICENSE,
+        )
+        preview_blob = json.dumps(preview.preview)
+        assert DEV_LICENSE not in preview_blob
+        assert "REDACTED" in preview_blob
+        assert DEV_LICENSE not in preview.preview.get("diff", "")
+
+        dry_run = service.dry_run_apply_dev_secret(
+            project_id=project_id,
+            slot_id="sv_licenseKey",
+            dev_value="not-a-cfxk-key",
+        )
+        assert any("cfxk_" in warning for warning in dry_run.warnings)
+
+        result = service.execute_apply_dev_secret(
+            project_id=project_id,
+            slot_id="sv_licenseKey",
+            dev_value=DEV_LICENSE,
+        )
+        overlay = overlay_path.read_text(encoding="utf-8")
+        base = base_path.read_text(encoding="utf-8")
+        assert DEV_LICENSE in overlay
+        assert DEV_LICENSE not in base
+        assert DEV_LICENSE_PLACEHOLDER not in overlay
+        _assert_no_secrets_in_persistence(container, project_id, (PROD_LICENSE, PROD_DB_PASSWORD, PROD_DB_HOST, DEV_LICENSE))
+
+        status = service.get_adopt_status(project_id)
+        assert status["pathway2_state"]["run_ready"] is True
+
+        service.undo(result.undo_plan)
+        restored = overlay_path.read_text(encoding="utf-8")
+        assert DEV_LICENSE_PLACEHOLDER in restored
+        assert DEV_LICENSE not in restored
+        status = service.get_adopt_status(project_id)
+        assert status["pathway2_state"]["run_ready"] is False
+    finally:
+        container.close()
+
+
 def test_run_gate_blocks_until_dev_license_filled(tmp_path: Path) -> None:
     container, project_id, config_path = _normalized_fixture(tmp_path)
     service = container.create_adopt_service()

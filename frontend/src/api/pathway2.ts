@@ -129,6 +129,28 @@ export async function applySecretSubstitution(projectId: string): Promise<Backen
   return requestBackend<CommandResultData>(`/api/v1/projects/${projectId}/pathway2/substitution/apply`, jsonRequest({}));
 }
 
+export async function previewDevSecret(
+  projectId: string,
+  slotId: string,
+  devValue: string
+): Promise<BackendResponse<CommandPreviewData>> {
+  return requestBackend<CommandPreviewData>(
+    `/api/v1/projects/${projectId}/pathway2/dev-secret-plan`,
+    jsonRequest({ slot_id: slotId, dev_value: devValue })
+  );
+}
+
+export async function dryRunDevSecret(
+  projectId: string,
+  slotId: string,
+  devValue: string
+): Promise<BackendResponse<DryRunData>> {
+  return requestBackend<DryRunData>(
+    `/api/v1/projects/${projectId}/pathway2/dev-secret-dry-run`,
+    jsonRequest({ slot_id: slotId, dev_value: devValue })
+  );
+}
+
 export async function applyDevSecret(projectId: string, slotId: string, devValue: string): Promise<BackendResponse<CommandResultData>> {
   return requestBackend<CommandResultData>(
     `/api/v1/projects/${projectId}/pathway2/dev-secret/apply`,

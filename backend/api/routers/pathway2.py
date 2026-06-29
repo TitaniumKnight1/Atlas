@@ -177,6 +177,23 @@ def plan_dev_secret(
         return _failure(error)
 
 
+@router.post("/projects/{project_id}/pathway2/dev-secret-dry-run", response_model=ResponseEnvelope)
+def dry_run_dev_secret(
+    project_id: str,
+    request: ApplyDevSecretRequest,
+    container: ApplicationContainer = Depends(get_container),
+) -> ResponseEnvelope:
+    try:
+        dry_run = container.create_adopt_service().dry_run_apply_dev_secret(
+            project_id=ProjectId(project_id),
+            slot_id=request.slot_id,
+            dev_value=request.dev_value,
+        )
+        return _success(_dry_run_data(dry_run), warnings=dry_run.warnings)
+    except Pathway2ApplicationError as error:
+        return _failure(error)
+
+
 @router.post("/projects/{project_id}/pathway2/dev-secret/apply", response_model=ResponseEnvelope)
 def apply_dev_secret(
     project_id: str,

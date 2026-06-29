@@ -3,9 +3,12 @@ import { useEffect, useMemo, useState } from "react";
 import {
   applyDevSecret,
   applySafeReturnCommit,
+  dryRunDevSecret,
   dryRunSafeReturnCommit,
   getReturnPathStatus,
+  previewDevSecret,
   previewSafeReturnCommit,
+  undoPathway2Command,
   type ContaminationReport,
   type InlineSecretFinding,
   type ReturnPathStatus,
@@ -30,6 +33,14 @@ import {
 import type { SecretsStepGuidance } from "../../api/pathway2";
 import { CommandPanel } from "../../components/CommandPanel";
 import { EmptyState, ErrorState, LoadingState } from "../../components/StateViews";
+import { KEYMASTER_URL, openExternalUrl } from "../../lib/openExternal";
+
+const DEV_LICENSE_PLACEHOLDER = "DEV_LICENSE_KEY_SET_ME";
+const LICENSE_SLOT_ID = "sv_licenseKey";
+
+function licenseKeyPending(unsetDevSlots: string[]): boolean {
+  return unsetDevSlots.includes(DEV_LICENSE_PLACEHOLDER) || unsetDevSlots.includes(LICENSE_SLOT_ID);
+}
 
 export function StructureScorecardView({ scorecard, compact = false }: { scorecard: StructureScorecard; compact?: boolean }) {
   const rows = useMemo(
@@ -133,6 +144,70 @@ export function SubstitutionSlotsReport({
   );
 }
 
+export function DevLicenseEntryPanel({
+  projectId,
+  unsetDevSlots,
+  onApplied
+}: {
+  projectId: string;
+  unsetDevSlots: string[];
+  onApplied: () => void;
+}) {
+  const [licenseKey, setLicenseKey] = useState("");
+  const showForm = licenseKeyPending(unsetDevSlots);
+  const formatWarning = !licenseKey.trim() || licenseKey.trim().startsWith("cfxk_") ? null : (
+    <Alert severity="warn" title="Unusual key format">
+      Dev license keys usually start with cfxk_. Continue only if you are sure this value is correct.
+    </Alert>
+  );
+
+  if (!showForm) {
+    return (
+      <Alert severity="success" title="Dev license set">
+        Your personal dev license is saved in server.cfg.local (gitignored). Previews and audit logs show a masked value only.
+      </Alert>
+    );
+  }
+
+  return (
+    <div className="stack-gap-md">
+      <SectionHeading
+        title="Dev license key"
+        detail="Paste your Cfx.re dev license below. Atlas writes it to server.cfg.local only — never to tracked server.cfg."
+      />
+      {formatWarning}
+      <InputGroup>
+        <Field label="Cfx.re dev license key" hint="Starts with cfxk_; stored locally in the gitignored overlay.">
+          <Input
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
+            value={licenseKey}
+            onChange={(event) => setLicenseKey(event.target.value)}
+            placeholder="cfxk_…"
+          />
+        </Field>
+      </InputGroup>
+      <CommandPanel
+        title="Save dev license to overlay"
+        description="Preview shows a masked diff. Apply writes server.cfg.local; undo restores the placeholder."
+        executeLabel="Save to overlay"
+        presentation="guided"
+        disabled={!licenseKey.trim()}
+        onPreview={() => previewDevSecret(projectId, LICENSE_SLOT_ID, licenseKey.trim())}
+        onDryRun={() => dryRunDevSecret(projectId, LICENSE_SLOT_ID, licenseKey.trim())}
+        onExecute={() => applyDevSecret(projectId, LICENSE_SLOT_ID, licenseKey.trim())}
+        onUndo={(commandExecutionId) => undoPathway2Command(projectId, commandExecutionId)}
+        onSuccess={() => {
+          setLicenseKey("");
+          onApplied();
+        }}
+        onUndoSuccess={() => onApplied()}
+      />
+    </div>
+  );
+}
+
 export function DevSecretEntryForm({
   projectId,
   slots,
@@ -144,7 +219,11 @@ export function DevSecretEntryForm({
   unsetDevSlots: string[];
   onApplied: () => void;
 }) {
-  const pending = slots.filter((slot) => unsetDevSlots.includes(slot.slot_id));
+  const pending = slots.filter(
+    (slot) =>
+      slot.slot_id !== LICENSE_SLOT_ID &&
+      unsetDevSlots.some((marker) => slot.replacement_line.includes(marker) || slot.slot_id === marker)
+  );
   const [values, setValues] = useState<Record<string, string>>({});
   const [savingSlot, setSavingSlot] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -384,6 +463,14 @@ export function DevSecretsStepHero({ guidance }: { guidance: SecretsStepGuidance
   return (
     <Alert severity={variant} title={guidance.title}>
       <p>{guidance.detail}</p>
+      {guidance.phase === "set_dev_license" ? (
+        <p className="muted-copy" style={{ marginTop: "var(--space-2)" }}>
+          <Button variant="ghost" size="sm" onClick={() => void openExternalUrl(KEYMASTER_URL)}>
+            Get a dev license key from the Cfx.re Keymaster ↗
+          </Button>{" "}
+          Keys start with <code>cfxk_</code>.
+        </p>
+      ) : null}
       <p className="muted-copy" style={{ marginTop: "var(--space-2)" }}>
         Next: {guidance.primary_action}
       </p>

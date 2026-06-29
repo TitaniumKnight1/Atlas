@@ -55,6 +55,7 @@ import { ConfigFindingsPanel } from "../config/ConfigFindingsPanel";
 import { DevDatabasePanel } from "./DevDatabasePanel";
 import {
   DevSecretsStepHero,
+  DevLicenseEntryPanel,
   DevSecretEntryForm,
   InlineSecretsReport,
   Pathway2StatusBadges,
@@ -133,14 +134,16 @@ export function JoinTeamWizardView() {
     [transformHostname, transformMaxClients, transformPort]
   );
 
-  const refreshWizardStatus = useCallback(async (activeProjectId: string) => {
+  const refreshWizardStatus = useCallback(async (activeProjectId: string, options?: { syncActiveStep?: boolean }) => {
     setStatusLoading(true);
     setStatusError(null);
     try {
       const response = await getPathway2WizardStatus(activeProjectId);
       setWizardStatus(response.data);
       setWizardValidationCheckedAt(new Date().toLocaleString());
-      setActiveStep(response.data.wizard.active_step as LocalWizardStepId);
+      if (options?.syncActiveStep !== false) {
+        setActiveStep(response.data.wizard.active_step as LocalWizardStepId);
+      }
       if (response.data.return_path?.contamination_report.gate_status === "PASS") {
         setCommitCompleted(false);
       }
@@ -399,6 +402,7 @@ export function JoinTeamWizardView() {
                 runReady={pathwayState.run_ready}
                 devTransformed={pathwayState.dev_transformed}
               />
+              {statusLoading ? <Badge variant="neutral">Refreshing status…</Badge> : null}
             </div>
           ) : null}
 
@@ -414,20 +418,21 @@ export function JoinTeamWizardView() {
               </div>
             ) : null}
 
-            {wizardStatus && !statusLoading ? (
+            {wizardStatus ? (
               <>
+            {statusError ? (
+              <ErrorState error={statusError} onRetry={() => projectId && void refreshWizardStatus(projectId)} />
+            ) : null}
             {activeStep === "adopt" ? (
               <section className="wizard-step">
                 <div className="wizard-step__content">
-                  {wizardStatus && !statusLoading ? (
-                    <ConfigFindingsPanel
-                      compact
-                      projectId={projectId ?? undefined}
-                      validation={wizardStatus.config_validation ?? null}
-                      showInlineSecretHint
-                      lastCheckedAt={wizardValidationCheckedAt}
-                    />
-                  ) : null}
+                  <ConfigFindingsPanel
+                    compact
+                    projectId={projectId ?? undefined}
+                    validation={wizardStatus.config_validation ?? null}
+                    showInlineSecretHint
+                    lastCheckedAt={wizardValidationCheckedAt}
+                  />
                   <SectionHeading title="Structure scorecard" detail="Atlas must detect a FiveM server before proceeding to normalization." />
                   {scorecard ? <StructureScorecardView compact scorecard={scorecard} /> : null}
                   {wizardStatus?.inline_secrets?.length ? <InlineSecretsReport findings={wizardStatus.inline_secrets} /> : null}
@@ -441,7 +446,7 @@ export function JoinTeamWizardView() {
                     variant="secondary"
                     disabled={statusLoading}
                     loading={statusLoading}
-                    onClick={() => projectId && void refreshWizardStatus(projectId)}
+                    onClick={() => projectId && void refreshWizardStatus(projectId, { syncActiveStep: false })}
                   >
                     Re-run changes
                   </Button>
@@ -514,12 +519,19 @@ export function JoinTeamWizardView() {
                     </>
                   ) : null}
                   {wizardStatus.wizard.secrets_step?.show_dev_entry_form ? (
-                    <DevSecretEntryForm
-                      projectId={projectId}
-                      slots={wizardStatus.substitution_slots ?? []}
-                      unsetDevSlots={wizardStatus.unset_dev_slots ?? []}
-                      onApplied={() => void refreshWizardStatus(projectId)}
-                    />
+                    <>
+                      <DevLicenseEntryPanel
+                        projectId={projectId}
+                        unsetDevSlots={wizardStatus.unset_dev_slots ?? []}
+                        onApplied={() => void refreshWizardStatus(projectId)}
+                      />
+                      <DevSecretEntryForm
+                        projectId={projectId}
+                        slots={wizardStatus.substitution_slots ?? []}
+                        unsetDevSlots={wizardStatus.unset_dev_slots ?? []}
+                        onApplied={() => void refreshWizardStatus(projectId)}
+                      />
+                    </>
                   ) : null}
                 </div>
                 <div className="wizard-step__footer">
