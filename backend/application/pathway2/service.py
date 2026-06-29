@@ -49,6 +49,7 @@ from backend.domain.pathway2.commit_safety import (
     is_overlay_path,
     load_staged_files,
     select_default_return_commit_paths,
+    server_cfg_eligible_for_return_commit,
 )
 from backend.domain.pathway2.transform import DevTransformOptions, build_transform_diff, default_transform_options, plan_dev_config_transform
 from backend.domain.shared_kernel import ErrorCode, ProjectId, StableIdentifier
@@ -653,7 +654,16 @@ class AdoptApplicationService:
         git_service = self._container.create_git_service()
         worktree = git_service.get_worktree_status(project_id, repo["git_repository_id"])
         project_root = Path(repo["local_path"]).resolve()
-        default_paths = select_default_return_commit_paths(file_changes=_file_changes_from_worktree(worktree))
+        file_changes = _file_changes_from_worktree(worktree)
+        include_server_cfg = server_cfg_eligible_for_return_commit(
+            file_changes=file_changes,
+            project_root=project_root,
+            read_text=self.filesystem.read_text,
+        )
+        default_paths = select_default_return_commit_paths(
+            file_changes=file_changes,
+            include_server_cfg=include_server_cfg,
+        )
         staged_files = load_staged_files(repo_root=project_root, paths=default_paths, read_text=self.filesystem.read_text)
         safety = evaluate_commit_safety(staged_files=staged_files, scanner=self.secret_scanner)
         gitignore_ok = self._overlay_gitignored(project_root)
@@ -944,9 +954,16 @@ class AdoptApplicationService:
     ):
         worktree = self._container.create_git_service().get_worktree_status(project_id, repo["git_repository_id"])
         project_root = Path(repo["local_path"]).resolve()
+        file_changes = _file_changes_from_worktree(worktree)
         resolved_paths = paths or select_default_return_commit_paths(
-            file_changes=_file_changes_from_worktree(worktree),
-            include_server_cfg=include_server_cfg,
+            file_changes=file_changes,
+            include_server_cfg=include_server_cfg
+            if paths is not None
+            else server_cfg_eligible_for_return_commit(
+                file_changes=file_changes,
+                project_root=project_root,
+                read_text=self.filesystem.read_text,
+            ),
         )
         if any(is_overlay_path(path) for path in resolved_paths):
             raise Pathway2ApplicationError(ErrorCode.VALIDATION_FAILED, f"{OVERLAY_FILENAME} cannot be included in a return-path commit")

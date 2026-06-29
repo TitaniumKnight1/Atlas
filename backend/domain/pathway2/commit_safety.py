@@ -81,7 +81,12 @@ class CommitSafetyResult:
             "blocked_paths": list(self.blocked_paths),
             "summary_lines": summary_lines,
             "push_seam": "evaluate_commit_safety is reusable for a future guarded PushBranch; Atlas remains commit-only per ADR-0010.",
-            "manual_push_message": "Commit ready locally. Push to your branch with your git tool — Atlas does not push.",
+            "manual_push_message": (
+                "Return-path commit uses explicit paths only — never blanket git add. "
+                f"Tracked server.cfg may be included when it contains placeholders only; "
+                f"{OVERLAY_FILENAME} is gitignored and is never committed. "
+                "Commit locally when your changes are ready, then push with your git tool — Atlas does not push."
+            ),
         }
 
     @staticmethod
@@ -113,6 +118,29 @@ def select_default_return_commit_paths(
             continue
         selected.append(change.path)
     return sorted(dict.fromkeys(selected))
+
+
+def server_cfg_eligible_for_return_commit(
+    *,
+    file_changes: list[Any],
+    project_root: Path,
+    read_text: Any,
+) -> bool:
+    """Include tracked server.cfg in return-path scope only when placeholders-only on disk."""
+    from backend.domain.git import ChangeStatus
+
+    for change in file_changes:
+        if not _is_server_cfg_path(change.path):
+            continue
+        if change.change_status == ChangeStatus.DELETED:
+            continue
+        absolute = project_root / change.path
+        if not absolute.is_file():
+            continue
+        content = read_text(absolute) or ""
+        if _server_cfg_is_placeholder_only(content):
+            return True
+    return False
 
 
 def evaluate_commit_safety(*, staged_files: list[StagedFile], scanner: SecretScannerPort) -> CommitSafetyResult:

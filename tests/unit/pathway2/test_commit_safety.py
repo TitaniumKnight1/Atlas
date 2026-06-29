@@ -6,6 +6,7 @@ from backend.domain.pathway2.commit_safety import (
     evaluate_commit_safety,
     is_overlay_path,
     select_default_return_commit_paths,
+    server_cfg_eligible_for_return_commit,
 )
 from backend.domain.git import ChangeStatus
 from types import SimpleNamespace
@@ -71,3 +72,30 @@ def test_default_paths_exclude_overlay_and_server_cfg() -> None:
     ]
     paths = select_default_return_commit_paths(file_changes=changes)
     assert paths == ["resources/demo/file.lua"]
+
+
+def test_default_paths_include_placeholder_server_cfg_when_requested() -> None:
+    changes = [
+        SimpleNamespace(path="server.cfg", change_status=ChangeStatus.MODIFIED),
+        SimpleNamespace(path=".gitignore", change_status=ChangeStatus.MODIFIED),
+        SimpleNamespace(path="server.cfg.local", change_status=ChangeStatus.UNTRACKED),
+    ]
+    paths = select_default_return_commit_paths(file_changes=changes, include_server_cfg=True)
+    assert paths == [".gitignore", "server.cfg"]
+    assert "server.cfg.local" not in paths
+
+
+def test_server_cfg_eligible_for_return_commit_requires_placeholders(tmp_path) -> None:
+    root = tmp_path / "repo"
+    root.mkdir()
+    cfg = root / "server.cfg"
+    cfg.write_text('sv_licenseKey "CHANGE_ME"\nexec server.cfg.local\n', encoding="utf-8")
+    changes = [SimpleNamespace(path="server.cfg", change_status=ChangeStatus.MODIFIED)]
+
+    def read_text(path: Path) -> str:
+        return path.read_text(encoding="utf-8")
+
+    assert server_cfg_eligible_for_return_commit(file_changes=changes, project_root=root, read_text=read_text) is True
+
+    cfg.write_text('sv_licenseKey "cfxk_test_production_key_value_123456"\n', encoding="utf-8")
+    assert server_cfg_eligible_for_return_commit(file_changes=changes, project_root=root, read_text=read_text) is False

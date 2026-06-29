@@ -318,7 +318,7 @@ export function ReturnPathPanel({
   const [returnStatus, setReturnStatus] = useState<ReturnPathStatus | null>(initialReturnPath ?? null);
   const [statusError, setStatusError] = useState<unknown>(null);
   const [branchName, setBranchName] = useState("feature/atlas-dev");
-  const [commitMessage, setCommitMessage] = useState("Pathway 2 dev work");
+  const [commitMessage, setCommitMessage] = useState("Atlas: overlay-safe config normalization");
   const [creatingBranch, setCreatingBranch] = useState(false);
 
   useEffect(() => {

@@ -56,6 +56,25 @@ def test_safe_return_commit_blocks_real_server_cfg(tmp_path: Path) -> None:
         container.close()
 
 
+def test_return_path_includes_placeholder_server_cfg_after_normalization(tmp_path: Path) -> None:
+    container, project_id, repo_id, root = _pathway2_git_fixture(tmp_path)
+    adopt = container.create_adopt_service()
+    try:
+        adopt.execute_apply_repo_normalization(project_id=project_id)
+        status = adopt.get_return_path_status(project_id=project_id, git_repository_id=repo_id)
+        paths = status["default_commit_paths"]
+        assert "server.cfg.local" not in paths
+        assert "server.cfg" in paths
+        assert status["gitignore_contains_overlay"] is True
+        assert status["contamination_report"]["gate_status"] == "PASS"
+        assert status["contamination_report"]["server_cfg_placeholder_only"] is True
+        assert PROD_LICENSE not in (root / "server.cfg").read_text(encoding="utf-8")
+        assert (root / "server.cfg.local").exists()
+        assert PROD_LICENSE not in (root / "server.cfg.local").read_text(encoding="utf-8")
+    finally:
+        container.close()
+
+
 def test_safe_return_commit_excludes_overlay_and_commits_safe_resource(tmp_path: Path) -> None:
     container, project_id, repo_id, root = _pathway2_git_fixture(tmp_path)
     adopt = container.create_adopt_service()

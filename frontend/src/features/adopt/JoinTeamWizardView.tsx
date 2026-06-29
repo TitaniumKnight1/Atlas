@@ -487,7 +487,7 @@ export function JoinTeamWizardView() {
                 <div className="wizard-step__content">
                   <SectionHeading
                     title="Return path (safe commit)"
-                    detail="Fail-closed secret gate on explicit paths only. Atlas commits locally; you push manually (ADR-0010)."
+                    detail="Explicit-path commits only — never blanket git add. Atlas can commit placeholder-only server.cfg and .gitignore updates; server.cfg.local and secrets are gitignored and blocked by the fail-closed gate. Atlas commits locally; you push manually (ADR-0010)."
                   />
                   {blockers.return ? <WizardGateAlert title="Commit blocked" detail={blockers.return} /> : null}
                   <ReturnPathPanel
@@ -519,12 +519,17 @@ export function JoinTeamWizardView() {
                       <li>Adopted team repo with overlay structure (server.cfg.local is gitignored).</li>
                       <li>Production secrets substituted — your dev values stay local and masked in previews.</li>
                       <li>Server started locally — your setup is verified before return work.</li>
-                      <li>Return path uses a fail-closed commit gate; push your branch manually when ready.</li>
+                      <li>
+                        Tracked server.cfg now uses placeholders plus an exec server.cfg.local trailer — that safe normalization (and
+                        .gitignore) is what you can commit back to the team when ready. Your overlay and dev secrets never leave this
+                        machine; the fail-closed gate blocks them.
+                      </li>
                     </ul>
                   </Alert>
-                  {wizardStatus?.return_path?.manual_push_message ? (
-                    <p className="muted-text">{wizardStatus.return_path.manual_push_message}</p>
-                  ) : null}
+                  <Alert severity="info" title="About local commits">
+                    Nothing is committed automatically. When you are ready, use Return work to commit explicit paths only (normalized
+                    server.cfg, .gitignore, and your resource changes). Atlas never pushes — use your git tool on your branch (ADR-0010).
+                  </Alert>
                   {commitCompleted ? <Badge variant="info">Local commit recorded</Badge> : null}
                 </div>
                 <div className="wizard-step__footer">
