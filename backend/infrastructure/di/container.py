@@ -102,6 +102,11 @@ class ApplicationContainer:
     def create_project_service(self) -> ProjectApplicationService:
         return ProjectApplicationService(container=self, filesystem_inspector=self.filesystem_inspector)
 
+    def create_project_topology_service(self) -> ProjectTopologyService:
+        from backend.application.project.topology_service import ProjectTopologyService
+
+        return ProjectTopologyService(container=self)
+
     def create_telemetry_service(self) -> TelemetryApplicationService:
         return TelemetryApplicationService(
             container=self,

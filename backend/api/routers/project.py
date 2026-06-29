@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from backend.api.dependencies import get_container
 from backend.api.schemas.project import (
@@ -219,6 +219,21 @@ def record_trust_decision(
 def list_trust_decisions(project_id: str, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
     try:
         return _success(container.create_project_service().list_trust_decisions(ProjectId(project_id)))
+    except ProjectApplicationError as error:
+        return _failure(error)
+
+
+@router.get("/projects/{project_id}/topology", response_model=ResponseEnvelope)
+def get_project_topology(
+    project_id: str,
+    path: str | None = Query(default=None, description="Optional file path to resolve owning repo"),
+    container: ApplicationContainer = Depends(get_container),
+) -> ResponseEnvelope:
+    try:
+        service = container.create_project_topology_service()
+        if path:
+            return _success(service.resolve_path_owner(ProjectId(project_id), Path(path)))
+        return _success(service.get_topology(ProjectId(project_id)))
     except ProjectApplicationError as error:
         return _failure(error)
 
