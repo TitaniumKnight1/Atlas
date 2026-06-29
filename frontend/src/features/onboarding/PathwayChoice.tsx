@@ -6,9 +6,9 @@ interface PathwayChoiceProps {
 
 export function PathwayChoice({ current }: PathwayChoiceProps) {
   return (
-    <div className="pathway-choice atlas-panel">
-      <p className="muted-text">Choose your onboarding path:</p>
-      <div className="inline-actions">
+    <div className="pathway-choice">
+      <p className="pathway-choice__label">Choose your onboarding path:</p>
+      <div className="pathway-choice__actions">
         {current === "setup" ? (
           <Button variant="primary" disabled>
             New server setup

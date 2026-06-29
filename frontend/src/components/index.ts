@@ -28,3 +28,5 @@ export { DependencyChecksTable } from "./DependencyChecksTable";
 export { DependencyGraphView } from "./DependencyGraphView";
 export { ProjectPicker, ProjectPickerEmpty } from "./ProjectPicker";
 export { ViewPage, ViewPageBody, ViewPageHeader, ViewWorkspace } from "./layout/ViewPage";
+export { TechnicalDetails } from "./TechnicalDetails";
+export { buildCommandSummary, buildTechnicalPayload } from "./commandSummaries";

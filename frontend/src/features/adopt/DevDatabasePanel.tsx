@@ -158,6 +158,7 @@ export function DevDatabasePanel({ projectId, serverDataPath, onAuditRef }: DevD
         title="Provision dev database"
         description="Creates atlas-dev-mysql with a named volume on 127.0.0.1:3306. Default undo removes the container but keeps the volume."
         executeLabel="Provision"
+        presentation="guided"
         onPreview={() => previewProvisionDevDatabase(projectId)}
         onDryRun={() => dryRunProvisionDevDatabase(projectId)}
         onExecute={() => provisionDevDatabase(projectId)}

@@ -3,7 +3,9 @@ import { useState } from "react";
 import type { BackendResponse } from "../api/backend";
 import { formatAuditRef, type CommandResultData, type DryRunData, type CommandPreviewData } from "../api/project";
 import { Alert, Badge, Button, type BadgeVariant } from ".";
+import { buildCommandSummary, buildTechnicalPayload } from "./commandSummaries";
 import { ErrorState, LoadingState } from "./StateViews";
+import { TechnicalDetails } from "./TechnicalDetails";
 
 interface CommandPanelProps {
   title: string;
@@ -11,6 +13,8 @@ interface CommandPanelProps {
   previewLabel?: string;
   executeLabel: string;
   disabled?: boolean;
+  /** guided: human summary + collapsed JSON (wizard). detailed: legacy debug-first layout. */
+  presentation?: "guided" | "detailed";
   onPreview: () => Promise<BackendResponse<CommandPreviewData>>;
   onDryRun: () => Promise<BackendResponse<DryRunData>>;
   onExecute: () => Promise<BackendResponse<CommandResultData>>;
@@ -34,6 +38,7 @@ export function CommandPanel({
   previewLabel = "Preview changes",
   executeLabel,
   disabled,
+  presentation = "detailed",
   onPreview,
   onDryRun,
   onExecute,
@@ -47,6 +52,7 @@ export function CommandPanel({
   const [result, setResult] = useState<BackendResponse<CommandResultData> | null>(null);
   const [undoResult, setUndoResult] = useState<BackendResponse<CommandResultData> | null>(null);
   const [error, setError] = useState<unknown>(null);
+  const guided = presentation === "guided";
 
   async function previewCommand() {
     setPhase("previewing");
@@ -100,9 +106,10 @@ export function CommandPanel({
   const commandSteps = buildCommandSteps({ phase, preview: Boolean(preview), dryRun: Boolean(dryRun), result: Boolean(result), canUndo });
   const planSteps = extractPlanSteps(preview?.data.preview) ?? extractPlanSteps(dryRun?.data.simulation) ?? extractPlanSteps(result?.data);
   const compactPreview = preview ? isCompactPayload(preview.data.preview) : false;
+  const allWarnings = [...(preview?.warnings ?? []), ...(dryRun && !dryRun.data.valid ? ["Dry-run validation failed"] : [])];
 
   return (
-    <section className="command-panel">
+    <section className={guided ? "command-panel command-panel--guided" : "command-panel"}>
       <div className="command-panel__head">
         <div className="atlas-row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
           <div className="atlas-section-heading">
@@ -114,18 +121,32 @@ export function CommandPanel({
         </div>
       </div>
 
-      <div className="command-panel__steps" aria-label="Command progress">
-        {commandSteps.map((step) => (
-          <CommandStep key={step.label} step={step} />
-        ))}
-      </div>
+      {!guided ? (
+        <div className="command-panel__steps" aria-label="Command progress">
+          {commandSteps.map((step) => (
+            <CommandStep key={step.label} step={step} />
+          ))}
+        </div>
+      ) : preview || phase !== "idle" ? (
+        <div className="command-panel__steps" aria-label="Command progress">
+          {commandSteps.map((step) => (
+            <CommandStep key={step.label} step={step} />
+          ))}
+        </div>
+      ) : null}
 
       <div className="command-panel__body">
         <div className="command-panel__actions">
           <Button type="button" variant="secondary" onClick={previewCommand} disabled={disabled || isBusy} loading={phase === "previewing"}>
             {previewLabel}
           </Button>
-          <Button type="button" variant="primary" onClick={executeCommand} disabled={disabled || phase !== "ready" || isBusy} loading={phase === "executing"}>
+          <Button
+            type="button"
+            variant="primary"
+            onClick={executeCommand}
+            disabled={disabled || phase !== "ready" || isBusy || (dryRun != null && !dryRun.data.valid)}
+            loading={phase === "executing"}
+          >
             {executeLabel}
           </Button>
         </div>
@@ -135,7 +156,11 @@ export function CommandPanel({
         {phase === "undoing" ? <LoadingState title="Undoing command" detail="Rehydrating compensation from the audit record and applying it." /> : null}
         {phase === "error" && error ? <ErrorState error={error} /> : null}
 
-        {preview ? (
+        {guided && preview ? (
+          <GuidedPreviewResult dryRun={dryRun} preview={preview} warnings={allWarnings} />
+        ) : null}
+
+        {!guided && preview ? (
           <div className={compactPreview ? "command-result command-result--compact" : "command-result"}>
             <div>
               <h3>{preview.data.summary}</h3>
@@ -152,7 +177,7 @@ export function CommandPanel({
           </div>
         ) : null}
 
-        {planSteps && planSteps.length > 0 ? (
+        {!guided && planSteps && planSteps.length > 0 ? (
           <div className="command-result command-result--warning">
             <div>
               <h3>Plan steps</h3>
@@ -175,7 +200,7 @@ export function CommandPanel({
           </div>
         ) : null}
 
-        {dryRun ? (
+        {!guided && dryRun ? (
           <div className={dryRun.data.valid ? "command-result command-result--success" : "command-result command-result--warning"}>
             <h3>Dry-run {dryRun.data.valid ? "passed" : "failed"}</h3>
             <Alert severity={dryRun.data.valid ? "success" : "warn"} title={dryRun.data.valid ? "Safe to execute" : "Hold before execute"}>
@@ -183,7 +208,7 @@ export function CommandPanel({
                 ? "Atlas simulated the command without persisting changes."
                 : "Resolve the dry-run findings before executing the command."}
             </Alert>
-            <pre>{JSON.stringify(dryRun.data.simulation, null, 2)}</pre>
+            <pre className="command-json">{JSON.stringify(dryRun.data.simulation, null, 2)}</pre>
           </div>
         ) : null}
 
@@ -202,10 +227,12 @@ export function CommandPanel({
                 <Button type="button" variant="secondary" onClick={undoCommand} disabled={!canUndo || isBusy} loading={phase === "undoing"}>
                   Undo
                 </Button>
-                <p className="note">
-                  Undo references execution <code>{String(result.data.command_execution_id)}</code>. Atlas rehydrates the
-                  compensating action from the stored audit record server-side.
-                </p>
+                {!guided ? (
+                  <p className="note">
+                    Undo references execution <code>{String(result.data.command_execution_id)}</code>. Atlas rehydrates the
+                    compensating action from the stored audit record server-side.
+                  </p>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -225,6 +252,51 @@ export function CommandPanel({
         ) : null}
       </div>
     </section>
+  );
+}
+
+function GuidedPreviewResult({
+  preview,
+  dryRun,
+  warnings
+}: {
+  preview: BackendResponse<CommandPreviewData>;
+  dryRun: BackendResponse<DryRunData> | null;
+  warnings: string[];
+}) {
+  const summaryLines = buildCommandSummary({
+    preview: preview.data,
+    dryRun: dryRun?.data ?? null,
+    warnings: preview.warnings
+  });
+  const blocked = dryRun != null && !dryRun.data.valid;
+  const technicalPayload = buildTechnicalPayload(preview.data.preview, dryRun?.data ?? null, warnings);
+
+  return (
+    <div className={blocked ? "command-result command-result--warning" : "command-result"}>
+      {blocked ? (
+        <Alert severity="warn" title="Hold before execute">
+          Resolve the dry-run findings before executing this command.
+        </Alert>
+      ) : dryRun ? (
+        <Alert severity="success" title="Safe to execute">
+          Atlas simulated this command without persisting changes.
+        </Alert>
+      ) : null}
+      {warnings.length > 0 && !blocked ? (
+        <Alert severity="warn" title="Review warnings">
+          {warnings.join(" ")}
+        </Alert>
+      ) : null}
+      <ul className="command-summary">
+        {summaryLines.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+      <TechnicalDetails summary="Show raw command payload">
+        <pre className="command-json">{JSON.stringify(technicalPayload, null, 2)}</pre>
+      </TechnicalDetails>
+    </div>
   );
 }
 

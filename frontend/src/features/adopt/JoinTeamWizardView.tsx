@@ -42,7 +42,8 @@ import {
   ViewPage,
   ViewPageBody,
   ViewPageHeader,
-  ViewWorkspace
+  ViewWorkspace,
+  TechnicalDetails
 } from "../../components";
 import { CommandPanel } from "../../components/CommandPanel";
 import { EmptyState, ErrorState, LoadingState } from "../../components/StateViews";
@@ -221,15 +222,6 @@ export function JoinTeamWizardView() {
     setActiveStep(step);
   }
 
-  function canNavigateTo(step: LocalWizardStepId): boolean {
-    if (!wizardStatus) {
-      return step === "adopt";
-    }
-    const stepIndex = WIZARD_STEP_DEFS.findIndex((item) => item.id === step);
-    const activeIndex = WIZARD_STEP_DEFS.findIndex((item) => item.id === wizardStatus.wizard.active_step);
-    return stepIndex <= activeIndex || Boolean(gates?.[step]);
-  }
-
   async function handlePreviewStart() {
     if (!projectId) {
       return;
@@ -296,12 +288,19 @@ export function JoinTeamWizardView() {
           title="Join a team server"
           detail="Guided onboarding: adopt a team repo, normalize overlay structure, substitute dev secrets, tune local config, run under supervision, and return work safely."
         />
-        <PathwayChoice current="join" />
+        {projectId ? (
+          <div className="inline-actions">
+            <Badge variant="info">Pathway 2</Badge>
+            <Badge variant="neutral">Join team</Badge>
+          </div>
+        ) : null}
       </ViewPageHeader>
 
-      <ViewPageBody className="view-page__body--scroll">
+      <ViewPageBody className={projectId ? undefined : "view-page__body--scroll"}>
       {!projectId ? (
-        <div className="view-split view-split--2">
+        <>
+          <PathwayChoice current="join" />
+          <div className="view-split view-split--2">
           <Surface>
             <SectionHeading title="Clone or adopt" detail="Provide a local destination and optional remote URL. Atlas clones, imports, and scores the structure." />
             <InputGroup>
@@ -316,6 +315,7 @@ export function JoinTeamWizardView() {
               title="Adopt repository"
               description="Clone (optional), import as an Atlas project, and run config/resource discovery explicitly."
               executeLabel="Adopt repository"
+              presentation="guided"
               disabled={!rootPath.trim()}
               onPreview={() => previewAdoptRepository(rootPath.trim(), remoteUrl.trim() || undefined)}
               onDryRun={() => dryRunAdoptRepository(rootPath.trim(), remoteUrl.trim() || undefined)}
@@ -347,35 +347,38 @@ export function JoinTeamWizardView() {
             </Surface>
           )}
         </div>
+        </>
       ) : (
         <ViewWorkspace>
         <Surface className="setup-wizard" kind="panel" padded={false}>
           <WizardStepper steps={wizardSteps} ariaLabel="Join team wizard progress" />
 
+          {wizardStatus && pathwayState ? (
+            <div className="setup-wizard__meta">
+              <Pathway2StatusBadges
+                normalized={pathwayState.normalized}
+                secretsSubstituted={pathwayState.secrets_substituted}
+                runReady={pathwayState.run_ready}
+                devTransformed={pathwayState.dev_transformed}
+              />
+            </div>
+          ) : null}
+
           <div className="setup-wizard__body">
             {statusLoading ? <LoadingState title="Loading wizard status" detail="Reading Pathway 2 state and guard rails." /> : null}
             {statusError ? <ErrorState error={statusError} onRetry={() => void refreshWizardStatus(projectId)} /> : null}
 
-            {wizardStatus && pathwayState ? (
-              <Surface kind="card">
-                <Pathway2StatusBadges
-                  normalized={pathwayState.normalized}
-                  secretsSubstituted={pathwayState.secrets_substituted}
-                  runReady={pathwayState.run_ready}
-                  devTransformed={pathwayState.dev_transformed}
-                />
-              </Surface>
-            ) : null}
-
             {activeStep === "adopt" ? (
-              <section className="setup-step">
-                <SectionHeading title="Structure scorecard" detail="Atlas must detect a FiveM server before proceeding to normalization." />
-                {scorecard ? <StructureScorecardView scorecard={scorecard} /> : null}
-                {wizardStatus?.inline_secrets?.length ? <InlineSecretsReport findings={wizardStatus.inline_secrets} /> : null}
-                {!scorecard?.looks_like_fivem_server && pathwayState?.origin ? (
-                  <WizardGateAlert title="Not a detected FiveM server" detail={blockers.normalize ?? "server.cfg and resources must be present."} />
-                ) : null}
-                <div className="setup-step__actions">
+              <section className="wizard-step">
+                <div className="wizard-step__content">
+                  <SectionHeading title="Structure scorecard" detail="Atlas must detect a FiveM server before proceeding to normalization." />
+                  {scorecard ? <StructureScorecardView compact scorecard={scorecard} /> : null}
+                  {wizardStatus?.inline_secrets?.length ? <InlineSecretsReport findings={wizardStatus.inline_secrets} /> : null}
+                  {!scorecard?.looks_like_fivem_server && pathwayState?.origin ? (
+                    <WizardGateAlert title="Not a detected FiveM server" detail={blockers.normalize ?? "server.cfg and resources must be present."} />
+                  ) : null}
+                </div>
+                <div className="wizard-step__footer">
                   <Button variant="primary" disabled={!gates?.adopt} onClick={() => goToStep("normalize")}>
                     Continue to normalize
                   </Button>
@@ -384,24 +387,27 @@ export function JoinTeamWizardView() {
             ) : null}
 
             {activeStep === "normalize" ? (
-              <section className="setup-step">
-                <SectionHeading
-                  title="Normalize base config"
-                  detail="Preview-first restructuring: placeholders in server.cfg, endpoints moved to gitignored server.cfg.local."
-                />
-                {blockers.normalize ? <WizardGateAlert title="Blocked" detail={blockers.normalize} /> : null}
-                <CommandPanel
-                  title="Apply overlay structure"
-                  description="Mutates server.cfg through the command contract. Undo restores the original file byte-for-byte."
-                  executeLabel="Apply normalization"
-                  onPreview={() => previewRepoNormalization(projectId)}
-                  onDryRun={() => dryRunRepoNormalization(projectId)}
-                  onExecute={() => applyRepoNormalization(projectId)}
-                  onUndo={(commandExecutionId) => undoPathway2Command(projectId, commandExecutionId)}
-                  onSuccess={() => void refreshWizardStatus(projectId)}
-                  onUndoSuccess={() => void refreshWizardStatus(projectId)}
-                />
-                <div className="setup-step__actions">
+              <section className="wizard-step">
+                <div className="wizard-step__content">
+                  <SectionHeading
+                    title="Normalize base config"
+                    detail="Preview-first restructuring: placeholders in server.cfg, endpoints moved to gitignored server.cfg.local."
+                  />
+                  {blockers.normalize ? <WizardGateAlert title="Blocked" detail={blockers.normalize} /> : null}
+                  <CommandPanel
+                    title="Apply overlay structure"
+                    description="Mutates server.cfg through the command contract. Undo restores the original file byte-for-byte."
+                    executeLabel="Apply normalization"
+                    presentation="guided"
+                    onPreview={() => previewRepoNormalization(projectId)}
+                    onDryRun={() => dryRunRepoNormalization(projectId)}
+                    onExecute={() => applyRepoNormalization(projectId)}
+                    onUndo={(commandExecutionId) => undoPathway2Command(projectId, commandExecutionId)}
+                    onSuccess={() => void refreshWizardStatus(projectId)}
+                    onUndoSuccess={() => void refreshWizardStatus(projectId)}
+                  />
+                </div>
+                <div className="wizard-step__footer">
                   <Button variant="secondary" onClick={() => goToStep("adopt")}>
                     Back
                   </Button>
@@ -413,36 +419,39 @@ export function JoinTeamWizardView() {
             ) : null}
 
             {activeStep === "secrets" ? (
-              <section className="setup-step">
-                <SectionHeading
-                  title="Substitute dev secrets"
-                  detail="Hybrid model: Atlas fills safe local defaults; you supply dev-only keys. Set all dev slots before running."
-                />
-                {wizardStatus?.substitution_slots?.length ? (
-                  <SubstitutionSlotsReport slots={wizardStatus.substitution_slots} unsetDevSlots={wizardStatus.unset_dev_slots ?? []} />
-                ) : null}
-                {blockers.secrets ? <WizardGateAlert title="Dev secrets required" detail={blockers.secrets} /> : null}
-                <CommandPanel
-                  title="Apply secret substitution"
-                  description="Writes dev values and placeholders into server.cfg.local only. Production secrets stay masked in previews."
-                  executeLabel="Apply substitution"
-                  disabled={!pathwayState?.normalized}
-                  onPreview={() => previewSecretSubstitution(projectId)}
-                  onDryRun={() => dryRunSecretSubstitution(projectId)}
-                  onExecute={() => applySecretSubstitution(projectId)}
-                  onUndo={(commandExecutionId) => undoPathway2Command(projectId, commandExecutionId)}
-                  onSuccess={() => void refreshWizardStatus(projectId)}
-                  onUndoSuccess={() => void refreshWizardStatus(projectId)}
-                />
-                {pathwayState?.secrets_substituted && (wizardStatus?.unset_dev_slots?.length ?? 0) > 0 ? (
-                  <DevSecretEntryForm
-                    projectId={projectId}
-                    slots={wizardStatus?.substitution_slots ?? []}
-                    unsetDevSlots={wizardStatus?.unset_dev_slots ?? []}
-                    onApplied={() => void refreshWizardStatus(projectId)}
+              <section className="wizard-step">
+                <div className="wizard-step__content">
+                  <SectionHeading
+                    title="Substitute dev secrets"
+                    detail="Hybrid model: Atlas fills safe local defaults; you supply dev-only keys. Set all dev slots before running."
                   />
-                ) : null}
-                <div className="setup-step__actions">
+                  {wizardStatus?.substitution_slots?.length ? (
+                    <SubstitutionSlotsReport slots={wizardStatus.substitution_slots} unsetDevSlots={wizardStatus.unset_dev_slots ?? []} />
+                  ) : null}
+                  {blockers.secrets ? <WizardGateAlert title="Dev secrets required" detail={blockers.secrets} /> : null}
+                  <CommandPanel
+                    title="Apply secret substitution"
+                    description="Writes dev values and placeholders into server.cfg.local only. Production secrets stay masked in previews."
+                    executeLabel="Apply substitution"
+                    presentation="guided"
+                    disabled={!pathwayState?.normalized}
+                    onPreview={() => previewSecretSubstitution(projectId)}
+                    onDryRun={() => dryRunSecretSubstitution(projectId)}
+                    onExecute={() => applySecretSubstitution(projectId)}
+                    onUndo={(commandExecutionId) => undoPathway2Command(projectId, commandExecutionId)}
+                    onSuccess={() => void refreshWizardStatus(projectId)}
+                    onUndoSuccess={() => void refreshWizardStatus(projectId)}
+                  />
+                  {pathwayState?.secrets_substituted && (wizardStatus?.unset_dev_slots?.length ?? 0) > 0 ? (
+                    <DevSecretEntryForm
+                      projectId={projectId}
+                      slots={wizardStatus?.substitution_slots ?? []}
+                      unsetDevSlots={wizardStatus?.unset_dev_slots ?? []}
+                      onApplied={() => void refreshWizardStatus(projectId)}
+                    />
+                  ) : null}
+                </div>
+                <div className="wizard-step__footer">
                   <Button variant="secondary" onClick={() => goToStep("normalize")}>
                     Back
                   </Button>
@@ -454,39 +463,39 @@ export function JoinTeamWizardView() {
             ) : null}
 
             {activeStep === "tuning" ? (
-              <section className="setup-step">
-                <SectionHeading
-                  title="Dev config transform"
-                  detail="Optional but recommended: hostname, slots, ports, and dev convars in server.cfg.local only."
-                />
-                <InputGroup>
-                  <Field label="Dev hostname">
-                    <Input value={transformHostname} onChange={(event) => setTransformHostname(event.target.value)} />
-                  </Field>
-                  <Field label="Max clients">
-                    <Input value={transformMaxClients} onChange={(event) => setTransformMaxClients(event.target.value)} />
-                  </Field>
-                  <Field label="Dev port (UDP/TCP)">
-                    <Input value={transformPort} onChange={(event) => setTransformPort(event.target.value)} />
-                  </Field>
-                </InputGroup>
-                <CommandPanel
-                  title="Apply dev transform"
-                  description="Preview shows full non-secret values. onesync uses +set at start when needed (ADR-0027)."
-                  executeLabel="Apply dev transform"
-                  onPreview={() => previewDevConfigTransform(projectId, transformOptions)}
-                  onDryRun={() => dryRunDevConfigTransform(projectId, transformOptions)}
-                  onExecute={() => applyDevConfigTransform(projectId, transformOptions)}
-                  onUndo={(commandExecutionId) => undoPathway2Command(projectId, commandExecutionId)}
-                  onSuccess={() => void refreshWizardStatus(projectId)}
-                  onUndoSuccess={() => void refreshWizardStatus(projectId)}
-                />
-                <div className="setup-step__actions">
+              <section className="wizard-step">
+                <div className="wizard-step__content">
+                  <SectionHeading
+                    title="Dev config transform"
+                    detail="Optional but recommended: hostname, slots, ports, and dev convars in server.cfg.local only."
+                  />
+                  <InputGroup>
+                    <Field label="Dev hostname">
+                      <Input value={transformHostname} onChange={(event) => setTransformHostname(event.target.value)} />
+                    </Field>
+                    <Field label="Max clients">
+                      <Input value={transformMaxClients} onChange={(event) => setTransformMaxClients(event.target.value)} />
+                    </Field>
+                    <Field label="Dev port (UDP/TCP)">
+                      <Input value={transformPort} onChange={(event) => setTransformPort(event.target.value)} />
+                    </Field>
+                  </InputGroup>
+                  <CommandPanel
+                    title="Apply dev transform"
+                    description="Preview shows full non-secret values. onesync uses +set at start when needed (ADR-0027)."
+                    executeLabel="Apply dev transform"
+                    presentation="guided"
+                    onPreview={() => previewDevConfigTransform(projectId, transformOptions)}
+                    onDryRun={() => dryRunDevConfigTransform(projectId, transformOptions)}
+                    onExecute={() => applyDevConfigTransform(projectId, transformOptions)}
+                    onUndo={(commandExecutionId) => undoPathway2Command(projectId, commandExecutionId)}
+                    onSuccess={() => void refreshWizardStatus(projectId)}
+                    onUndoSuccess={() => void refreshWizardStatus(projectId)}
+                  />
+                </div>
+                <div className="wizard-step__footer">
                   <Button variant="secondary" onClick={() => goToStep("secrets")}>
                     Back
-                  </Button>
-                  <Button variant="secondary" onClick={() => goToStep("run")}>
-                    Continue with defaults
                   </Button>
                   <Button variant="primary" disabled={!pathwayState?.secrets_substituted || !gates?.run} onClick={() => goToStep("run")}>
                     Continue to run
@@ -496,54 +505,70 @@ export function JoinTeamWizardView() {
             ) : null}
 
             {activeStep === "run" ? (
-              <section className="setup-step">
-                <SectionHeading title="Run locally" detail="Start FXServer under Atlas supervision. Blocked until dev secrets are complete." />
-                {blockers.run || wizardStatus?.run_blocked_reason ? (
-                  <WizardGateAlert
-                    title="Server not ready to run"
-                    detail={blockers.run ?? wizardStatus?.run_blocked_reason ?? "Complete dev secrets first."}
-                  />
-                ) : null}
-                <Surface kind="card">
-                  <DefinitionGrid
-                    items={[
-                      ["Project", projectDetail?.display_name ?? projectId],
-                      ["Server-data", serverDataPath || "—"],
-                      ["FXServer", fxserverPath || "—"],
-                      ["Stream", streamConnected ? "Connected" : "Connecting…"]
-                    ]}
-                  />
-                </Surface>
-                {projectId ? (
-                  <DevDatabasePanel
-                    projectId={projectId}
-                    serverDataPath={serverDataPath}
-                    onAuditRef={(auditRef) => setLastAuditRef(auditRef)}
-                  />
-                ) : null}
-                <div className="setup-form-grid">
-                  <Field label="FXServer executable">
-                    <Input value={fxserverPath} onChange={(event) => setFxserverPath(event.target.value)} />
-                  </Field>
-                  <Field label="Launch mode">
-                    <select value={txadminMode ? "txadmin" : "direct"} onChange={(event) => setTxadminMode(event.target.value === "txadmin")}>
-                      <option value="direct">Direct (+exec server.cfg)</option>
-                      <option value="txadmin">txAdmin mode</option>
-                    </select>
-                  </Field>
+              <section className="wizard-step">
+                <div className="wizard-step__content">
+                  <SectionHeading title="Run locally" detail="Start FXServer under Atlas supervision. Blocked until dev secrets are complete." />
+                  {blockers.run || wizardStatus?.run_blocked_reason ? (
+                    <WizardGateAlert
+                      title="Server not ready to run"
+                      detail={blockers.run ?? wizardStatus?.run_blocked_reason ?? "Complete dev secrets first."}
+                    />
+                  ) : null}
+                  <Surface kind="card">
+                    <DefinitionGrid
+                      items={[
+                        ["Project", projectDetail?.display_name ?? projectId],
+                        ["Server-data", serverDataPath || "—"],
+                        ["FXServer", fxserverPath || "—"],
+                        ["Stream", streamConnected ? "Connected" : "Connecting…"]
+                      ]}
+                    />
+                  </Surface>
+                  {projectId ? (
+                    <DevDatabasePanel
+                      projectId={projectId}
+                      serverDataPath={serverDataPath}
+                      onAuditRef={(auditRef) => setLastAuditRef(auditRef)}
+                    />
+                  ) : null}
+                  <div className="setup-form-grid">
+                    <Field label="FXServer executable">
+                      <Input value={fxserverPath} onChange={(event) => setFxserverPath(event.target.value)} />
+                    </Field>
+                    <Field label="Launch mode">
+                      <select value={txadminMode ? "txadmin" : "direct"} onChange={(event) => setTxadminMode(event.target.value === "txadmin")}>
+                        <option value="direct">Direct (+exec server.cfg)</option>
+                        <option value="txadmin">txAdmin mode</option>
+                      </select>
+                    </Field>
+                  </div>
+                  {processPreviewSummary ? (
+                    <Alert severity="info" title="Start preview">
+                      {processPreviewSummary}
+                    </Alert>
+                  ) : null}
+                  {processError ? <ErrorState error={processError} /> : null}
+                  {lastAuditRef ? (
+                    <Alert severity="info" title="Last audited operation">
+                      {lastAuditRef}
+                    </Alert>
+                  ) : null}
+                  <div className="atlas-row">
+                    <StatusPill status={processStatusKind}>{processStatus?.state ?? "Not started"}</StatusPill>
+                    {processRunId ? <Badge variant="neutral">run {processRunId.slice(0, 8)}</Badge> : null}
+                  </div>
+                  {serverLines.length > 0 ? (
+                    <TechnicalDetails summary="Server output">
+                      <pre className="command-json setup-output-log">{serverLines.join("\n")}</pre>
+                    </TechnicalDetails>
+                  ) : (
+                    <p className="muted-copy">Server output appears here after the process starts.</p>
+                  )}
                 </div>
-                {processPreviewSummary ? (
-                  <Alert severity="info" title="Start preview">
-                    {processPreviewSummary}
-                  </Alert>
-                ) : null}
-                {processError ? <ErrorState error={processError} /> : null}
-                {lastAuditRef ? (
-                  <Alert severity="info" title="Last audited operation">
-                    {lastAuditRef}
-                  </Alert>
-                ) : null}
-                <div className="setup-step__actions">
+                <div className="wizard-step__footer">
+                  <Button variant="secondary" onClick={() => goToStep("tuning")}>
+                    Back
+                  </Button>
                   <Button variant="secondary" disabled={!gates?.run} onClick={() => void handlePreviewStart()}>
                     Preview start
                   </Button>
@@ -553,23 +578,6 @@ export function JoinTeamWizardView() {
                   <Button disabled={!processRunId || processBusy} variant="secondary" onClick={() => void handleStopProcess()}>
                     Stop
                   </Button>
-                </div>
-                <div className="atlas-row">
-                  <StatusPill status={processStatusKind}>{processStatus?.state ?? "Not started"}</StatusPill>
-                  {processRunId ? <Badge variant="neutral">run {processRunId.slice(0, 8)}</Badge> : null}
-                </div>
-                <Surface kind="card">
-                  <SectionHeading detail="Live tail from the server-output SSE topic." title="Server output" />
-                  {serverLines.length === 0 ? (
-                    <p className="muted-copy">Output appears here after the process starts.</p>
-                  ) : (
-                    <pre className="command-json setup-output-log">{serverLines.join("\n")}</pre>
-                  )}
-                </Surface>
-                <div className="setup-step__actions">
-                  <Button variant="secondary" onClick={() => goToStep("tuning")}>
-                    Back
-                  </Button>
                   <Button variant="primary" disabled={!gates?.run} onClick={() => goToStep("return")}>
                     Continue to return work
                   </Button>
@@ -578,21 +586,23 @@ export function JoinTeamWizardView() {
             ) : null}
 
             {activeStep === "return" ? (
-              <section className="setup-step">
-                <SectionHeading
-                  title="Return path (safe commit)"
-                  detail="Fail-closed secret gate on explicit paths only. Atlas commits locally; you push manually (ADR-0010)."
-                />
-                {blockers.return ? <WizardGateAlert title="Commit blocked" detail={blockers.return} /> : null}
-                <ReturnPathPanel
-                  projectId={projectId}
-                  initialReturnPath={wizardStatus?.return_path}
-                  onStatusChange={() => {
-                    setCommitCompleted(true);
-                    void refreshWizardStatus(projectId);
-                  }}
-                />
-                <div className="setup-step__actions">
+              <section className="wizard-step">
+                <div className="wizard-step__content">
+                  <SectionHeading
+                    title="Return path (safe commit)"
+                    detail="Fail-closed secret gate on explicit paths only. Atlas commits locally; you push manually (ADR-0010)."
+                  />
+                  {blockers.return ? <WizardGateAlert title="Commit blocked" detail={blockers.return} /> : null}
+                  <ReturnPathPanel
+                    projectId={projectId}
+                    initialReturnPath={wizardStatus?.return_path}
+                    onStatusChange={() => {
+                      setCommitCompleted(true);
+                      void refreshWizardStatus(projectId);
+                    }}
+                  />
+                </div>
+                <div className="wizard-step__footer">
                   <Button variant="secondary" onClick={() => goToStep("run")}>
                     Back
                   </Button>
@@ -604,35 +614,29 @@ export function JoinTeamWizardView() {
             ) : null}
 
             {activeStep === "done" ? (
-              <section className="setup-step">
-                <SectionHeading title="You're set up for local team development" detail="Summary of what Atlas prepared." />
-                <Alert severity="success" title="Pathway 2 complete">
-                  <ul className="plain-list">
-                    <li>Adopted team repo with overlay structure (server.cfg.local is gitignored).</li>
-                    <li>Production secrets substituted — your dev values stay local and masked in previews.</li>
-                    <li>Server can run locally when dev secrets are filled and the run gate passes.</li>
-                    <li>Return path uses a fail-closed commit gate; push your branch manually when ready.</li>
-                  </ul>
-                </Alert>
-                {wizardStatus?.return_path?.manual_push_message ? (
-                  <p className="muted-text">{wizardStatus.return_path.manual_push_message}</p>
-                ) : null}
-                {commitCompleted ? <Badge variant="info">Local commit recorded</Badge> : null}
-                <div className="setup-step__actions">
+              <section className="wizard-step">
+                <div className="wizard-step__content">
+                  <SectionHeading title="You're set up for local team development" detail="Summary of what Atlas prepared." />
+                  <Alert severity="success" title="Pathway 2 complete">
+                    <ul className="plain-list">
+                      <li>Adopted team repo with overlay structure (server.cfg.local is gitignored).</li>
+                      <li>Production secrets substituted — your dev values stay local and masked in previews.</li>
+                      <li>Server can run locally when dev secrets are filled and the run gate passes.</li>
+                      <li>Return path uses a fail-closed commit gate; push your branch manually when ready.</li>
+                    </ul>
+                  </Alert>
+                  {wizardStatus?.return_path?.manual_push_message ? (
+                    <p className="muted-text">{wizardStatus.return_path.manual_push_message}</p>
+                  ) : null}
+                  {commitCompleted ? <Badge variant="info">Local commit recorded</Badge> : null}
+                </div>
+                <div className="wizard-step__footer">
                   <Button variant="secondary" onClick={() => goToStep("return")}>
                     Back to return work
                   </Button>
                 </div>
               </section>
             ) : null}
-
-            <nav className="setup-step__actions" aria-label="Wizard step navigation">
-              {WIZARD_STEP_DEFS.filter((step) => step.id !== activeStep && canNavigateTo(step.id)).map((step) => (
-                <Button key={step.id} variant="secondary" onClick={() => goToStep(step.id)}>
-                  Go to {step.label}
-                </Button>
-              ))}
-            </nav>
           </div>
         </Surface>
         </ViewWorkspace>

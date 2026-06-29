@@ -143,13 +143,13 @@ export function ProjectView() {
           {projectsResource.state === "loading" ? <LoadingState title="Loading projects" detail="Reading project metadata." /> : null}
           {projectsResource.state === "error" ? <ErrorState error={projectsResource.error} /> : null}
           {projectsResource.state === "ready" && projects.length === 0 ? (
-            <OnboardingEmptyState
-              primaryAction={
-                <Button variant="primary" onClick={() => document.getElementById("project-root-path")?.focus()}>
-                  Import existing server
-                </Button>
-              }
-            />
+            <section className="project-sidebar-empty atlas-card">
+              <span className="atlas-status-pill atlas-status-pill--pending">
+                <span className="atlas-status-pill__dot" aria-hidden="true" />
+                No projects yet
+              </span>
+              <p className="muted-copy">Use the import form on the right to add your first workspace.</p>
+            </section>
           ) : null}
 
           <div className="project-list">
@@ -201,8 +201,17 @@ export function ProjectView() {
             </div>
           </Surface>
 
-          {workspace.state === "empty" ? (
+          {workspace.state === "empty" && projects.length > 0 ? (
             <EmptyState title="Select a project" detail="Project settings and environments appear after a workspace is selected." />
+          ) : null}
+          {projectsResource.state === "ready" && projects.length === 0 ? (
+            <OnboardingEmptyState
+              primaryAction={
+                <Button variant="primary" onClick={() => document.getElementById("project-root-path")?.focus()}>
+                  Import existing server
+                </Button>
+              }
+            />
           ) : null}
           {workspace.state === "loading" ? <LoadingState title="Loading project" detail="Collecting paths, settings, and environments." /> : null}
           {workspace.state === "error" ? <ErrorState error={workspace.error} /> : null}

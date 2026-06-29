@@ -23,12 +23,13 @@ import {
   InputGroup,
   SectionHeading,
   StatusPill,
-  Surface
+  Surface,
+  TechnicalDetails
 } from "../../components";
 import { CommandPanel } from "../../components/CommandPanel";
 import { EmptyState, ErrorState, LoadingState } from "../../components/StateViews";
 
-export function StructureScorecardView({ scorecard }: { scorecard: StructureScorecard }) {
+export function StructureScorecardView({ scorecard, compact = false }: { scorecard: StructureScorecard; compact?: boolean }) {
   const rows = useMemo(
     () =>
       Object.entries(scorecard.checks).map(([key, value]) => ({
@@ -38,6 +39,25 @@ export function StructureScorecardView({ scorecard }: { scorecard: StructureScor
       })),
     [scorecard]
   );
+
+  if (compact) {
+    return (
+      <div className="stack-gap-sm">
+        <p className="muted-copy">
+          {scorecard.looks_like_fivem_server
+            ? `FiveM server detected (${scorecard.confidence} confidence, score ${scorecard.score}).`
+            : "FiveM server not confidently detected yet."}
+        </p>
+        <div className="inline-actions">
+          {rows.map((row) => (
+            <Badge key={row.key} variant={row.present ? "info" : "neutral"}>
+              {row.label}: {row.present ? "yes" : "no"}
+            </Badge>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="stack-gap-md">
@@ -61,19 +81,27 @@ export function StructureScorecardView({ scorecard }: { scorecard: StructureScor
 }
 
 export function InlineSecretsReport({ findings }: { findings: InlineSecretFinding[] }) {
+  const list = (
+    <ul className="plain-list">
+      {findings.map((finding, index) => (
+        <li key={`${finding.path}:${finding.line}:${index}`}>
+          <code>
+            {finding.path}:{finding.line}
+          </code>{" "}
+          — {finding.secret_type}: {finding.redacted_preview}
+        </li>
+      ))}
+    </ul>
+  );
+
   return (
     <div className="stack-gap-sm">
       <SectionHeading title="Inline secrets (masked)" detail="Production-shaped values detected in tracked config. Normalization will placeholderize these." />
-      <ul className="plain-list">
-        {findings.map((finding, index) => (
-          <li key={`${finding.path}:${finding.line}:${index}`}>
-            <code>
-              {finding.path}:{finding.line}
-            </code>{" "}
-            — {finding.secret_type}: {finding.redacted_preview}
-          </li>
-        ))}
-      </ul>
+      {findings.length > 3 ? (
+        <TechnicalDetails summary={`${findings.length} inline secrets detected`}>{list}</TechnicalDetails>
+      ) : (
+        list
+      )}
     </div>
   );
 }
@@ -299,6 +327,7 @@ export function ReturnPathPanel({
               title="Safe return commit"
               description={returnStatus.manual_push_message}
               executeLabel="Commit locally"
+              presentation="guided"
               disabled={commitBlocked}
               onPreview={() => previewSafeReturnCommit(projectId, commitRequest)}
               onDryRun={() => dryRunSafeReturnCommit(projectId, commitRequest)}
