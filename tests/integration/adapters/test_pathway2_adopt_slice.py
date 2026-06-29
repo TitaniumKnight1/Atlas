@@ -85,6 +85,36 @@ def test_wizard_status_resumes_at_normalize_after_adopt(tmp_path: Path) -> None:
         container.close()
 
 
+def test_adopt_execute_envelope_exposes_project_id_and_response_safe_validation(tmp_path: Path) -> None:
+    from backend.api.routers.pathway2 import _command_success
+
+    container = create_application_container(tmp_path / "app-data")
+    root = _project_root(tmp_path, "adopt-envelope")
+    (root / "server.cfg").write_text(_prod_config(), encoding="utf-8")
+    try:
+        service = container.create_adopt_service()
+        execution = service.execute_adopt_repository(root_path=root)
+        envelope = _command_success(execution)
+        data = envelope.data
+        project_id = ProjectId(str(data["project_id"]))
+
+        assert envelope.ok is True
+        assert data["command_execution_id"]
+        assert data["structure_scorecard"]["looks_like_fivem_server"] is True
+        validation = data["config_validation"]
+        assert validation["status"] == "validated"
+        assert validation["finding_count"] >= 0
+        assert len(validation["findings"]) <= 100
+        assert "counts_by_type" in validation
+        assert "counts_by_severity" in validation
+
+        wizard = service.get_wizard_status(project_id)
+        assert wizard["wizard"]["active_step"] == "normalize"
+        assert str(wizard["project_id"]) == str(project_id)
+    finally:
+        container.close()
+
+
 def _fixture(tmp_path: Path):
     container = create_application_container(tmp_path / "app-data")
     root = _project_root(tmp_path, "adopt-normalize")

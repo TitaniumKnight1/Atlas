@@ -17,7 +17,8 @@ import {
   undoPathway2Command,
   type Pathway2WizardStatus
 } from "../../api/pathway2";
-import { formatAuditRef, getProject, listProjects, type ProjectDetail, type ProjectSummary } from "../../api/project";
+import type { ConfigValidationBlock } from "../../api/configValidation";
+import { formatAuditRef, getProject, type ProjectDetail } from "../../api/project";
 import {
   getProcessStatus,
   previewStartProcess,
@@ -47,7 +48,7 @@ import {
 } from "../../components";
 import { CommandPanel } from "../../components/CommandPanel";
 import { EmptyState, ErrorState, LoadingState } from "../../components/StateViews";
-import { useAsyncTask } from "../../components/useAsyncTask";
+import { useProjectDirectory } from "../../components/ProjectDirectoryContext";
 import { useProjectStream } from "../../components/useProjectStream";
 import { PathwayChoice } from "../onboarding/PathwayChoice";
 import { ConfigFindingsPanel } from "../config/ConfigFindingsPanel";
@@ -75,7 +76,7 @@ const WIZARD_STEP_DEFS = [
 type LocalWizardStepId = (typeof WIZARD_STEP_DEFS)[number]["id"];
 
 export function JoinTeamWizardView() {
-  const { resource: projectsResource, reload: reloadProjects } = useAsyncTask<ProjectSummary[]>(listProjects, []);
+  const { resource: projectsResource, projects, reload: reloadProjects } = useProjectDirectory();
   const [projectId, setProjectId] = useState<string | null>(null);
   const [wizardStatus, setWizardStatus] = useState<Pathway2WizardStatus | null>(null);
   const [statusError, setStatusError] = useState<unknown>(null);
@@ -84,6 +85,14 @@ export function JoinTeamWizardView() {
 
   const [rootPath, setRootPath] = useState("");
   const [remoteUrl, setRemoteUrl] = useState("");
+  const [adoptPreviewValidation, setAdoptPreviewValidation] = useState<ConfigValidationBlock | null>(null);
+  const [adoptValidationCheckedAt, setAdoptValidationCheckedAt] = useState<string | null>(null);
+  const [wizardValidationCheckedAt, setWizardValidationCheckedAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    setAdoptPreviewValidation(null);
+    setAdoptValidationCheckedAt(null);
+  }, [rootPath, remoteUrl]);
 
   const [transformHostname, setTransformHostname] = useState("[DEV] Atlas Local Server");
   const [transformMaxClients, setTransformMaxClients] = useState("8");
@@ -101,7 +110,17 @@ export function JoinTeamWizardView() {
   const [lastAuditRef, setLastAuditRef] = useState<string | null>(null);
   const [commitCompleted, setCommitCompleted] = useState(false);
 
-  const projects = projectsResource.state === "ready" ? projectsResource.data : [];
+  useEffect(() => {
+    if (!projectId || projectsResource.state !== "ready") {
+      return;
+    }
+    if (!projects.some((project) => project.project_id === projectId)) {
+      setProjectId(null);
+      setWizardStatus(null);
+      setProjectDetail(null);
+      setActiveStep("adopt");
+    }
+  }, [projectId, projects, projectsResource.state]);
 
   const transformOptions = useMemo(
     () => ({
@@ -119,6 +138,7 @@ export function JoinTeamWizardView() {
     try {
       const response = await getPathway2WizardStatus(activeProjectId);
       setWizardStatus(response.data);
+      setWizardValidationCheckedAt(new Date().toLocaleString());
       setActiveStep(response.data.wizard.active_step as LocalWizardStepId);
       if (response.data.return_path?.contamination_report.gate_status === "PASS") {
         setCommitCompleted(false);
@@ -321,14 +341,36 @@ export function JoinTeamWizardView() {
               onPreview={() => previewAdoptRepository(rootPath.trim(), remoteUrl.trim() || undefined)}
               onDryRun={() => dryRunAdoptRepository(rootPath.trim(), remoteUrl.trim() || undefined)}
               onExecute={() => adoptRepository(rootPath.trim(), remoteUrl.trim() || undefined)}
-              onSuccess={(response) => {
+              onPreviewReady={(response) => {
+                const block = response.data.preview.config_validation as ConfigValidationBlock | undefined;
+                setAdoptPreviewValidation(block ?? null);
+                setAdoptValidationCheckedAt(new Date().toLocaleString());
+              }}
+              onSuccess={async (response) => {
                 const adoptedId = String(response.data.project_id ?? "");
-                if (adoptedId) {
-                  setProjectId(adoptedId);
-                  void reloadProjects();
+                if (!adoptedId) {
+                  return;
                 }
+                await reloadProjects();
+                setProjectId(adoptedId);
               }}
             />
+            {rootPath.trim() ? (
+              <div style={{ marginTop: "var(--space-4)" }}>
+                <ConfigFindingsPanel
+                  compact
+                  validation={adoptPreviewValidation}
+                  showInlineSecretHint
+                  lastCheckedAt={adoptValidationCheckedAt}
+                  onRefresh={async () => {
+                    const response = await previewAdoptRepository(rootPath.trim(), remoteUrl.trim() || undefined);
+                    const block = response.data.preview.config_validation as ConfigValidationBlock | undefined;
+                    setAdoptPreviewValidation(block ?? null);
+                    setAdoptValidationCheckedAt(new Date().toLocaleString());
+                  }}
+                />
+              </div>
+            ) : null}
           </Surface>
 
           {projects.length > 0 ? (
@@ -372,14 +414,20 @@ export function JoinTeamWizardView() {
             {activeStep === "adopt" ? (
               <section className="wizard-step">
                 <div className="wizard-step__content">
-                  {wizardStatus?.config_validation ? (
-                    <ConfigFindingsPanel
-                      compact
-                      projectId={projectId ?? undefined}
-                      validation={wizardStatus.config_validation}
-                      showInlineSecretHint
-                    />
-                  ) : null}
+                  <ConfigFindingsPanel
+                    compact
+                    projectId={projectId ?? undefined}
+                    validation={wizardStatus?.config_validation ?? null}
+                    showInlineSecretHint
+                    lastCheckedAt={wizardValidationCheckedAt}
+                    onRefresh={
+                      projectId
+                        ? async () => {
+                            await refreshWizardStatus(projectId);
+                          }
+                        : undefined
+                    }
+                  />
                   <SectionHeading title="Structure scorecard" detail="Atlas must detect a FiveM server before proceeding to normalization." />
                   {scorecard ? <StructureScorecardView compact scorecard={scorecard} /> : null}
                   {wizardStatus?.inline_secrets?.length ? <InlineSecretsReport findings={wizardStatus.inline_secrets} /> : null}

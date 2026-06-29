@@ -15,6 +15,7 @@ import { ResourceView } from "../features/resources/ResourceView";
 import { SetupView } from "../features/setup/SetupView";
 import "./App.css";
 import { AppShell } from "./AppShell";
+import { ProjectDirectoryProvider } from "../components/ProjectDirectoryContext";
 import { featureRoutes, type FeatureRouteId } from "./routes";
 import { useBackendStatus } from "./useBackendStatus";
 import { useErrorReporting } from "./useErrorReporting";
@@ -45,6 +46,7 @@ export function App() {
           }}
         />
       ) : null}
+      <ProjectDirectoryProvider>
       <AppShell
         activeLabel={activeRoute.label}
         activePath={routePath}
@@ -82,6 +84,7 @@ export function App() {
         />
       )}
     </AppShell>
+      </ProjectDirectoryProvider>
     </>
   );
 }
