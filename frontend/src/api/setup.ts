@@ -155,3 +155,22 @@ export async function restartProcess(projectId: string, request: RestartServerPr
 export async function getProcessStatus(projectId: string, processRunId: string): Promise<ProcessStatus> {
   return (await requestBackend<ProcessStatus>(`/api/v1/projects/${projectId}/process/${processRunId}`)).data;
 }
+
+export interface FxserverDetectResult {
+  detected_path: string | null;
+  found: boolean;
+}
+
+export interface FxserverValidateResult {
+  valid: boolean;
+  message: string | null;
+  resolved_path: string | null;
+}
+
+export async function detectFxserver(projectId: string): Promise<BackendResponse<FxserverDetectResult>> {
+  return requestBackend<FxserverDetectResult>(`/api/v1/projects/${projectId}/setup/fxserver/detect`);
+}
+
+export async function validateFxserverPath(projectId: string, fxserverPath: string): Promise<BackendResponse<FxserverValidateResult>> {
+  return requestBackend<FxserverValidateResult>(`/api/v1/projects/${projectId}/setup/fxserver/validate`, jsonRequest({ fxserver_path: fxserverPath }));
+}

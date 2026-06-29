@@ -99,6 +99,33 @@ def test_wizard_run_blocked_until_dev_secrets_filled() -> None:
     assert "dev license" in wizard["blockers"]["run"].lower()
 
 
+def test_wizard_run_blocked_until_server_started() -> None:
+    wizard = build_wizard_status(
+        adopt_status=_adopt_status(
+            normalized=True,
+            secrets_substituted=True,
+            dev_transformed=True,
+            run_ready=True,
+        )
+    )
+    assert wizard["active_step"] == "run"
+    assert wizard["gates"]["run"] is True
+    assert "start your server" in wizard["blockers"]["run"].lower()
+
+
+def test_wizard_run_complete_after_server_started() -> None:
+    status = _adopt_status(
+        normalized=True,
+        secrets_substituted=True,
+        dev_transformed=True,
+        run_ready=True,
+    )
+    status["pathway2_state"]["server_started"] = True
+    wizard = build_wizard_status(adopt_status=status)
+    assert wizard["gates"]["done"] is True
+    assert "run" not in wizard["blockers"] or "start your server" not in wizard["blockers"].get("run", "").lower()
+
+
 def test_wizard_return_blocked_by_contamination_gate() -> None:
     wizard = build_wizard_status(
         adopt_status=_adopt_status(

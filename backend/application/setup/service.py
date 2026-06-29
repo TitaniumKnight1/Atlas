@@ -39,6 +39,13 @@ from backend.domain.setup import (
     server_stopped,
     setup_run_completed,
 )
+from backend.domain.pathway2.settings import Pathway2SettingKeys
+from backend.domain.setup.fxserver_paths import (
+    detect_fxserver_executable,
+    humanize_launch_error,
+    validate_fxserver_path,
+    validate_server_data_path,
+)
 from backend.domain.shared_kernel import ErrorCode, ProjectId, StableIdentifier
 from backend.infrastructure.unit_of_work import RepositoryContext
 
@@ -497,6 +504,15 @@ class SetupApplicationService:
             uow.commit()
             return result
 
+    def detect_fxserver(self, *, project_id: ProjectId) -> dict[str, Any]:
+        project_root = self._project_root_path(project_id)
+        detected = detect_fxserver_executable(project_root=project_root)
+        return {"detected_path": detected, "found": detected is not None}
+
+    def validate_fxserver(self, *, fxserver_path: str) -> dict[str, Any]:
+        valid, message, resolved = validate_fxserver_path(fxserver_path)
+        return {"valid": valid, "message": message, "resolved_path": resolved}
+
     def preview_start_server(
         self,
         *,
@@ -549,7 +565,10 @@ class SetupApplicationService:
         )
         plan = self._process_launch_plan(fxserver_path, server_data_path, txadmin_mode, extra_args, plus_set_args=self._pathway2_plus_set_args(project_id, server_data_path))
         process_run_id = StableIdentifier.new()
-        status = self._process_port.start(str(process_run_id), str(project_id), plan)
+        try:
+            status = self._process_port.start(str(process_run_id), str(project_id), plan)
+        except OSError as error:
+            raise SetupApplicationError(ErrorCode.VALIDATION_FAILED, humanize_launch_error(error, fxserver_path)) from error
         masked_arguments = self._masked_launch_arguments(plan.arguments)
         with self._container.create_unit_of_work(project_id) as uow:
             uow.begin()
@@ -586,7 +605,16 @@ class SetupApplicationService:
                 ),
             )
             uow.commit()
-            return result
+        settings = self._container.create_project_service().get_project_settings(project_id)
+        if settings.get("pathway2.origin") and status.state == ServerProcessState.RUNNING:
+            self._container.create_project_service().update_project_settings(
+                project_id=project_id,
+                patch={
+                    Pathway2SettingKeys.SERVER_STARTED: True,
+                    Pathway2SettingKeys.FXSERVER_PATH: str(plan.executable_path),
+                },
+            )
+        return result
 
     def preview_stop_server(self, *, project_id: ProjectId, process_run_id: str) -> CommandPreview:
         return CommandPreview(
@@ -771,8 +799,25 @@ class SetupApplicationService:
         extra_args: list[str] | None,
         plus_set_args: list[str] | None = None,
     ) -> ProcessLaunchPlan:
-        executable = Path(fxserver_path).expanduser().resolve()
-        working_directory = Path(server_data_path).expanduser().resolve()
+        if extra_args is not None:
+            stripped = (fxserver_path or "").strip()
+            if not stripped:
+                raise SetupApplicationError(ErrorCode.VALIDATION_FAILED, "Set your FXServer executable first.")
+            try:
+                executable = Path(stripped).expanduser().resolve()
+            except OSError as error:
+                raise SetupApplicationError(ErrorCode.VALIDATION_FAILED, humanize_launch_error(error, stripped)) from error
+            if not executable.is_file():
+                raise SetupApplicationError(ErrorCode.VALIDATION_FAILED, f"FXServer.exe not found at {stripped}")
+        else:
+            valid, message, resolved_exe = validate_fxserver_path(fxserver_path)
+            if not valid or not resolved_exe:
+                raise SetupApplicationError(ErrorCode.VALIDATION_FAILED, message or "Invalid FXServer path.")
+            executable = Path(resolved_exe)
+        valid_data, data_message, resolved_data = validate_server_data_path(server_data_path)
+        if not valid_data or not resolved_data:
+            raise SetupApplicationError(ErrorCode.VALIDATION_FAILED, data_message or "Invalid server-data path.")
+        working_directory = Path(resolved_data)
         if extra_args is not None:
             arguments = extra_args
             mode = "custom"
@@ -888,6 +933,16 @@ class SetupApplicationService:
     def _require_project(self, repository: ProjectRepository, project_id: ProjectId) -> None:
         if repository.get_project(project_id) is None:
             raise SetupApplicationError(ErrorCode.NOT_FOUND, f"Project not found: {project_id}")
+
+    def _project_root_path(self, project_id: ProjectId) -> Path | None:
+        try:
+            detail = self._container.create_project_service().get_project(project_id)
+        except Exception:
+            return None
+        for path in detail.get("paths", []):
+            if path.get("path_role") == "root":
+                return Path(str(path["absolute_path"])).expanduser().resolve()
+        return None
 
 
 def _server_cfg_content(options: dict[str, Any]) -> str:

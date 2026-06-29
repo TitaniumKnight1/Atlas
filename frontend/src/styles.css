@@ -1219,6 +1219,21 @@ pre {
   font-weight: 800;
 }
 
+.link-button {
+  padding: 0;
+  border: 0;
+  color: var(--atlas-accent-text);
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  color: var(--atlas-accent);
+}
+
 .command-panel {
   overflow: hidden;
   border: 1px solid var(--atlas-border-subtle);

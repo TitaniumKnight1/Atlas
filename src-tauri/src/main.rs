@@ -59,6 +59,7 @@ fn backend_base_url(state: State<'_, BackendState>) -> Result<String, String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .manage(BackendState::default())
         .setup(|app| {

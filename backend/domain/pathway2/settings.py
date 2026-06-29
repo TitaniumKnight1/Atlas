@@ -12,6 +12,8 @@ class Pathway2SettingKeys:
     SUBSTITUTION_SLOTS = "pathway2.substitution_slots"
     UNSET_DEV_SLOTS = "pathway2.unset_dev_slots"
     DEV_TRANSFORMED = "pathway2.dev_transformed"
+    SERVER_STARTED = "pathway2.server_started"
+    FXSERVER_PATH = "pathway2.fxserver_path"
     TRANSFORM_OPTIONS = "pathway2.transform_options"
     DEV_DB_ENGINE = "pathway2.dev_db.engine"
     DEV_DB_CONTAINER_ID = "pathway2.dev_db.container_id"

@@ -48,6 +48,7 @@ def _step_complete(
     secrets_substituted: bool,
     dev_transformed: bool,
     run_ready: bool,
+    server_started: bool,
     commit_gate_passed: bool,
 ) -> bool:
     if step_id == "adopt":
@@ -58,6 +59,8 @@ def _step_complete(
         return secrets_substituted and run_ready
     if step_id == "tuning":
         return dev_transformed
+    if step_id == "run":
+        return server_started
     if step_id == "return":
         return commit_gate_passed
     return False
@@ -78,6 +81,7 @@ def build_wizard_status(
     secrets_substituted = bool(state.get("secrets_substituted"))
     dev_transformed = bool(state.get("dev_transformed"))
     run_ready = bool(state.get("run_ready"))
+    server_started = bool(state.get("server_started"))
     looks_like_fivem = bool(scorecard.get("looks_like_fivem_server"))
 
     contamination = (return_path or {}).get("contamination_report") or {}
@@ -104,6 +108,7 @@ def build_wizard_status(
             secrets_substituted=secrets_substituted,
             dev_transformed=dev_transformed,
             run_ready=run_ready,
+            server_started=server_started,
             commit_gate_passed=commit_gate_passed,
         ):
             status = "complete"
@@ -120,6 +125,7 @@ def build_wizard_status(
         normalized=normalized,
         secrets_substituted=secrets_substituted,
         run_ready=run_ready,
+        server_started=server_started,
         run_blocked_reason=run_blocked_reason,
         unset_dev_slots=unset_dev_slots,
         looks_like_fivem=looks_like_fivem,
@@ -134,7 +140,7 @@ def build_wizard_status(
         "tuning": True,
         "run": run_ready,
         "return": commit_allowed,
-        "done": bool(origin) and normalized and run_ready,
+        "done": bool(origin) and normalized and run_ready and server_started,
     }
 
     substitution_slots = list(adopt_status.get("substitution_slots") or [])
@@ -188,6 +194,7 @@ def _build_blockers(
     normalized: bool,
     secrets_substituted: bool,
     run_ready: bool,
+    server_started: bool,
     run_blocked_reason: str | None,
     unset_dev_slots: list[str],
     looks_like_fivem: bool,
@@ -205,6 +212,9 @@ def _build_blockers(
         blockers["run"] = reason
     elif not run_ready and run_blocked_reason:
         blockers["run"] = run_blocked_reason
+    elif run_ready and not server_started:
+        blockers["run"] = "Start your server to continue — this confirms your local setup works."
+        blockers["return"] = "Start your server on the Run locally step before returning work."
     if return_path and not contamination.get("allowed"):
         summary = contamination.get("summary_lines") or []
         findings = contamination.get("findings") or []

@@ -76,3 +76,7 @@ class StopServerProcessRequest(BaseModel):
 
 class RestartServerProcessRequest(StartServerProcessRequest):
     process_run_id: str
+
+
+class ValidateFxserverPathRequest(BaseModel):
+    fxserver_path: str

@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@tauri-apps/api": "latest",
-    "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-dialog": "^2.7.1",
     "react": "latest",
     "react-dom": "latest"
   },

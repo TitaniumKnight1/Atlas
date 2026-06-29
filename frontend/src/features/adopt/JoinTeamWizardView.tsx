@@ -18,41 +18,29 @@ import {
   type Pathway2WizardStatus
 } from "../../api/pathway2";
 import type { ConfigValidationBlock } from "../../api/configValidation";
-import { formatAuditRef, getProject, type ProjectDetail } from "../../api/project";
-import {
-  getProcessStatus,
-  previewStartProcess,
-  startProcess,
-  stopProcess,
-  type ProcessStatus
-} from "../../api/setup";
+import { getProject, type ProjectDetail } from "../../api/project";
 import {
   Alert,
   Badge,
   Button,
-  DefinitionGrid,
   Field,
   Input,
   InputGroup,
   SectionHeading,
-  StatusPill,
   Surface,
   WizardStepper,
-  type StatusKind,
   type WizardStepItem,
   ViewPage,
   ViewPageBody,
   ViewPageHeader,
-  ViewWorkspace,
-  TechnicalDetails
+  ViewWorkspace
 } from "../../components";
 import { CommandPanel } from "../../components/CommandPanel";
 import { EmptyState, ErrorState, LoadingState } from "../../components/StateViews";
 import { useProjectDirectory } from "../../components/ProjectDirectoryContext";
-import { useProjectStream } from "../../components/useProjectStream";
 import { PathwayChoice } from "../onboarding/PathwayChoice";
 import { ConfigFindingsPanel } from "../config/ConfigFindingsPanel";
-import { DevDatabasePanel } from "./DevDatabasePanel";
+import { RunLocallyWizardStep } from "./RunLocallyWizardStep";
 import {
   DevSecretsStepHero,
   DevLicenseEntryPanel,
@@ -101,15 +89,7 @@ export function JoinTeamWizardView() {
   const [transformPort, setTransformPort] = useState("30121");
 
   const [projectDetail, setProjectDetail] = useState<ProjectDetail | null>(null);
-  const [fxserverPath, setFxserverPath] = useState("");
   const [serverDataPath, setServerDataPath] = useState("");
-  const [txadminMode, setTxadminMode] = useState(false);
-  const [processRunId, setProcessRunId] = useState<string | null>(null);
-  const [processStatus, setProcessStatus] = useState<ProcessStatus | null>(null);
-  const [processBusy, setProcessBusy] = useState(false);
-  const [processError, setProcessError] = useState<unknown>(null);
-  const [processPreviewSummary, setProcessPreviewSummary] = useState<string | null>(null);
-  const [lastAuditRef, setLastAuditRef] = useState<string | null>(null);
   const [commitCompleted, setCommitCompleted] = useState(false);
 
   useEffect(() => {
@@ -174,10 +154,6 @@ export function JoinTeamWizardView() {
         if (!cancelled) {
           setProjectDetail(detail);
           setServerDataPath(resolveServerDataPath(detail));
-          const artifact = detail.paths.find((path) => path.path_role === "artifact_extract")?.absolute_path;
-          if (artifact) {
-            setFxserverPath(`${artifact}\\FXServer.exe`);
-          }
         }
       } catch {
         if (!cancelled) {
@@ -190,42 +166,6 @@ export function JoinTeamWizardView() {
       cancelled = true;
     };
   }, [projectId]);
-
-  const { events: streamEvents, connected: streamConnected } = useProjectStream(projectId, ["server-output", "process-lifecycle"]);
-  const serverLines = useMemo(
-    () =>
-      streamEvents
-        .filter((event) => event.topic === "server-output")
-        .map((event) => String(event.payload?.line ?? event.payload?.message ?? ""))
-        .filter(Boolean)
-        .slice(-200),
-    [streamEvents]
-  );
-
-  useEffect(() => {
-    if (!projectId || !processRunId) {
-      return;
-    }
-    let cancelled = false;
-    const activeProjectId = projectId;
-    const activeRunId = processRunId;
-    async function poll() {
-      try {
-        const status = await getProcessStatus(activeProjectId, activeRunId);
-        if (!cancelled) {
-          setProcessStatus(status);
-        }
-      } catch {
-        /* ignore transient poll errors */
-      }
-    }
-    void poll();
-    const timer = window.setInterval(() => void poll(), 3000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [projectId, processRunId]);
 
   const wizardSteps: WizardStepItem[] = useMemo(() => {
     if (wizardStatus?.wizard.steps) {
@@ -246,64 +186,6 @@ export function JoinTeamWizardView() {
   function goToStep(step: LocalWizardStepId) {
     setActiveStep(step);
   }
-
-  async function handlePreviewStart() {
-    if (!projectId) {
-      return;
-    }
-    setProcessError(null);
-    try {
-      const result = await previewStartProcess(projectId, {
-        fxserver_path: fxserverPath,
-        server_data_path: serverDataPath,
-        txadmin_mode: txadminMode
-      });
-      setProcessPreviewSummary(result.data.summary);
-    } catch (error) {
-      setProcessError(error);
-    }
-  }
-
-  async function handleStartProcess() {
-    if (!projectId) {
-      return;
-    }
-    setProcessBusy(true);
-    setProcessError(null);
-    try {
-      const result = await startProcess(projectId, {
-        fxserver_path: fxserverPath,
-        server_data_path: serverDataPath,
-        txadmin_mode: txadminMode
-      });
-      setLastAuditRef(formatAuditRef(result.auditRef) ?? null);
-      const runId = String(result.data.process_run_id ?? "");
-      if (runId) {
-        setProcessRunId(runId);
-      }
-    } catch (error) {
-      setProcessError(error);
-    } finally {
-      setProcessBusy(false);
-    }
-  }
-
-  async function handleStopProcess() {
-    if (!projectId || !processRunId) {
-      return;
-    }
-    setProcessBusy(true);
-    setProcessError(null);
-    try {
-      await stopProcess(projectId, { process_run_id: processRunId });
-    } catch (error) {
-      setProcessError(error);
-    } finally {
-      setProcessBusy(false);
-    }
-  }
-
-  const processStatusKind: StatusKind = mapProcessState(processStatus?.state);
 
   return (
     <ViewPage>
@@ -588,84 +470,16 @@ export function JoinTeamWizardView() {
             ) : null}
 
             {activeStep === "run" ? (
-              <section className="wizard-step">
-                <div className="wizard-step__content">
-                  <SectionHeading title="Run locally" detail="Start FXServer under Atlas supervision. Blocked until dev secrets are complete." />
-                  {blockers.run || wizardStatus?.run_blocked_reason ? (
-                    <WizardGateAlert
-                      title="Server not ready to run"
-                      detail={blockers.run ?? wizardStatus?.run_blocked_reason ?? "Complete dev secrets first."}
-                    />
-                  ) : null}
-                  <Surface kind="card">
-                    <DefinitionGrid
-                      items={[
-                        ["Project", projectDetail?.display_name ?? projectId],
-                        ["Server-data", serverDataPath || "—"],
-                        ["FXServer", fxserverPath || "—"],
-                        ["Stream", streamConnected ? "Connected" : "Connecting…"]
-                      ]}
-                    />
-                  </Surface>
-                  {projectId ? (
-                    <DevDatabasePanel
-                      projectId={projectId}
-                      serverDataPath={serverDataPath}
-                      onAuditRef={(auditRef) => setLastAuditRef(auditRef)}
-                    />
-                  ) : null}
-                  <div className="setup-form-grid">
-                    <Field label="FXServer executable">
-                      <Input value={fxserverPath} onChange={(event) => setFxserverPath(event.target.value)} />
-                    </Field>
-                    <Field label="Launch mode">
-                      <select value={txadminMode ? "txadmin" : "direct"} onChange={(event) => setTxadminMode(event.target.value === "txadmin")}>
-                        <option value="direct">Direct (+exec server.cfg)</option>
-                        <option value="txadmin">txAdmin mode</option>
-                      </select>
-                    </Field>
-                  </div>
-                  {processPreviewSummary ? (
-                    <Alert severity="info" title="Start preview">
-                      {processPreviewSummary}
-                    </Alert>
-                  ) : null}
-                  {processError ? <ErrorState error={processError} /> : null}
-                  {lastAuditRef ? (
-                    <Alert severity="info" title="Last audited operation">
-                      {lastAuditRef}
-                    </Alert>
-                  ) : null}
-                  <div className="atlas-row">
-                    <StatusPill status={processStatusKind}>{processStatus?.state ?? "Not started"}</StatusPill>
-                    {processRunId ? <Badge variant="neutral">run {processRunId.slice(0, 8)}</Badge> : null}
-                  </div>
-                  {serverLines.length > 0 ? (
-                    <TechnicalDetails summary="Server output">
-                      <pre className="command-json setup-output-log">{serverLines.join("\n")}</pre>
-                    </TechnicalDetails>
-                  ) : (
-                    <p className="muted-copy">Server output appears here after the process starts.</p>
-                  )}
-                </div>
-                <div className="wizard-step__footer">
-                  <Button variant="secondary" onClick={() => goToStep("tuning")}>
-                    Back
-                  </Button>
-                  <Button variant="secondary" disabled={!gates?.run} onClick={() => void handlePreviewStart()}>
-                    Preview start
-                  </Button>
-                  <Button loading={processBusy} variant="primary" disabled={!gates?.run} onClick={() => void handleStartProcess()}>
-                    Start server
-                  </Button>
-                  <Button disabled={!processRunId || processBusy} variant="secondary" onClick={() => void handleStopProcess()}>
-                    Stop
-                  </Button>
-                  <Button variant="primary" disabled={!gates?.run} onClick={() => goToStep("return")}>
-                    Continue to return work
-                  </Button>
-                </div>
-              </section>
+              <RunLocallyWizardStep
+                projectId={projectId}
+                projectDetail={projectDetail}
+                wizardStatus={wizardStatus}
+                serverDataPath={serverDataPath}
+                onServerDataPathChange={setServerDataPath}
+                onRefresh={() => void refreshWizardStatus(projectId)}
+                onBack={() => goToStep("tuning")}
+                onContinue={() => goToStep("return")}
+              />
             ) : null}
 
             {activeStep === "return" ? (
@@ -704,7 +518,7 @@ export function JoinTeamWizardView() {
                     <ul className="plain-list">
                       <li>Adopted team repo with overlay structure (server.cfg.local is gitignored).</li>
                       <li>Production secrets substituted — your dev values stay local and masked in previews.</li>
-                      <li>Server can run locally when dev secrets are filled and the run gate passes.</li>
+                      <li>Server started locally — your setup is verified before return work.</li>
                       <li>Return path uses a fail-closed commit gate; push your branch manually when ready.</li>
                     </ul>
                   </Alert>
@@ -741,18 +555,4 @@ function resolveServerDataPath(detail: ProjectDetail): string {
     return `${root.absolute_path}\\server-data`;
   }
   return "";
-}
-
-function mapProcessState(state: string | undefined): StatusKind {
-  switch ((state ?? "").toLowerCase()) {
-    case "running":
-      return "running";
-    case "crashed":
-      return "crashed";
-    case "stopped":
-    case "idle":
-      return "idle";
-    default:
-      return "pending";
-  }
 }

@@ -1025,6 +1025,7 @@ def _pathway2_state(settings: dict[str, Any]) -> dict[str, Any]:
         "secrets_substituted": bool(settings.get(Pathway2SettingKeys.SECRETS_SUBSTITUTED)),
         "run_ready": bool(settings.get(Pathway2SettingKeys.RUN_READY)),
         "dev_transformed": bool(settings.get(Pathway2SettingKeys.DEV_TRANSFORMED)),
+        "server_started": bool(settings.get(Pathway2SettingKeys.SERVER_STARTED)),
         "server_cfg_path": settings.get(Pathway2SettingKeys.SERVER_CFG_PATH),
         "overlay_path": settings.get(Pathway2SettingKeys.OVERLAY_PATH),
     }

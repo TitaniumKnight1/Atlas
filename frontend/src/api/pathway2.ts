@@ -29,6 +29,7 @@ export interface Pathway2State {
   secrets_substituted: boolean;
   run_ready: boolean;
   dev_transformed: boolean;
+  server_started: boolean;
   server_cfg_path: string | null;
   overlay_path: string | null;
 }

@@ -7,14 +7,13 @@ import {
   provisionDevDatabase,
   startDevDatabase,
   stopDevDatabase,
-  previewTeardownDevDatabase,
   teardownDevDatabase,
   undoDevDatabaseCommand,
   type DevDatabaseStatus
 } from "../../api/devDb";
 import { runDependencyChecks, listDependencyChecks, type DependencyCheck } from "../../api/setup";
 import { formatAuditRef } from "../../api/project";
-import { Alert, Button, DefinitionGrid, DependencyChecksTable, SectionHeading, Surface } from "../../components";
+import { Alert, Button, DefinitionGrid, DependencyChecksTable, SectionHeading, Surface, TechnicalDetails } from "../../components";
 import { CommandPanel } from "../../components/CommandPanel";
 import { ErrorState } from "../../components/StateViews";
 
@@ -22,9 +21,10 @@ interface DevDatabasePanelProps {
   projectId: string;
   serverDataPath: string;
   onAuditRef?: (auditRef: string | null) => void;
+  compact?: boolean;
 }
 
-export function DevDatabasePanel({ projectId, serverDataPath, onAuditRef }: DevDatabasePanelProps) {
+export function DevDatabasePanel({ projectId, serverDataPath, onAuditRef, compact = false }: DevDatabasePanelProps) {
   const [status, setStatus] = useState<DevDatabaseStatus | null>(null);
   const [statusError, setStatusError] = useState<unknown>(null);
   const [dependencyChecks, setDependencyChecks] = useState<DependencyCheck[]>([]);
@@ -121,11 +121,109 @@ export function DevDatabasePanel({ projectId, serverDataPath, onAuditRef }: DevD
   const canStop = Boolean(status?.container_running);
   const hasContainer = status != null && status.lifecycle !== "absent";
 
+  const summaryLine = compactSummary(status);
+
+  if (compact) {
+    return (
+      <TechnicalDetails summary={`Dev database (optional): ${summaryLine}`}>
+        <ExpandedDevDatabasePanel
+          status={status}
+          statusError={statusError}
+          lifecycleError={lifecycleError}
+          dependencyError={dependencyError}
+          dependencyChecks={dependencyChecks}
+          dependencyBusy={dependencyBusy}
+          lifecycleBusy={lifecycleBusy}
+          serverDataPath={serverDataPath}
+          canStart={canStart}
+          canStop={canStop}
+          hasContainer={hasContainer}
+          projectId={projectId}
+          onRunPreflight={() => void handleRunPreflight()}
+          onStart={() => void handleStart()}
+          onStop={() => void handleStop()}
+          onTeardown={() => void handleTeardown()}
+          onRefreshStatus={() => void refreshStatus()}
+        />
+      </TechnicalDetails>
+    );
+  }
+
+  return (
+    <ExpandedDevDatabasePanel
+      status={status}
+      statusError={statusError}
+      lifecycleError={lifecycleError}
+      dependencyError={dependencyError}
+      dependencyChecks={dependencyChecks}
+      dependencyBusy={dependencyBusy}
+      lifecycleBusy={lifecycleBusy}
+      serverDataPath={serverDataPath}
+      canStart={canStart}
+      canStop={canStop}
+      hasContainer={hasContainer}
+      projectId={projectId}
+      onRunPreflight={() => void handleRunPreflight()}
+      onStart={() => void handleStart()}
+      onStop={() => void handleStop()}
+      onTeardown={() => void handleTeardown()}
+      onRefreshStatus={() => void refreshStatus()}
+    />
+  );
+}
+
+function compactSummary(status: DevDatabaseStatus | null): string {
+  if (!status || status.lifecycle === "absent") {
+    return "not provisioned — local MySQL via Docker. Expand to set up.";
+  }
+  if (status.container_running) {
+    return `running (${status.container_name ?? "container"}) — optional; never blocks server start.`;
+  }
+  return `${status.lifecycle} — optional; never blocks server start.`;
+}
+
+function ExpandedDevDatabasePanel({
+  status,
+  statusError,
+  lifecycleError,
+  dependencyError,
+  dependencyChecks,
+  dependencyBusy,
+  lifecycleBusy,
+  serverDataPath,
+  canStart,
+  canStop,
+  hasContainer,
+  projectId,
+  onRunPreflight,
+  onStart,
+  onStop,
+  onTeardown,
+  onRefreshStatus
+}: {
+  status: DevDatabaseStatus | null;
+  statusError: unknown;
+  lifecycleError: unknown;
+  dependencyError: unknown;
+  dependencyChecks: DependencyCheck[];
+  dependencyBusy: boolean;
+  lifecycleBusy: boolean;
+  serverDataPath: string;
+  canStart: boolean;
+  canStop: boolean;
+  hasContainer: boolean;
+  projectId: string;
+  onRunPreflight: () => void;
+  onStart: () => void;
+  onStop: () => void;
+  onTeardown: () => void;
+  onRefreshStatus: () => void;
+}) {
   return (
     <Surface kind="card">
       <SectionHeading
         title="Dev database"
-        detail="Provision a local MySQL Docker container matching the P2-2 connection string. Informational only — never blocks server start."
+        detail="Optional local MySQL via Docker. Informational only — never blocks server start."
       />
       {statusError ? <ErrorState error={statusError} /> : null}
       {lifecycleError ? <ErrorState error={lifecycleError} /> : null}
@@ -145,11 +243,11 @@ export function DevDatabasePanel({ projectId, serverDataPath, onAuditRef }: DevD
         </Surface>
       ) : null}
       <Alert severity="info" title="Preflight checks">
-        Run M1 checks for Docker availability and port 3306 before provisioning.
+        Run M1 checks for Docker availability and port 3306. Warnings here do not block FXServer start.
       </Alert>
       {dependencyError ? <ErrorState error={dependencyError} /> : null}
       <div className="setup-step__actions">
-        <Button loading={dependencyBusy} variant="secondary" disabled={!serverDataPath.trim()} onClick={() => void handleRunPreflight()}>
+        <Button loading={dependencyBusy} variant="secondary" disabled={!serverDataPath.trim()} onClick={onRunPreflight}>
           Run dev DB preflight
         </Button>
       </div>
@@ -163,21 +261,17 @@ export function DevDatabasePanel({ projectId, serverDataPath, onAuditRef }: DevD
         onDryRun={() => dryRunProvisionDevDatabase(projectId)}
         onExecute={() => provisionDevDatabase(projectId)}
         onUndo={(commandExecutionId) => undoDevDatabaseCommand(projectId, commandExecutionId)}
-        onSuccess={() => {
-          void refreshStatus();
-        }}
-        onUndoSuccess={() => {
-          void refreshStatus();
-        }}
+        onSuccess={onRefreshStatus}
+        onUndoSuccess={onRefreshStatus}
       />
       <div className="setup-step__actions">
-        <Button variant="secondary" disabled={!hasContainer || lifecycleBusy || !canStop} onClick={() => void handleStop()}>
+        <Button variant="secondary" disabled={!hasContainer || lifecycleBusy || !canStop} onClick={onStop}>
           Stop container
         </Button>
-        <Button variant="secondary" disabled={!canStart || lifecycleBusy} onClick={() => void handleStart()}>
+        <Button variant="secondary" disabled={!canStart || lifecycleBusy} onClick={onStart}>
           Start container
         </Button>
-        <Button variant="secondary" disabled={!hasContainer || lifecycleBusy} onClick={() => void handleTeardown()}>
+        <Button variant="secondary" disabled={!hasContainer || lifecycleBusy} onClick={onTeardown}>
           Remove container + volume
         </Button>
       </div>

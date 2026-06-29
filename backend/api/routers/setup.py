@@ -17,6 +17,7 @@ from backend.api.schemas.setup import (
     ServerConfigRequest,
     StartServerProcessRequest,
     StopServerProcessRequest,
+    ValidateFxserverPathRequest,
 )
 from backend.application.commands import CommandExecutionResult, CommandPreview, DryRunResult, RiskLevel
 from backend.application.setup import SetupApplicationError
@@ -191,6 +192,24 @@ def get_setup_run(project_id: str, setup_run_id: str, container: ApplicationCont
         return _failure(error)
 
 
+@router.get("/projects/{project_id}/setup/fxserver/detect", response_model=ResponseEnvelope)
+def detect_fxserver(project_id: str, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        return _success(container.create_setup_service().detect_fxserver(project_id=ProjectId(project_id)))
+    except SetupApplicationError as error:
+        return _failure(error)
+
+
+@router.post("/projects/{project_id}/setup/fxserver/validate", response_model=ResponseEnvelope)
+def validate_fxserver_path_route(
+    project_id: str,
+    request: ValidateFxserverPathRequest,
+    container: ApplicationContainer = Depends(get_container),
+) -> ResponseEnvelope:
+    _ = project_id
+    return _success(container.create_setup_service().validate_fxserver(fxserver_path=request.fxserver_path))
+
+
 @router.post("/projects/{project_id}/process/start-plan", response_model=ResponseEnvelope)
 def start_process_plan(project_id: str, request: StartServerProcessRequest, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
     preview = container.create_setup_service().preview_start_server(
@@ -263,8 +282,11 @@ def _failure(error: SetupApplicationError) -> ResponseEnvelope:
 def _setup_error(error: Exception) -> SetupApplicationError:
     if isinstance(error, SetupApplicationError):
         return error
+    from backend.domain.setup.fxserver_paths import humanize_launch_error
     from backend.domain.shared_kernel import ErrorCode
 
+    if isinstance(error, OSError):
+        return SetupApplicationError(ErrorCode.VALIDATION_FAILED, humanize_launch_error(error))
     return SetupApplicationError(ErrorCode.VALIDATION_FAILED, str(error))
 
 
