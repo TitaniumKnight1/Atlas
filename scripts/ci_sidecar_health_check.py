@@ -64,6 +64,8 @@ def main() -> None:
             if data.get("transport") != "loopback-http":
                 raise AssertionError(f"Unexpected transport: {data.get('transport')}")
 
+            _assert_dev_secret_dry_run_route(base_url)
+
             port = int(ready["port"])
             _shutdown_process(process)
             _assert_port_released("127.0.0.1", port)
@@ -71,6 +73,24 @@ def main() -> None:
         finally:
             if process.poll() is None:
                 _force_kill_process(process)
+
+
+def _assert_dev_secret_dry_run_route(base_url: str) -> None:
+    """QoL wizard preview chains plan + dry-run; a missing dry-run route surfaces as HTTP 404."""
+    payload = json.dumps({"slot_id": "sv_licenseKey", "dev_value": "cfxk_ci_probe"}).encode("utf-8")
+    req = request.Request(
+        f"{base_url}/api/v1/projects/ci-probe/pathway2/dev-secret-dry-run",
+        data=payload,
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+        method="POST",
+    )
+    try:
+        with request.urlopen(req, timeout=5) as response:
+            if response.status == 404:
+                raise AssertionError("dev-secret-dry-run route missing from packaged sidecar (HTTP 404)")
+    except error.HTTPError as http_error:
+        if http_error.code == 404:
+            raise AssertionError("dev-secret-dry-run route missing from packaged sidecar (HTTP 404)") from http_error
 
 
 def _wait_for_ready(process: subprocess.Popen[str]) -> dict:

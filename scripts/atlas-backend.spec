@@ -21,6 +21,7 @@ a = Analysis(
         "backend",
         "backend.adapters.persistence.sqlite_smoke",
         "backend.api.routers.health",
+        "backend.api.routers.pathway2",
         "backend.api.schemas.health",
         "backend.atlas_backend.app",
         "backend.infrastructure.build_config_generated",

@@ -479,13 +479,17 @@ class AdoptApplicationService:
         except ValueError as error:
             raise Pathway2ApplicationError(ErrorCode.VALIDATION_FAILED, str(error)) from error
         diff = build_substitution_diff(current=current, proposed=proposed)
+        masked_value = slot_preview_for_dev_value(slot_id=slot_id, dev_value=dev_value)["masked_value"]
+        stripped = dev_value.strip()
+        if stripped and stripped in diff:
+            diff = diff.replace(stripped, masked_value)
         return CommandPreview(
             "PlanApplyDevSecret",
             f"Apply dev value for {slot_id}",
             {
                 "project_id": str(project_id),
                 "slot_id": slot_id,
-                "masked_value": slot_preview_for_dev_value(slot_id=slot_id, dev_value=dev_value)["masked_value"],
+                "masked_value": masked_value,
                 "diff": diff,
             },
             risk_level=RiskLevel.HIGH,

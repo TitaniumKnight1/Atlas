@@ -89,6 +89,15 @@ def test_dev_license_apply_preview_masks_key_and_undo_restores_placeholder(tmp_p
         assert "REDACTED" in preview_blob
         assert DEV_LICENSE not in preview.preview.get("diff", "")
 
+        short_key = "cfxk_TESTKEY_VERIFY123"
+        short_preview = service.preview_apply_dev_secret(
+            project_id=project_id,
+            slot_id="sv_licenseKey",
+            dev_value=short_key,
+        )
+        assert short_key not in json.dumps(short_preview.preview)
+        assert short_key not in short_preview.preview.get("diff", "")
+
         dry_run = service.dry_run_apply_dev_secret(
             project_id=project_id,
             slot_id="sv_licenseKey",
