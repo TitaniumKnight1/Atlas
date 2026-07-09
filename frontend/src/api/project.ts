@@ -120,6 +120,13 @@ export async function importProject(request: ImportProjectRequest): Promise<Comm
   );
 }
 
+export async function archiveProject(projectId: string, reason: string): Promise<CommandResponse> {
+  return requestBackend<CommandResultData>(
+    `/api/v1/projects/${projectId}/archive`,
+    jsonRequest({ reason })
+  );
+}
+
 export async function undoCommandExecution(commandExecutionId: string): Promise<CommandResponse> {
   return requestBackend<CommandResultData>("/api/v1/projects/undo", jsonRequest({ command_execution_id: commandExecutionId }));
 }

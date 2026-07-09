@@ -55,6 +55,15 @@ def slug_from_path(path: Path) -> str:
     return slug or "project"
 
 
+def same_resolved_path(left: Path | str, right: Path | str) -> bool:
+    """True when two paths refer to the same directory (case-insensitive on Windows)."""
+    left_resolved = Path(left).expanduser().resolve()
+    right_resolved = Path(right).expanduser().resolve()
+    if left_resolved == right_resolved:
+        return True
+    return str(left_resolved).casefold() == str(right_resolved).casefold()
+
+
 def value_type_for(value: object) -> SettingValueType:
     if isinstance(value, bool):
         return SettingValueType.BOOLEAN

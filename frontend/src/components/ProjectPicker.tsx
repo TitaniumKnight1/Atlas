@@ -8,11 +8,19 @@ interface ProjectPickerProps {
   projects: ProjectSummary[];
   selectedProjectId: string | null;
   onSelect: (projectId: string) => void;
+  onRemove?: (projectId: string) => Promise<void>;
   loading?: boolean;
   emptyHref?: string;
 }
 
-export function ProjectPicker({ projects, selectedProjectId, onSelect, loading, emptyHref = "#/projects" }: ProjectPickerProps) {
+export function ProjectPicker({
+  projects,
+  selectedProjectId,
+  onSelect,
+  onRemove,
+  loading,
+  emptyHref = "#/projects"
+}: ProjectPickerProps) {
   if (loading) {
     return <LoadingState title="Loading projects" detail="Reading workspace list." />;
   }
@@ -36,18 +44,33 @@ export function ProjectPicker({ projects, selectedProjectId, onSelect, loading, 
       <SectionHeading detail="Feature actions run in project context." title="Project" />
       <div className="project-list">
         {projects.map((project) => (
-          <button
+          <div
             className={project.project_id === selectedProjectId ? "project-card project-card--active" : "project-card"}
             key={project.project_id}
-            type="button"
-            onClick={() => onSelect(project.project_id)}
           >
-            <span>
-              <strong>{project.display_name}</strong>
-              <small>{project.slug}</small>
-            </span>
-            <StatusPill status={project.status.toLowerCase() === "open" ? "running" : "idle"}>{project.status}</StatusPill>
-          </button>
+            <button className="project-card__select" type="button" onClick={() => onSelect(project.project_id)}>
+              <span>
+                <strong>{project.display_name}</strong>
+                <small>{project.slug}</small>
+              </span>
+              <StatusPill status={project.status.toLowerCase() === "open" ? "running" : "idle"}>{project.status}</StatusPill>
+            </button>
+            {onRemove ? (
+              <button
+                aria-label={`Remove ${project.display_name}`}
+                className="project-card__remove"
+                title="Remove project from Atlas"
+                type="button"
+                onClick={() => {
+                  if (window.confirm(`Remove "${project.display_name}" from Atlas? Files on disk are not deleted.`)) {
+                    void onRemove(project.project_id);
+                  }
+                }}
+              >
+                ×
+              </button>
+            ) : null}
+          </div>
         ))}
       </div>
     </section>

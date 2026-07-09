@@ -46,6 +46,7 @@ from backend.domain.setup.fxserver_paths import (
     validate_fxserver_path,
     validate_server_data_path,
 )
+from backend.domain.setup.wizard import build_wizard_status as build_setup_wizard_status
 from backend.domain.shared_kernel import ErrorCode, ProjectId, StableIdentifier
 from backend.infrastructure.unit_of_work import RepositoryContext
 
@@ -785,6 +786,52 @@ class SetupApplicationService:
         with self._container.session_factory() as session:
             repository = SetupRepository(RepositoryContext(session=session, project_id=project_id))
             return [_dependency_record_data(record) for record in repository.list_dependency_checks(project_id)]
+
+    def get_wizard_status(self, project_id: ProjectId) -> dict[str, Any]:
+        project_service = self._container.create_project_service()
+        settings = project_service.get_project_settings(project_id)
+        if settings.get(Pathway2SettingKeys.ORIGIN):
+            return {
+                "pathway": "join",
+                "wizard": self._container.create_adopt_service().get_wizard_status(project_id)["wizard"],
+            }
+
+        has_artifact_pin = False
+        dependency_checks_run = False
+        with self._container.session_factory() as session:
+            repository = SetupRepository(RepositoryContext(session=session, project_id=project_id))
+            has_artifact_pin = repository.get_artifact_pin(project_id) is not None
+            dependency_checks_run = bool(repository.list_dependency_checks(project_id))
+
+        project_root = self._project_root_path(project_id)
+        server_cfg_written = False
+        database_prepared = False
+        if project_root is not None:
+            from backend.domain.setup.server_working_dir import resolve_tracked_server_working_directory
+
+            valid, _, data = resolve_tracked_server_working_directory(project_root)
+            if valid and data is not None:
+                working_directory = Path(data["working_directory"])
+                server_cfg_written = (working_directory / "server.cfg").is_file()
+                database_prepared = (working_directory / "database" / "fivem.sqlite").is_file()
+
+        fxserver_path = settings.get(Pathway2SettingKeys.FXSERVER_PATH)
+        fxserver_installed = False
+        if isinstance(fxserver_path, str) and fxserver_path.strip():
+            fxserver_installed = Path(fxserver_path).expanduser().is_file()
+        if not fxserver_installed and project_root is not None:
+            fxserver_installed = detect_fxserver_executable(project_root=project_root) is not None
+
+        server_started = bool(settings.get(Pathway2SettingKeys.SERVER_STARTED))
+        wizard = build_setup_wizard_status(
+            has_artifact_pin=has_artifact_pin,
+            fxserver_installed=fxserver_installed,
+            server_cfg_written=server_cfg_written,
+            dependency_checks_run=dependency_checks_run,
+            database_prepared=database_prepared,
+            server_started=server_started,
+        )
+        return {"pathway": "setup", "wizard": wizard}
 
     def _artifact_install_plan(self, *, platform: str, channel: str, build_number: str) -> ArtifactInstallPlan:
         artifacts = self._artifact_client.discover(ArtifactPlatform(platform), ArtifactChannel(channel))

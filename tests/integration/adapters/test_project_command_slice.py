@@ -92,6 +92,43 @@ def test_project_id_scoping_isolates_settings(tmp_path: Path) -> None:
         container.close()
 
 
+def test_reimport_same_path_replaces_metadata(tmp_path: Path) -> None:
+    root = _project_root(tmp_path, "prevailrp")
+    container = create_application_container(tmp_path / "app-data")
+    try:
+        service = container.create_project_service()
+        first = service.execute_import_project(root_path=root)
+        first_id = first.result["project_id"]
+        service.update_project_settings(project_id=ProjectId(first_id), patch={"server.name": "Prevail"})
+        service.archive_project(ProjectId(first_id), "Fixture reset")
+
+        second = service.execute_import_project(root_path=root)
+        assert second.result["project_id"] == first_id
+        assert second.result["replaced_existing_project"] is True
+        project = service.get_project(ProjectId(first_id))
+        assert project["status"] == "active"
+        assert service.get_project_settings(ProjectId(first_id)) == {}
+        assert _count(container, ProjectRecord) == 1
+    finally:
+        container.close()
+
+
+def test_reimport_same_slug_different_path_conflicts(tmp_path: Path) -> None:
+    first_root = _project_root(tmp_path, "prevailrp")
+    second_root = _project_root(tmp_path / "other", "prevailrp")
+    container = create_application_container(tmp_path / "app-data")
+    try:
+        service = container.create_project_service()
+        service.execute_import_project(root_path=first_root)
+        try:
+            service.execute_import_project(root_path=second_root)
+            raise AssertionError("expected conflict")
+        except Exception as error:
+            assert "different folder" in str(error)
+    finally:
+        container.close()
+
+
 def test_rollback_does_not_publish_collected_events(tmp_path: Path) -> None:
     container = create_application_container(tmp_path / "app-data")
     seen: list[str] = []

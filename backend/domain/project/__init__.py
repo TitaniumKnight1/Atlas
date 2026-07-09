@@ -6,6 +6,7 @@ from backend.domain.project.types import (
     TrustScope,
     TrustState,
     slug_from_path,
+    same_resolved_path,
     value_type_for,
 )
 
@@ -17,5 +18,6 @@ __all__ = [
     "TrustScope",
     "TrustState",
     "slug_from_path",
+    "same_resolved_path",
     "value_type_for",
 ]

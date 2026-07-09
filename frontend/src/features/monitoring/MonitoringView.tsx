@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { listProjects, type ProjectSummary } from "../../api/project";
 import {
   createAlert,
   deleteAlert,
@@ -41,7 +40,7 @@ import {
   type LiveMetricSeries
 } from "../../components";
 import { EmptyState, ErrorState, LoadingState } from "../../components/StateViews";
-import { useAsyncTask } from "../../components/useAsyncTask";
+import { useActiveProjectSelection } from "../../components/useActiveProjects";
 import { useBackendStatus } from "../../app/useBackendStatus";
 
 type MonitoringTab = "live" | "history" | "alerts";
@@ -56,8 +55,7 @@ const HISTORY_WINDOWS: Record<HistoryWindow, { label: string; ms: number; resolu
 
 export function MonitoringView() {
   const backendStatus = useBackendStatus();
-  const { resource: projectsResource } = useAsyncTask<ProjectSummary[]>(listProjects, []);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const { resource: projectsResource, projects, selectedProjectId, setSelectedProjectId, removeProject } = useActiveProjectSelection();
   const [activeTab, setActiveTab] = useState<MonitoringTab>("live");
   const [collectionState, setCollectionState] = useState<CollectionState>("unknown");
   const [collectionBusy, setCollectionBusy] = useState(false);
@@ -81,14 +79,7 @@ export function MonitoringView() {
   const [alertDuration, setAlertDuration] = useState("0");
   const [alertEnabled, setAlertEnabled] = useState(true);
 
-  const projects = projectsResource.state === "ready" ? projectsResource.data : [];
   const { metrics: liveMetrics, alerts: streamAlerts, connected: streamConnected, streamError, lastMetricAt } = useMonitoringStream(selectedProjectId);
-
-  useEffect(() => {
-    if (!selectedProjectId && projects.length > 0) {
-      setSelectedProjectId(projects[0].project_id);
-    }
-  }, [projects, selectedProjectId]);
 
   const reloadMetadata = useCallback(async () => {
     if (!selectedProjectId) {
@@ -373,6 +364,7 @@ export function MonitoringView() {
           projects={projects}
           selectedProjectId={selectedProjectId}
           onSelect={setSelectedProjectId}
+          onRemove={removeProject}
         />
 
         <section className="project-main">

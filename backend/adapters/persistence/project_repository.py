@@ -26,6 +26,42 @@ class ProjectRepository:
     def slug_exists(self, slug: str) -> bool:
         return self._session.execute(select(ProjectRecord.project_id).where(ProjectRecord.slug == slug)).first() is not None
 
+    def find_project_by_slug(self, slug: str) -> ProjectRecord | None:
+        return self._session.execute(select(ProjectRecord).where(ProjectRecord.slug == slug)).scalar_one_or_none()
+
+    def get_root_path(self, project_id: ProjectId) -> str | None:
+        record = self._session.execute(
+            select(ProjectPathRecord).where(
+                ProjectPathRecord.project_id == str(project_id),
+                ProjectPathRecord.path_role == "root",
+            )
+        ).scalar_one_or_none()
+        return record.absolute_path if record is not None else None
+
+    def reset_project_for_reimport(
+        self,
+        project_id: ProjectId,
+        *,
+        display_name: str,
+        updated_at: datetime,
+    ) -> None:
+        self._ensure_project_scope(project_id)
+        scoped_id = str(project_id)
+        self._session.execute(delete(ProjectSettingRecord).where(ProjectSettingRecord.project_id == scoped_id))
+        self._session.execute(delete(EnvironmentProfileRecord).where(EnvironmentProfileRecord.project_id == scoped_id))
+        self._session.execute(delete(ProjectPathRecord).where(ProjectPathRecord.project_id == scoped_id))
+        self._session.execute(
+            update(ProjectRecord)
+            .where(ProjectRecord.project_id == scoped_id)
+            .values(
+                display_name=display_name,
+                status=ProjectStatus.ACTIVE.value,
+                updated_at=updated_at.isoformat(),
+                last_opened_at=None,
+                default_environment_id=None,
+            )
+        )
+
     def add_project(
         self,
         *,

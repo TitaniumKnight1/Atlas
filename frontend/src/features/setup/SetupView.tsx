@@ -4,6 +4,7 @@ import {
   dryRunInstallArtifact,
   dryRunServerConfig,
   getProcessStatus,
+  getSetupWizardStatus,
   installArtifact,
   listArtifacts,
   listDependencyChecks,
@@ -22,7 +23,7 @@ import {
   type DependencyCheck,
   type ProcessStatus
 } from "../../api/setup";
-import { formatAuditRef, getProject, listProjects, undoCommandExecution, type ProjectDetail, type ProjectSummary } from "../../api/project";
+import { formatAuditRef, getProject, undoCommandExecution, type ProjectDetail } from "../../api/project";
 import {
   Alert,
   Badge,
@@ -42,9 +43,10 @@ import {
 } from "../../components";
 import { CommandPanel } from "../../components/CommandPanel";
 import { EmptyState, ErrorState, LoadingState, OnboardingEmptyState } from "../../components/StateViews";
-import { useAsyncTask } from "../../components/useAsyncTask";
+import { useActiveProjectSelection } from "../../components/useActiveProjects";
 import { useProjectStream } from "../../components/useProjectStream";
 import { PathwayChoice } from "../onboarding/PathwayChoice";
+import { stashAdoptResumeProjectId } from "../onboarding/resumeProject";
 
 const WIZARD_STEP_DEFS = [
   { id: "project", label: "Project" },
@@ -89,9 +91,9 @@ const DEFAULT_DRAFT: SetupDraft = {
 };
 
 export function SetupView() {
-  const { resource: projectsResource, reload: reloadProjects } = useAsyncTask<ProjectSummary[]>(listProjects, []);
+  const { resource: projectsResource, projects, selectedProjectId, setSelectedProjectId, reload: reloadProjects } =
+    useActiveProjectSelection();
   const [activeStep, setActiveStep] = useState<WizardStepId>("project");
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [projectDetail, setProjectDetail] = useState<ProjectDetail | null>(null);
   const [projectLoading, setProjectLoading] = useState(false);
   const [projectError, setProjectError] = useState<unknown>(null);
@@ -115,18 +117,11 @@ export function SetupView() {
   const [installExecuting, setInstallExecuting] = useState(false);
   const [mutationTick, setMutationTick] = useState(0);
 
-  const projects = projectsResource.state === "ready" ? projectsResource.data : [];
   const { events: streamEvents, connected: streamConnected } = useProjectStream(selectedProjectId, [
     "op-progress",
     "server-output",
     "process-lifecycle"
   ]);
-
-  useEffect(() => {
-    if (!selectedProjectId && projects.length > 0) {
-      setSelectedProjectId(projects[0].project_id);
-    }
-  }, [projects, selectedProjectId]);
 
   useEffect(() => {
     if (!selectedProjectId) {
@@ -303,6 +298,32 @@ export function SetupView() {
   function goToStep(step: WizardStepId) {
     setActiveStep(step);
   }
+
+  const resumeSetupProject = useCallback(
+    async (projectId: string) => {
+      setSelectedProjectId(projectId);
+      try {
+        const response = await getSetupWizardStatus(projectId);
+        if (response.data.pathway === "join") {
+          stashAdoptResumeProjectId(projectId);
+          window.location.hash = "#/adopt";
+          return;
+        }
+        const step = response.data.wizard.active_step as WizardStepId;
+        const completed = new Set<WizardStepId>();
+        for (const wizardStep of response.data.wizard.steps) {
+          if (wizardStep.status === "complete") {
+            completed.add(wizardStep.id as WizardStepId);
+          }
+        }
+        setCompletedSteps(completed);
+        setActiveStep(step);
+      } catch {
+        setActiveStep("artifact");
+      }
+    },
+    [setSelectedProjectId]
+  );
 
   function bumpMutation() {
     setMutationTick((value) => value + 1);
@@ -525,7 +546,7 @@ export function SetupView() {
                       className={project.project_id === selectedProjectId ? "project-card project-card--active" : "project-card"}
                       key={project.project_id}
                       type="button"
-                      onClick={() => setSelectedProjectId(project.project_id)}
+                      onClick={() => void resumeSetupProject(project.project_id)}
                     >
                       <span>
                         <strong>{project.display_name}</strong>

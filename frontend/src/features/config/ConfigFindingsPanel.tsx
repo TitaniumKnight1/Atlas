@@ -19,13 +19,86 @@ interface ConfigFindingsPanelProps {
   projectId?: string;
   compact?: boolean;
   showInlineSecretHint?: boolean;
+  lastCheckedAt?: string | null;
+}
+
+export function ConfigValidationSummaryBar({
+  validation,
+  onCopied
+}: {
+  validation: ConfigValidationBlock | null | undefined;
+  onCopied?: (label: string) => void;
+}) {
+  const findings = validation?.findings ?? [];
+  const errorCount = findings.filter((item) => item.severity === "error").length;
+  const warningCount = findings.filter((item) => item.severity === "warning").length;
+  const hasValidated = validation?.status === "validated";
+  const skipped = validation?.status === "skipped_no_server_cfg";
+  const notRun = !validation || validation.status === "not_run";
+
+  async function copyPrompt() {
+    const text = validation?.all_issues_prompt;
+    if (!text) {
+      return;
+    }
+    await navigator.clipboard.writeText(text);
+    onCopied?.("llm");
+  }
+
+  if (notRun) {
+    return null;
+  }
+
+  if (skipped) {
+    return (
+      <div className="config-validation-bar">
+        <Badge variant="warn">No server.cfg</Badge>
+        <span className="muted-copy">Structural validation skipped.</span>
+      </div>
+    );
+  }
+
+  if (hasValidated && findings.length === 0) {
+    return (
+      <div className="config-validation-bar">
+        <Badge variant="success">Config clean</Badge>
+        <span className="muted-copy">No structural issues found.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="config-validation-bar">
+      <div className="inline-actions">
+        {errorCount > 0 ? (
+          <Badge variant="danger">
+            {errorCount} error{errorCount === 1 ? "" : "s"}
+          </Badge>
+        ) : null}
+        {warningCount > 0 ? (
+          <Badge variant="warn">
+            {warningCount} warning{warningCount === 1 ? "" : "s"}
+          </Badge>
+        ) : null}
+        <span className="muted-copy">
+          {validation?.finding_count ?? findings.length} structural issue{(validation?.finding_count ?? findings.length) === 1 ? "" : "s"}
+        </span>
+      </div>
+      {validation?.all_issues_prompt ? (
+        <Button type="button" size="sm" variant="secondary" onClick={() => void copyPrompt()}>
+          Copy for LLM
+        </Button>
+      ) : null}
+    </div>
+  );
 }
 
 export function ConfigFindingsPanel({
   validation,
   projectId,
   compact = false,
-  showInlineSecretHint = true
+  showInlineSecretHint = true,
+  lastCheckedAt
 }: ConfigFindingsPanelProps) {
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
 
@@ -34,73 +107,61 @@ export function ConfigFindingsPanel({
   const skipped = validation?.status === "skipped_no_server_cfg";
   const notRun = !validation || validation.status === "not_run";
 
-  const errorCount = useMemo(() => findings.filter((item) => item.severity === "error").length, [findings]);
-  const warningCount = useMemo(() => findings.filter((item) => item.severity === "warning").length, [findings]);
-
   async function copyText(label: string, text: string) {
     await navigator.clipboard.writeText(text);
     setCopyStatus(label);
     window.setTimeout(() => setCopyStatus(null), 2000);
   }
 
-  if (notRun) {
-    return (
-      <Alert severity="info" title="Config not yet validated">
-        Run Preview to scan server.cfg for structural issues (dangling ensures, missing manifests, absolute paths, inline secrets).
-      </Alert>
-    );
-  }
-
-  if (skipped) {
-    return (
-      <Alert severity="warn" title="Structural validation skipped">
-        No server.cfg found at this path — Atlas could not run structural validation.
-      </Alert>
-    );
-  }
-
-  if (hasValidated && findings.length === 0) {
-    return (
-      <Alert severity="success" title="No structural issues found">
-        Atlas validated server.cfg and resources/ — no dangling references, missing manifests, absolute paths, or inline secrets detected.
-      </Alert>
-    );
-  }
-
   return (
-    <div className="stack-gap-md">
-      <div className="atlas-row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
-        <SectionHeading
-          title="Config findings"
-          detail={
-            compact
-              ? `${findings.length} issue${findings.length === 1 ? "" : "s"} detected.`
-              : "Structural problems in server.cfg and resources/. Secrets are masked everywhere."
-          }
-        />
-        <div className="inline-actions">
-          {errorCount > 0 ? <Badge variant="danger">{errorCount} error{errorCount === 1 ? "" : "s"}</Badge> : null}
-          {warningCount > 0 ? <Badge variant="warn">{warningCount} warning{warningCount === 1 ? "" : "s"}</Badge> : null}
-          {validation?.all_issues_prompt ? (
-            <Button type="button" variant="secondary" onClick={() => void copyText("all", validation.all_issues_prompt ?? "")}>
-              Copy all issues as prompt
-            </Button>
+    <div className="stack-gap-md config-findings-panel">
+      <ConfigValidationSummaryBar validation={validation} onCopied={() => setCopyStatus("llm")} />
+      {lastCheckedAt ? <p className="muted-copy">Last checked {lastCheckedAt}</p> : null}
+      {copyStatus ? (
+        <p className="muted-copy">{copyStatus === "llm" ? "Copied LLM fix prompt to clipboard." : "Copied fix prompt."}</p>
+      ) : null}
+
+      {notRun ? (
+        <Alert severity="info" title="Config not yet validated">
+          Run Preview changes to scan server.cfg for structural issues (dangling ensures, missing manifests, absolute paths, inline secrets).
+          After fixing files on disk, use Re-run changes to refresh.
+        </Alert>
+      ) : null}
+
+      {skipped ? (
+        <Alert severity="warn" title="Structural validation skipped">
+          No server.cfg found at this path — Atlas could not run structural validation.
+        </Alert>
+      ) : null}
+
+      {hasValidated && findings.length === 0 ? (
+        <Alert severity="success" title="No structural issues found">
+          Atlas validated server.cfg and resources/ — no dangling references, missing manifests, absolute paths, or inline secrets detected.
+        </Alert>
+      ) : null}
+
+      {hasValidated && findings.length > 0 ? (
+        <>
+          {!compact ? (
+            <SectionHeading
+              title="Config findings"
+              detail="Structural problems in server.cfg and resources/. Secrets are masked everywhere."
+            />
           ) : null}
-        </div>
-      </div>
-      {copyStatus ? <p className="muted-copy">Copied {copyStatus === "all" ? "all issues prompt" : "fix prompt"}.</p> : null}
-      <div className="config-findings-grid">
-        {findings.map((finding) => (
-          <ConfigFindingCard
-            key={finding.finding_id}
-            finding={finding}
-            fixPrompt={validation?.fix_prompts?.[finding.finding_id]}
-            projectId={projectId}
-            showInlineSecretHint={showInlineSecretHint}
-            onCopyPrompt={(text) => void copyText(finding.finding_id, text)}
-          />
-        ))}
-      </div>
+          <div className="config-findings-grid">
+            {findings.map((finding) => (
+              <ConfigFindingCard
+                key={finding.finding_id}
+                finding={finding}
+                fixPrompt={validation?.fix_prompts?.[finding.finding_id]}
+                projectId={projectId}
+                showInlineSecretHint={showInlineSecretHint}
+                onCopyPrompt={(text) => void copyText(finding.finding_id, text)}
+              />
+            ))}
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -139,8 +200,8 @@ function ConfigFindingCard({
       </div>
       <div className="inline-actions" style={{ marginTop: "var(--space-3)" }}>
         {fixPrompt ? (
-          <Button type="button" variant="secondary" onClick={() => onCopyPrompt(fixPrompt)}>
-            Copy fix prompt
+          <Button type="button" variant="secondary" size="sm" onClick={() => onCopyPrompt(fixPrompt)}>
+            Copy for LLM
           </Button>
         ) : null}
         {projectId && finding.remediation.auto_fix_available && finding.remediation.auto_fix_kind === "comment_out_ensure" ? (

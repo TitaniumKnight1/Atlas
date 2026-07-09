@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { listProjects, type ProjectSummary } from "../../api/project";
 import {
   compareIncidents,
   exportIncidentMarkdown,
@@ -29,7 +28,7 @@ import {
   type StatusKind
 } from "../../components";
 import { EmptyState, ErrorState, LoadingState } from "../../components/StateViews";
-import { useAsyncTask } from "../../components/useAsyncTask";
+import { useActiveProjectSelection } from "../../components/useActiveProjects";
 import { useBackendStatus } from "../../app/useBackendStatus";
 
 type IncidentTab = "timeline" | "snapshot" | "related" | "compare" | "export";
@@ -73,8 +72,7 @@ function SnapshotPanel({ snapshots }: { snapshots: ContextSnapshot[] }) {
 
 export function IncidentsView() {
   const backendStatus = useBackendStatus();
-  const { resource: projectsResource } = useAsyncTask<ProjectSummary[]>(listProjects, []);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const { resource: projectsResource, projects, selectedProjectId, setSelectedProjectId, removeProject } = useActiveProjectSelection();
   const [groups, setGroups] = useState<IncidentGroup[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [detail, setDetail] = useState<IncidentGroupDetail | null>(null);
@@ -91,14 +89,6 @@ export function IncidentsView() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [toast, setToast] = useState<string | null>(null);
-
-  const projects = projectsResource.state === "ready" ? projectsResource.data : [];
-
-  useEffect(() => {
-    if (!selectedProjectId && projects.length > 0) {
-      setSelectedProjectId(projects[0].project_id);
-    }
-  }, [projects, selectedProjectId]);
 
   const reloadGroups = useCallback(async () => {
     if (!selectedProjectId) {
@@ -246,7 +236,7 @@ export function IncidentsView() {
 
       <div className="atlas-row" style={{ justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "var(--space-3)" }}>
         <SectionHeading eyebrow="Operate" title="Incidents" detail="Fingerprint-grouped crashes with environment snapshots and sanitized export." />
-        <ProjectPicker projects={projects} selectedProjectId={selectedProjectId} onSelect={setSelectedProjectId} />
+        <ProjectPicker projects={projects} selectedProjectId={selectedProjectId} onSelect={setSelectedProjectId} onRemove={removeProject} />
       </div>
 
       <Alert severity="info" title="Grouping caveat (M7b)">

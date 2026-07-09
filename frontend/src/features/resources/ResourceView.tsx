@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { listProjects, type ProjectSummary } from "../../api/project";
 import {
   deleteResource,
   dryRunDeleteResource,
@@ -42,14 +41,13 @@ import {
 } from "../../components";
 import { CommandPanel } from "../../components/CommandPanel";
 import { EmptyState, ErrorState, LoadingState } from "../../components/StateViews";
-import { useAsyncTask } from "../../components/useAsyncTask";
+import { useActiveProjectSelection } from "../../components/useActiveProjects";
 import { useProjectStream } from "../../components/useProjectStream";
 
 type ResourceTab = "inventory" | "graph" | "lifecycle" | "rollback";
 
 export function ResourceView() {
-  const { resource: projectsResource } = useAsyncTask<ProjectSummary[]>(listProjects, []);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const { resource: projectsResource, projects, selectedProjectId, setSelectedProjectId, removeProject } = useActiveProjectSelection();
   const [activeTab, setActiveTab] = useState<ResourceTab>("inventory");
   const [resources, setResources] = useState<ResourceSummary[]>([]);
   const [graph, setGraph] = useState<DependencyGraph | null>(null);
@@ -64,15 +62,8 @@ export function ResourceView() {
   const [rollbackIds, setRollbackIds] = useState("");
   const [longOpActive, setLongOpActive] = useState(false);
 
-  const projects = projectsResource.state === "ready" ? projectsResource.data : [];
   const selectedResource = resources.find((resource) => resource.resource_id === selectedResourceId) ?? null;
   const { events: streamEvents, connected: streamConnected } = useProjectStream(selectedProjectId, ["op-progress"]);
-
-  useEffect(() => {
-    if (!selectedProjectId && projects.length > 0) {
-      setSelectedProjectId(projects[0].project_id);
-    }
-  }, [projects, selectedProjectId]);
 
   const reload = useCallback(async () => {
     if (!selectedProjectId) {
@@ -150,6 +141,7 @@ export function ResourceView() {
           projects={projects}
           selectedProjectId={selectedProjectId}
           onSelect={setSelectedProjectId}
+          onRemove={removeProject}
         />
 
         <section className="project-main">

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { listProjects, type ProjectSummary } from "../../api/project";
 import {
   createBackupPlan,
   updateBackupPlan,
@@ -37,7 +36,7 @@ import {
   type StatusKind
 } from "../../components";
 import { EmptyState, ErrorState, LoadingState } from "../../components/StateViews";
-import { useAsyncTask } from "../../components/useAsyncTask";
+import { useActiveProjectSelection } from "../../components/useActiveProjects";
 import { useProjectStream } from "../../components/useProjectStream";
 import { useBackendStatus } from "../../app/useBackendStatus";
 
@@ -85,8 +84,7 @@ function consistencyWarning(run: BackupRun): string | null {
 
 export function BackupView() {
   const backendStatus = useBackendStatus();
-  const { resource: projectsResource } = useAsyncTask<ProjectSummary[]>(listProjects, []);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const { resource: projectsResource, projects, selectedProjectId, setSelectedProjectId, removeProject } = useActiveProjectSelection();
   const [activeTab, setActiveTab] = useState<BackupTab>("backups");
   const [plans, setPlans] = useState<BackupPlan[]>([]);
   const [runs, setRuns] = useState<BackupRun[]>([]);
@@ -117,14 +115,7 @@ export function BackupView() {
 
   const [longOpActive, setLongOpActive] = useState(false);
 
-  const projects = projectsResource.state === "ready" ? projectsResource.data : [];
   const { events: streamEvents, connected: streamConnected } = useProjectStream(selectedProjectId, ["op-progress"]);
-
-  useEffect(() => {
-    if (!selectedProjectId && projects.length > 0) {
-      setSelectedProjectId(projects[0].project_id);
-    }
-  }, [projects, selectedProjectId]);
 
   const reload = useCallback(async () => {
     if (!selectedProjectId) {
@@ -352,7 +343,7 @@ export function BackupView() {
 
       <div className="atlas-row" style={{ justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "var(--space-3)" }}>
         <SectionHeading eyebrow="Operate" title="Backup" detail="On-demand capture, destructive restore with undo, and retention policy." />
-        <ProjectPicker projects={projects} selectedProjectId={selectedProjectId} onSelect={setSelectedProjectId} />
+        <ProjectPicker projects={projects} selectedProjectId={selectedProjectId} onSelect={setSelectedProjectId} onRemove={removeProject} />
       </div>
 
       {longOpActive && opProgress ? (

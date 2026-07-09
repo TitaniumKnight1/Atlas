@@ -145,6 +145,14 @@ def list_dependency_checks(project_id: str, container: ApplicationContainer = De
     return _success(container.create_setup_service().list_dependency_checks(ProjectId(project_id)))
 
 
+@router.get("/projects/{project_id}/setup/wizard-status", response_model=ResponseEnvelope)
+def setup_wizard_status(project_id: str, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
+    try:
+        return _success(container.create_setup_service().get_wizard_status(ProjectId(project_id)))
+    except SetupApplicationError as error:
+        return _failure(error)
+
+
 @router.post("/projects/{project_id}/setup/database/prepare", response_model=ResponseEnvelope)
 def prepare_database(project_id: str, request: PrepareDatabaseRequest, container: ApplicationContainer = Depends(get_container)) -> ResponseEnvelope:
     try:

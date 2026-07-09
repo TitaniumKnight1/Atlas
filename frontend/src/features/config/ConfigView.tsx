@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { listProjects, undoCommandExecution, type ProjectSummary } from "../../api/project";
+import { undoCommandExecution } from "../../api/project";
 import {
   applyConfigChange,
   dryRunConfigChange,
@@ -19,13 +19,12 @@ import {
 import { Alert, Button, CodeEditor, ProjectPicker, SectionHeading, Surface, Tabs } from "../../components";
 import { CommandPanel } from "../../components/CommandPanel";
 import { EmptyState, ErrorState, LoadingState } from "../../components/StateViews";
-import { useAsyncTask } from "../../components/useAsyncTask";
+import { useActiveProjectSelection } from "../../components/useActiveProjects";
 
 type ConfigTab = "editor" | "findings" | "secrets";
 
 export function ConfigView() {
-  const { resource: projectsResource } = useAsyncTask<ProjectSummary[]>(listProjects, []);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const { resource: projectsResource, projects, selectedProjectId, setSelectedProjectId, removeProject } = useActiveProjectSelection();
   const [files, setFiles] = useState<ConfigFileSummary[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [editorContent, setEditorContent] = useState("");
@@ -38,14 +37,7 @@ export function ConfigView() {
   const [error, setError] = useState<unknown>(null);
   const [mutationTick, setMutationTick] = useState(0);
 
-  const projects = projectsResource.state === "ready" ? projectsResource.data : [];
   const selectedFile = files.find((file) => file.config_file_id === selectedFileId) ?? null;
-
-  useEffect(() => {
-    if (!selectedProjectId && projects.length > 0) {
-      setSelectedProjectId(projects[0].project_id);
-    }
-  }, [projects, selectedProjectId]);
 
   useEffect(() => {
     if (!selectedProjectId) {
@@ -159,6 +151,7 @@ export function ConfigView() {
           projects={projects}
           selectedProjectId={selectedProjectId}
           onSelect={setSelectedProjectId}
+          onRemove={removeProject}
         />
 
         <section className="project-main">

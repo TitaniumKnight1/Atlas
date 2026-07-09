@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { listProjects, type ProjectSummary } from "../../api/project";
+import { listProjects } from "../../api/project";
 import {
   approveAutomationRun,
   countPendingApprovals,
@@ -41,7 +41,7 @@ import {
   type StatusKind
 } from "../../components";
 import { EmptyState, ErrorState, LoadingState } from "../../components/StateViews";
-import { useAsyncTask } from "../../components/useAsyncTask";
+import { useActiveProjectSelection } from "../../components/useActiveProjects";
 import { useProjectStream } from "../../components/useProjectStream";
 import { useBackendStatus } from "../../app/useBackendStatus";
 
@@ -97,8 +97,7 @@ function previewSummary(preview: Record<string, unknown> | null): string {
 
 export function AutomationView() {
   const backendStatus = useBackendStatus();
-  const { resource: projectsResource } = useAsyncTask<ProjectSummary[]>(listProjects, []);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const { resource: projectsResource, projects, selectedProjectId, setSelectedProjectId, removeProject } = useActiveProjectSelection();
   const [activeTab, setActiveTab] = useState<AutomationTab>("approvals");
   const [globalEnabled, setGlobalEnabled] = useState(true);
   const [globalBusy, setGlobalBusy] = useState(false);
@@ -127,14 +126,7 @@ export function AutomationView() {
 
   const [longOpActive, setLongOpActive] = useState(false);
 
-  const projects = projectsResource.state === "ready" ? projectsResource.data : [];
   const { events: streamEvents, connected: streamConnected } = useProjectStream(selectedProjectId, ["op-progress"]);
-
-  useEffect(() => {
-    if (!selectedProjectId && projects.length > 0) {
-      setSelectedProjectId(projects[0].project_id);
-    }
-  }, [projects, selectedProjectId]);
 
   useEffect(() => {
     if (pending.length > 0) {
@@ -348,7 +340,7 @@ export function AutomationView() {
 
       <div className="atlas-row" style={{ justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "var(--space-3)" }}>
         <SectionHeading eyebrow="Operate" title="Automation" detail="Approval-gated recipes, workflow triggers, and run history." />
-        <ProjectPicker projects={projects} selectedProjectId={selectedProjectId} onSelect={setSelectedProjectId} />
+        <ProjectPicker projects={projects} selectedProjectId={selectedProjectId} onSelect={setSelectedProjectId} onRemove={removeProject} />
       </div>
 
       <Surface className={globalEnabled ? undefined : "atlas-card--warn"}>
@@ -658,8 +650,9 @@ export function useAutomationNavCount(enabled: boolean): number {
     let cancelled = false;
     async function poll() {
       try {
-        const projects = await listProjects();
-        const total = await countPendingApprovals(projects.map((project) => project.project_id));
+        const projectRows = await listProjects();
+        const activeIds = projectRows.filter((project) => project.status.toLowerCase() === "active").map((project) => project.project_id);
+        const total = await countPendingApprovals(activeIds);
         if (!cancelled) {
           setCount(total);
         }

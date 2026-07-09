@@ -39,6 +39,7 @@ import { CommandPanel } from "../../components/CommandPanel";
 import { EmptyState, ErrorState, LoadingState } from "../../components/StateViews";
 import { useProjectDirectory } from "../../components/ProjectDirectoryContext";
 import { PathwayChoice } from "../onboarding/PathwayChoice";
+import { consumeAdoptResumeProjectId } from "../onboarding/resumeProject";
 import { ConfigFindingsPanel } from "../config/ConfigFindingsPanel";
 import { RunLocallyWizardStep } from "./RunLocallyWizardStep";
 import {
@@ -91,6 +92,19 @@ export function JoinTeamWizardView() {
   const [projectDetail, setProjectDetail] = useState<ProjectDetail | null>(null);
   const [serverDataPath, setServerDataPath] = useState("");
   const [commitCompleted, setCommitCompleted] = useState(false);
+
+  useEffect(() => {
+    if (projectsResource.state !== "ready" || projectId) {
+      return;
+    }
+    const stashedId = consumeAdoptResumeProjectId();
+    if (!stashedId) {
+      return;
+    }
+    if (projects.some((project) => project.project_id === stashedId)) {
+      setProjectId(stashedId);
+    }
+  }, [projectId, projects, projectsResource.state]);
 
   useEffect(() => {
     if (!projectId || projectsResource.state !== "ready") {

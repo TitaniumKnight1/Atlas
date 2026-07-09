@@ -19,7 +19,7 @@ from backend.application.commands import (
     UndoPlan,
 )
 from backend.application.commands.recorder import CommandAuditRecorder
-from backend.domain.project import ProjectStatus, TrustScope, TrustState, slug_from_path
+from backend.domain.project import ProjectStatus, TrustScope, TrustState, same_resolved_path, slug_from_path
 from backend.domain.project.events import (
     environment_profile_created,
     environment_profile_updated,
@@ -82,6 +82,10 @@ class ProjectApplicationService:
     def preview_import_project(self, root_path: Path, template_id: str | None = None) -> CommandPreview:
         detected_paths = self._inspect_import_root(root_path)
         config_validation, validation_warnings = self._structural_validation_block(root_path)
+        replacement_warning = self._import_replacement_warning(root_path)
+        warnings = [*validation_warnings]
+        if replacement_warning:
+            warnings.append(replacement_warning)
         return CommandPreview(
             command_type="ImportProject",
             summary=f"Import project metadata from {root_path}",
@@ -90,8 +94,9 @@ class ProjectApplicationService:
                 "template_id": template_id,
                 "detected_paths": [_path_dict(path) for path in detected_paths],
                 "config_validation": config_validation,
+                "replaces_existing_project": replacement_warning is not None,
             },
-            warnings=validation_warnings,
+            warnings=warnings,
         )
 
     def _structural_validation_block(self, root_path: Path) -> tuple[dict[str, Any], list[str]]:
@@ -123,23 +128,36 @@ class ProjectApplicationService:
         preview = self.preview_import_project(root_path, template_id)
         detected_paths = preview.preview["detected_paths"]
         resolved_root = Path(str(preview.preview["root_path"]))
-        project_id = ProjectId.new()
         slug = slug_from_path(resolved_root)
         now = datetime.now(UTC)
+        replaced_existing = bool(preview.preview.get("replaces_existing_project"))
 
         with self._container.create_unit_of_work() as uow:
             uow.begin()
             repository = uow.repository(ProjectRepository)
-            if repository.slug_exists(slug):
-                raise ProjectApplicationError(ErrorCode.CONFLICT, f"Project slug already exists: {slug}")
-
-            repository.add_project(
-                project_id=project_id,
-                slug=slug,
-                display_name=resolved_root.name,
-                description=None,
-                created_at=now,
-            )
+            existing = repository.find_project_by_slug(slug)
+            if existing is not None:
+                existing_root = repository.get_root_path(ProjectId(existing.project_id))
+                if existing_root is None or not same_resolved_path(existing_root, resolved_root):
+                    raise ProjectApplicationError(
+                        ErrorCode.CONFLICT,
+                        f"Project slug already exists for a different folder: {slug}",
+                    )
+                project_id = ProjectId(existing.project_id)
+                repository.reset_project_for_reimport(
+                    project_id,
+                    display_name=resolved_root.name,
+                    updated_at=now,
+                )
+            else:
+                project_id = ProjectId.new()
+                repository.add_project(
+                    project_id=project_id,
+                    slug=slug,
+                    display_name=resolved_root.name,
+                    description=None,
+                    created_at=now,
+                )
             uow.session.flush()
             for path in detected_paths:
                 repository.add_path(
@@ -156,14 +174,23 @@ class ProjectApplicationService:
                 payload=ArchiveImportedProjectCompensation(project_id).describe(),
             )
             event = project_imported(project_id, list(detected_paths))
+            summary = (
+                f"Re-imported project {resolved_root.name}"
+                if replaced_existing
+                else f"Imported project {resolved_root.name}"
+            )
             result = self._recorder.record_success(
                 uow=uow,
                 preview=preview,
                 project_id=project_id,
                 entity_type="Project",
                 entity_id=str(project_id),
-                summary=f"Imported project {resolved_root.name}",
-                result={"project_id": str(project_id), "detected_paths": detected_paths},
+                summary=summary,
+                result={
+                    "project_id": str(project_id),
+                    "detected_paths": detected_paths,
+                    "replaced_existing_project": replaced_existing,
+                },
                 events=[event],
                 undo_plan=undo_plan,
                 idempotency_key=idempotency_key,
@@ -553,6 +580,22 @@ class ProjectApplicationService:
     def _require_project(self, repository: ProjectRepository, project_id: ProjectId) -> None:
         if repository.get_project(project_id) is None:
             raise ProjectApplicationError(ErrorCode.NOT_FOUND, f"Project not found: {project_id}")
+
+    def _import_replacement_warning(self, root_path: Path) -> str | None:
+        resolved_root = root_path.expanduser().resolve()
+        slug = slug_from_path(resolved_root)
+        with self._container.session_factory() as session:
+            repository = ProjectRepository(RepositoryContext(session=session))
+            existing = repository.find_project_by_slug(slug)
+            if existing is None:
+                return None
+            existing_root = repository.get_root_path(ProjectId(existing.project_id))
+            if existing_root is None or not same_resolved_path(existing_root, resolved_root):
+                return None
+            return (
+                f"An existing Atlas project for this folder will be replaced (slug: {slug}). "
+                "Project settings and detected paths will be reset."
+            )
 
 
 def _path_dict(path: Any) -> dict[str, object]:

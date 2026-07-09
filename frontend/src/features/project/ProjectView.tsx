@@ -7,14 +7,12 @@ import {
   getProjectSettings,
   importProject,
   listEnvironmentProfiles,
-  listProjects,
   openProject,
   previewImportProject,
   undoCommandExecution,
   updateProjectSettings,
   type EnvironmentProfile,
   type ProjectDetail,
-  type ProjectSummary,
   type SettingsData
 } from "../../api/project";
 import type { ConfigValidationBlock } from "../../api/configValidation";
@@ -38,7 +36,7 @@ import {
 import { CommandPanel } from "../../components/CommandPanel";
 import { ConfigFindingsPanel } from "../config/ConfigFindingsPanel";
 import { EmptyState, ErrorState, LoadingState, OnboardingEmptyState } from "../../components/StateViews";
-import { useAsyncTask } from "../../components/useAsyncTask";
+import { useActiveProjectSelection } from "../../components/useActiveProjects";
 import { useProjectStream } from "../../components/useProjectStream";
 
 type ProjectWorkspace =
@@ -53,8 +51,14 @@ type ProjectWorkspace =
   | { state: "error"; error: unknown };
 
 export function ProjectView() {
-  const { resource: projectsResource, reload: reloadProjects } = useAsyncTask<ProjectSummary[]>(listProjects, []);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const {
+    resource: projectsResource,
+    projects,
+    selectedProjectId,
+    setSelectedProjectId,
+    reload: reloadProjects,
+    removeProject
+  } = useActiveProjectSelection();
   const [workspace, setWorkspace] = useState<ProjectWorkspace>({ state: "empty" });
   const [importPath, setImportPath] = useState("");
   const [settingKey, setSettingKey] = useState("server.name");
@@ -63,14 +67,12 @@ export function ProjectView() {
   const [environmentDisplayName, setEnvironmentDisplayName] = useState("Local");
   const [lastMutation, setLastMutation] = useState<string | null>(null);
   const [importConfigValidation, setImportConfigValidation] = useState<ConfigValidationBlock | null>(null);
-
-  const projects = projectsResource.state === "ready" ? projectsResource.data : [];
+  const [importValidationCheckedAt, setImportValidationCheckedAt] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!selectedProjectId && projects.length > 0) {
-      setSelectedProjectId(projects[0].project_id);
-    }
-  }, [projects, selectedProjectId]);
+    setImportConfigValidation(null);
+    setImportValidationCheckedAt(null);
+  }, [importPath]);
 
   useEffect(() => {
     if (!selectedProjectId) {
@@ -157,18 +159,31 @@ export function ProjectView() {
 
           <div className="project-list">
             {projects.map((project) => (
-              <button
+              <div
                 className={project.project_id === selectedProjectId ? "project-card project-card--active" : "project-card"}
                 key={project.project_id}
-                type="button"
-                onClick={() => setSelectedProjectId(project.project_id)}
               >
-                <span>
-                  <strong>{project.display_name}</strong>
-                  <small>{project.slug}</small>
-                </span>
-                <StatusPill status={project.status.toLowerCase() === "open" ? "running" : "idle"}>{project.status}</StatusPill>
-              </button>
+                <button className="project-card__select" type="button" onClick={() => setSelectedProjectId(project.project_id)}>
+                  <span>
+                    <strong>{project.display_name}</strong>
+                    <small>{project.slug}</small>
+                  </span>
+                  <StatusPill status={project.status.toLowerCase() === "open" ? "running" : "idle"}>{project.status}</StatusPill>
+                </button>
+                <button
+                  aria-label={`Remove ${project.display_name}`}
+                  className="project-card__remove"
+                  title="Remove project from Atlas"
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm(`Remove "${project.display_name}" from Atlas? Files on disk are not deleted.`)) {
+                      void removeProject(project.project_id);
+                    }
+                  }}
+                >
+                  ×
+                </button>
+              </div>
             ))}
           </div>
         </section>
@@ -201,13 +216,18 @@ export function ProjectView() {
                 onPreviewReady={(response) => {
                   const block = response.data.preview.config_validation as ConfigValidationBlock | undefined;
                   setImportConfigValidation(block ?? null);
+                  setImportValidationCheckedAt(new Date().toLocaleString());
                 }}
                 onSuccess={(result) => void refreshAfterMutation(String(result.data.project_id ?? ""))}
                 onUndoSuccess={() => void refreshAfterMutation()}
               />
-              {importConfigValidation ? (
+              {importPath.trim() ? (
                 <div style={{ marginTop: "var(--space-4)" }}>
-                  <ConfigFindingsPanel validation={importConfigValidation} showInlineSecretHint />
+                  <ConfigFindingsPanel
+                    validation={importConfigValidation}
+                    showInlineSecretHint
+                    lastCheckedAt={importValidationCheckedAt}
+                  />
                 </div>
               ) : null}
             </div>

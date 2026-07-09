@@ -6,6 +6,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
@@ -92,8 +93,51 @@ def _install_sidecar_for_local_targets(built_binary: Path) -> None:
         if not profile_dir.is_dir():
             continue
         dest_dir = profile_dir / "binaries"
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(built_binary, dest_dir / f"atlas-backend{extension}")
+        dest = dest_dir / f"atlas-backend{extension}"
+        _atomic_install_binary(built_binary, dest)
+
+
+def _atomic_install_binary(source: Path, destination: Path) -> None:
+    """Install a built sidecar, replacing an in-use binary when possible (Windows dev runs)."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    staging = destination.with_name(destination.name + ".new")
+    if staging.exists():
+        staging.unlink()
+    shutil.copy2(source, staging)
+
+    last_error: OSError | None = None
+    for attempt in range(12):
+        try:
+            os.replace(staging, destination)
+            return
+        except PermissionError as error:
+            last_error = error
+            if attempt == 0:
+                _try_stop_locked_sidecar()
+            time.sleep(0.5)
+
+    if staging.exists():
+        try:
+            staging.unlink()
+        except OSError:
+            pass
+
+    raise RuntimeError(
+        f"Could not install sidecar at {destination} because the file is in use. "
+        "Close Atlas (and any atlas-backend.exe processes), then re-run `npm run sidecar:build`."
+    ) from last_error
+
+
+def _try_stop_locked_sidecar() -> None:
+    if sys.platform != "win32":
+        return
+    print("Stopping running atlas-backend sidecar so the new build can be installed...")
+    subprocess.run(
+        ["taskkill", "/F", "/IM", "atlas-backend.exe", "/T"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
 
 def _load_release_env() -> None:
@@ -162,7 +206,7 @@ def main() -> None:
     )
 
     built_binary = ROOT / "dist" / f"atlas-backend{'.exe' if sys.platform == 'win32' else ''}"
-    shutil.copy2(built_binary, output_path)
+    _atomic_install_binary(built_binary, output_path)
     _install_sidecar_for_local_targets(built_binary)
     if sys.platform != "win32":
         output_path.chmod(output_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)

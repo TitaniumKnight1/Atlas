@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { formatAuditRef, listProjects, undoCommandExecution, type ProjectSummary } from "../../api/project";
+import { formatAuditRef, undoCommandExecution } from "../../api/project";
 import {
   checkoutRef,
   cloneRepository,
@@ -41,14 +41,13 @@ import {
 } from "../../components";
 import { CommandPanel } from "../../components/CommandPanel";
 import { EmptyState, ErrorState, LoadingState } from "../../components/StateViews";
-import { useAsyncTask } from "../../components/useAsyncTask";
+import { useActiveProjectSelection } from "../../components/useActiveProjects";
 import { useProjectStream } from "../../components/useProjectStream";
 
 type GitTab = "repos" | "branches" | "changes" | "clone";
 
 export function GitView() {
-  const { resource: projectsResource } = useAsyncTask<ProjectSummary[]>(listProjects, []);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const { resource: projectsResource, projects, selectedProjectId, setSelectedProjectId, removeProject } = useActiveProjectSelection();
   const [repos, setRepos] = useState<GitRepository[]>([]);
   const [selectedRepoId, setSelectedRepoId] = useState<string | null>(null);
   const [status, setStatus] = useState<GitStatus | null>(null);
@@ -69,15 +68,8 @@ export function GitView() {
   const [longOpActive, setLongOpActive] = useState(false);
   const [lastAuditRef, setLastAuditRef] = useState<string | null>(null);
 
-  const projects = projectsResource.state === "ready" ? projectsResource.data : [];
   const selectedRepo = repos.find((repo) => repo.git_repository_id === selectedRepoId) ?? null;
   const { events: streamEvents, connected: streamConnected } = useProjectStream(selectedProjectId, ["op-progress"]);
-
-  useEffect(() => {
-    if (!selectedProjectId && projects.length > 0) {
-      setSelectedProjectId(projects[0].project_id);
-    }
-  }, [projects, selectedProjectId]);
 
   useEffect(() => {
     if (!selectedProjectId) {
@@ -195,6 +187,7 @@ export function GitView() {
           projects={projects}
           selectedProjectId={selectedProjectId}
           onSelect={setSelectedProjectId}
+          onRemove={removeProject}
         />
 
         <section className="project-main">

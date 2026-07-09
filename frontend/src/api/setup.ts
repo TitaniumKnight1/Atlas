@@ -185,3 +185,23 @@ export async function validateFxserverPath(projectId: string, fxserverPath: stri
 export async function resolveServerWorkingDirectory(projectId: string): Promise<BackendResponse<ServerWorkingDirResult>> {
   return requestBackend<ServerWorkingDirResult>(`/api/v1/projects/${projectId}/setup/server-working-dir`);
 }
+
+export interface SetupWizardStep {
+  id: string;
+  label: string;
+  status: string;
+}
+
+export interface SetupWizardStatus {
+  pathway: "setup" | "join";
+  wizard: {
+    active_step: string;
+    steps: SetupWizardStep[];
+    gates: Record<string, boolean>;
+    complete: boolean;
+  };
+}
+
+export async function getSetupWizardStatus(projectId: string): Promise<BackendResponse<SetupWizardStatus>> {
+  return requestBackend<SetupWizardStatus>(`/api/v1/projects/${projectId}/setup/wizard-status`);
+}
