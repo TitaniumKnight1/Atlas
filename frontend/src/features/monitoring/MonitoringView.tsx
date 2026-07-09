@@ -25,12 +25,12 @@ import {
   ProjectPicker,
   SectionHeading,
   Select,
-  Sparkline,
   StatusPill,
   Surface,
   Tabs,
   TimeSeriesChart,
   Toast,
+  Toggle,
   ViewPage,
   ViewPageBody,
   ViewPageHeader,
@@ -44,16 +44,22 @@ import { EmptyState, ErrorState, LoadingState } from "../../components/StateView
 import { useActiveProjectSelection } from "../../components/useActiveProjects";
 import { useBackendStatus } from "../../app/useBackendStatus";
 import { consumeMonitoringHandoffProjectId } from "./handoff";
+import { MetricCard, ResourcesMetricCard } from "./MetricCards";
+import { formatHistoryAxisValue, getMetricLabel, isFoldedResourceMetric } from "./metricPresentation";
 
 type MonitoringTab = "live" | "history" | "alerts";
 type CollectionState = "unknown" | "starting" | "running" | "stopped";
 type HistoryWindow = "1h" | "24h" | "7d";
-type MetricDotTone = "ok" | "warn" | "error" | "muted";
-
 const HISTORY_WINDOWS: Record<HistoryWindow, { label: string; ms: number; resolution: "raw" | "minute" | "hour" }> = {
   "1h": { label: "Last hour", ms: 60 * 60 * 1000, resolution: "raw" },
   "24h": { label: "Last 24 hours", ms: 24 * 60 * 60 * 1000, resolution: "minute" },
   "7d": { label: "Last 7 days", ms: 7 * 24 * 60 * 60 * 1000, resolution: "hour" }
+};
+
+const HISTORY_START_LABELS: Record<HistoryWindow, string> = {
+  "1h": "60m ago",
+  "24h": "24h ago",
+  "7d": "7d ago"
 };
 
 const SERVER_HEALTH_NAMES = new Set([
@@ -89,97 +95,6 @@ function isSystemMetric(metric: LiveMetricSeries): boolean {
     return true;
   }
   return name.includes("cpu") || name.includes("memory") || name.includes("disk") || name.includes("ram");
-}
-
-function humanizeMetricName(name: string): string {
-  return name.replace(/_/g, " ");
-}
-
-function deferredHint(metric: LiveMetricSeries): string {
-  if (metric.deferred_reason) {
-    return metric.deferred_reason;
-  }
-  const name = metric.metric_name.toLowerCase();
-  if (name.includes("fps") || name.includes("player")) {
-    return "Needs txAdmin / resource injection";
-  }
-  if (name.includes("process")) {
-    return "Needs a supervised server process";
-  }
-  return "Not available yet — never fabricated";
-}
-
-function formatMetricValue(metric: LiveMetricSeries): string {
-  if (metric.quality === "missing") {
-    return "Not available";
-  }
-  if (metric.value_real != null) {
-    return `${metric.value_real.toFixed(metric.value_real >= 100 ? 0 : 1)}${metric.unit ? ` ${metric.unit}` : ""}`;
-  }
-  if (metric.value_text) {
-    return metric.value_text;
-  }
-  return "—";
-}
-
-function metricDotTone(metric: LiveMetricSeries): MetricDotTone {
-  if (metric.quality === "missing") {
-    return "muted";
-  }
-  const name = metric.metric_name.toLowerCase();
-  if (name.includes("error") || name.includes("crash") || name.includes("failed")) {
-    return "error";
-  }
-  if (name.includes("warn")) {
-    return "warn";
-  }
-  return "ok";
-}
-
-function sparkTone(metric: LiveMetricSeries): "accent" | "warn" | "danger" | "success" | "muted" {
-  if (metric.quality === "missing") {
-    return "muted";
-  }
-  const tone = metricDotTone(metric);
-  if (tone === "error") {
-    return "danger";
-  }
-  if (tone === "warn") {
-    return "warn";
-  }
-  if (tone === "ok" && metric.metric_name.toLowerCase().includes("health")) {
-    return "success";
-  }
-  return "accent";
-}
-
-function MetricCard({ metric }: { metric: LiveMetricSeries }) {
-  const unavailable = metric.quality === "missing";
-  const dot = metricDotTone(metric);
-
-  return (
-    <article className={["metric-card", unavailable ? "metric-card--unavailable" : ""].filter(Boolean).join(" ")}>
-      <div className="metric-card__header">
-        <p className="metric-card__label">{humanizeMetricName(metric.metric_name)}</p>
-        <span className={`metric-card__status-dot metric-card__status-dot--${dot}`} aria-hidden="true" />
-      </div>
-      <p className="metric-card__value">{formatMetricValue(metric)}</p>
-      {unavailable ? (
-        <p className="metric-card__hint">{deferredHint(metric)}</p>
-      ) : metric.sparkline.length > 1 ? (
-        <div className="metric-card__spark">
-          <Sparkline label={`${metric.metric_name} trend`} tone={sparkTone(metric)} values={metric.sparkline} />
-        </div>
-      ) : (
-        <p className="metric-card__hint">Trend builds as samples arrive</p>
-      )}
-      {!unavailable ? (
-        <p className="metric-card__meta">
-          {metric.sampled_at ? new Date(metric.sampled_at).toLocaleTimeString() : "—"}
-        </p>
-      ) : null}
-    </article>
-  );
 }
 
 export function MonitoringView() {
@@ -279,15 +194,29 @@ export function MonitoringView() {
     return [...merged.values()].sort((a, b) => a.metric_name.localeCompare(b.metric_name));
   }, [baselineMetrics, liveMetrics]);
 
-  const serverHealthMetrics = useMemo(() => displayMetrics.filter(isServerHealthMetric), [displayMetrics]);
+  const serverHealthMetrics = useMemo(
+    () => displayMetrics.filter((metric) => isServerHealthMetric(metric) && !isFoldedResourceMetric(metric.metric_name)),
+    [displayMetrics]
+  );
+  const hasResourceSummary = useMemo(
+    () => displayMetrics.some((metric) => metric.metric_name.toLowerCase() === "resource_count"),
+    [displayMetrics]
+  );
   const systemMetrics = useMemo(() => {
     const healthIds = new Set(serverHealthMetrics.map((m) => m.metric_series_id));
-    return displayMetrics.filter((metric) => isSystemMetric(metric) && !healthIds.has(metric.metric_series_id));
+    return displayMetrics.filter(
+      (metric) => isSystemMetric(metric) && !healthIds.has(metric.metric_series_id) && !isFoldedResourceMetric(metric.metric_name)
+    );
   }, [displayMetrics, serverHealthMetrics]);
   const otherMetrics = useMemo(() => {
     const claimed = new Set([...serverHealthMetrics, ...systemMetrics].map((m) => m.metric_series_id));
-    return displayMetrics.filter((metric) => !claimed.has(metric.metric_series_id));
+    return displayMetrics.filter((metric) => !claimed.has(metric.metric_series_id) && !isFoldedResourceMetric(metric.metric_name));
   }, [displayMetrics, serverHealthMetrics, systemMetrics]);
+
+  const selectedHistorySeries = useMemo(
+    () => seriesList.find((series) => series.metric_series_id === historySeriesId),
+    [historySeriesId, seriesList]
+  );
 
   const liveAlertFeed = useMemo(() => {
     const streamItems = streamAlerts.map((event) => ({
@@ -508,7 +437,7 @@ export function MonitoringView() {
         : progressPhase === "waiting"
           ? "Collection is running. Metrics stream about every 5 seconds — first samples are on the way."
           : progressPhase === "live"
-            ? "Live health signals for your supervised server. Deferred FiveM metrics stay honest as Not available until wired."
+            ? "Live health signals for your supervised server. FiveM-specific metrics (players, FPS) show once a txAdmin connection is available."
             : "Metric collection is off. Start collection to populate live health — Atlas will not show fake values while waiting.";
 
   return (
@@ -607,10 +536,11 @@ export function MonitoringView() {
                       ) : null}
                       {displayMetrics.length > 0 ? (
                         <div className="metric-dashboard">
-                          {serverHealthMetrics.length > 0 ? (
+                          {serverHealthMetrics.length > 0 || hasResourceSummary ? (
                             <section className="metric-section">
                               <h3 className="metric-section__title">Server health</h3>
                               <div className="metric-card-grid">
+                                {hasResourceSummary ? <ResourcesMetricCard metrics={displayMetrics} /> : null}
                                 {serverHealthMetrics.map((metric) => (
                                   <MetricCard key={metric.metric_series_id} metric={metric} />
                                 ))}
@@ -653,7 +583,7 @@ export function MonitoringView() {
                           <Select value={historySeriesId} onChange={(event) => setHistorySeriesId(event.target.value)}>
                             {seriesList.map((series) => (
                               <option key={series.metric_series_id} value={series.metric_series_id}>
-                                {series.metric_name}
+                                {getMetricLabel(series.metric_name)}
                               </option>
                             ))}
                           </Select>
@@ -682,57 +612,69 @@ export function MonitoringView() {
                         />
                       ) : null}
                       {!historyLoading && historyPoints.length > 0 ? (
-                        <TimeSeriesChart label="Min/max range with average line" points={historyPoints} tone="info" />
+                        <TimeSeriesChart
+                          label="Min/max range with average line"
+                          points={historyPoints}
+                          tone="info"
+                          startLabel={HISTORY_START_LABELS[historyWindow]}
+                          endLabel="now"
+                          formatValue={(value) =>
+                            selectedHistorySeries
+                              ? formatHistoryAxisValue(selectedHistorySeries.metric_name, selectedHistorySeries.unit, value)
+                              : String(Math.round(value))
+                          }
+                        />
                       ) : null}
                     </Surface>
                   ) : null}
 
                   {activeTab === "alerts" ? (
-                    <div className="workspace-grid">
-                      <Surface kind="card">
-                        <SectionHeading detail="Rules evaluate against stored metric series. Enable/disable without deleting." title="Alert rules" />
-                        <div className="setup-form-grid">
+                    <div className="monitoring-alerts workspace-grid">
+                      <Surface className="monitoring-alerts__rules" kind="card">
+                        <SectionHeading detail="Rules evaluate against stored metric series. Enable or disable without deleting." title="Alert rules" />
+                        <div className="monitoring-alerts__form setup-form-grid">
                           <Field label="Name">
                             <Input value={alertName} onChange={(event) => setAlertName(event.target.value)} placeholder="High CPU" />
                           </Field>
                           <Field label="Severity">
                             <Select value={alertSeverity} onChange={(event) => setAlertSeverity(event.target.value)}>
-                              <option value="info">info</option>
-                              <option value="warn">warn</option>
-                              <option value="critical">critical</option>
+                              <option value="info">Info</option>
+                              <option value="warn">Warning</option>
+                              <option value="critical">Critical</option>
                             </Select>
                           </Field>
-                          <Field label="Metric series">
+                          <Field label="Metric">
                             <Select value={alertSeriesId} onChange={(event) => setAlertSeriesId(event.target.value)}>
                               {seriesList.map((series) => (
                                 <option key={series.metric_series_id} value={series.metric_series_id}>
-                                  {series.metric_name}
+                                  {getMetricLabel(series.metric_name)}
                                 </option>
                               ))}
                             </Select>
                           </Field>
-                          <Field label="Comparator">
+                          <Field label="Condition">
                             <Select value={alertComparator} onChange={(event) => setAlertComparator(event.target.value)}>
-                              <option value="gt">greater than</option>
-                              <option value="gte">greater or equal</option>
-                              <option value="lt">less than</option>
-                              <option value="lte">less or equal</option>
-                              <option value="eq">equal</option>
+                              <option value="gt">Greater than</option>
+                              <option value="gte">Greater or equal</option>
+                              <option value="lt">Less than</option>
+                              <option value="lte">Less or equal</option>
+                              <option value="eq">Equal to</option>
                             </Select>
                           </Field>
                           <Field label="Threshold">
-                            <Input value={alertThreshold} onChange={(event) => setAlertThreshold(event.target.value)} />
+                            <Input inputMode="decimal" value={alertThreshold} onChange={(event) => setAlertThreshold(event.target.value)} />
                           </Field>
                           <Field label="Duration (seconds)">
-                            <Input value={alertDuration} onChange={(event) => setAlertDuration(event.target.value)} />
+                            <Input inputMode="numeric" value={alertDuration} onChange={(event) => setAlertDuration(event.target.value)} />
                           </Field>
                         </div>
-                        <label className="atlas-field">
-                          <span className="atlas-field__label">Enabled</span>
-                          <input checked={alertEnabled} type="checkbox" onChange={(event) => setAlertEnabled(event.target.checked)} />
-                        </label>
+                        <div className="monitoring-alerts__toggle-row">
+                          <Toggle checked={alertEnabled} onChange={(event) => setAlertEnabled(event.target.checked)}>
+                            Rule enabled
+                          </Toggle>
+                        </div>
                         {alertFormError ? <ErrorState error={alertFormError} /> : null}
-                        <div className="setup-step__actions">
+                        <div className="monitoring-alerts__actions setup-step__actions">
                           <Button variant="primary" onClick={() => void handleSaveAlert()}>
                             {editingAlertId ? "Update rule" : "Create rule"}
                           </Button>
@@ -745,50 +687,58 @@ export function MonitoringView() {
                             Evaluate now
                           </Button>
                         </div>
-                        <div className="atlas-table-wrap">
-                          <table className="atlas-table">
-                            <thead>
-                              <tr>
-                                <th>Name</th>
-                                <th>Severity</th>
-                                <th>Runtime</th>
-                                <th>Enabled</th>
-                                <th />
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {alertRules.map((rule) => (
-                                <tr key={rule.monitoring_alert_id}>
-                                  <td>{rule.name}</td>
-                                  <td>{rule.severity}</td>
-                                  <td>
-                                    <StatusPill status={alertRuntimeStatus(rule.runtime_state)}>{rule.runtime_state}</StatusPill>
-                                  </td>
-                                  <td>{rule.is_enabled ? "yes" : "no"}</td>
-                                  <td>
-                                    <div className="atlas-row">
-                                      <Button size="sm" variant="secondary" onClick={() => populateAlertForm(rule)}>
-                                        Edit
-                                      </Button>
-                                      <Button size="sm" variant="ghost" onClick={() => void handleDeleteAlert(rule.monitoring_alert_id)}>
-                                        Delete
-                                      </Button>
-                                    </div>
-                                  </td>
+                        {alertRules.length === 0 ? (
+                          <p className="monitoring-alerts__empty-rules muted-copy">No alert rules yet. Create one above to get started.</p>
+                        ) : (
+                          <div className="atlas-table-wrap monitoring-alerts__table">
+                            <table className="atlas-table">
+                              <thead>
+                                <tr>
+                                  <th>Name</th>
+                                  <th>Severity</th>
+                                  <th>Runtime</th>
+                                  <th>Enabled</th>
+                                  <th />
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
+                              </thead>
+                              <tbody>
+                                {alertRules.map((rule) => (
+                                  <tr key={rule.monitoring_alert_id}>
+                                    <td>{rule.name}</td>
+                                    <td>
+                                      <StatusPill status={rule.severity === "critical" ? "crashed" : rule.severity === "warn" ? "pending" : "idle"}>
+                                        {rule.severity}
+                                      </StatusPill>
+                                    </td>
+                                    <td>
+                                      <StatusPill status={alertRuntimeStatus(rule.runtime_state)}>{rule.runtime_state}</StatusPill>
+                                    </td>
+                                    <td>{rule.is_enabled ? "Yes" : "No"}</td>
+                                    <td>
+                                      <div className="atlas-row">
+                                        <Button size="sm" variant="secondary" onClick={() => populateAlertForm(rule)}>
+                                          Edit
+                                        </Button>
+                                        <Button size="sm" variant="ghost" onClick={() => void handleDeleteAlert(rule.monitoring_alert_id)}>
+                                          Delete
+                                        </Button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
                       </Surface>
 
-                      <Surface kind="card">
-                        <SectionHeading
-                          detail="AlertFired and AlertResolved events on the guaranteed alerts topic — never silently dropped in the UI."
-                          title="Live alert events"
-                        />
+                      <Surface className="monitoring-alerts__events" kind="card">
+                        <SectionHeading detail="Fired and resolved alerts appear here as they happen." title="Live alert events" />
                         {liveAlertFeed.length === 0 ? (
-                          <EmptyState detail="Alert events appear here when rules fire or resolve." title="No alert events yet" />
+                          <div className="monitoring-alerts__empty-events">
+                            <p className="monitoring-alerts__empty-title">No alert events yet</p>
+                            <p className="muted-copy">Events show here when a rule fires or resolves.</p>
+                          </div>
                         ) : (
                           <div className="alert-feed">
                             {liveAlertFeed.map((event) => (

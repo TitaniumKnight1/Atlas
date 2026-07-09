@@ -1131,7 +1131,7 @@ pre {
 .atlas-sparkline__line {
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.75;
+  stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
@@ -1611,6 +1611,60 @@ pre {
   background: var(--atlas-bg-sunken);
 }
 
+.time-series-chart-shell {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.time-series-chart__grid {
+  stroke: var(--atlas-border-subtle);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+}
+
+.time-series-chart__axis {
+  stroke: var(--atlas-border-subtle);
+  stroke-width: 1;
+}
+
+.time-series-chart__tick {
+  fill: var(--atlas-text-muted);
+  font-size: 11px;
+  font-family: var(--font-ui);
+}
+
+.time-series-chart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--atlas-text-muted);
+}
+
+.time-series-chart__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.time-series-chart__legend-line {
+  display: inline-block;
+  width: 0.875rem;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--series-color, var(--atlas-accent));
+}
+
+.time-series-chart__legend-band {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.625rem;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--series-color, var(--atlas-accent)) 18%, transparent);
+}
+
 .time-series-chart__range {
   fill: color-mix(in srgb, var(--series-color, var(--atlas-accent)) 18%, transparent);
 }
@@ -1743,17 +1797,47 @@ pre {
 
 .metric-card__value {
   margin: 0;
-  font-size: var(--text-xl);
-  font-weight: 700;
+  font-size: clamp(1.5rem, 4vw, 1.875rem);
+  font-weight: 600;
+  font-family: var(--font-voice, var(--font-ui));
   color: var(--atlas-text-strong);
-  line-height: 1.15;
+  line-height: 1;
   overflow-wrap: anywhere;
+}
+
+.metric-card__value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.2rem;
+  margin: 0;
+  min-width: 0;
+}
+
+.metric-card__value-suffix {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--atlas-text-muted);
+  line-height: 1.2;
 }
 
 .metric-card--unavailable .metric-card__value {
   font-size: var(--text-md);
   font-weight: 600;
   color: var(--atlas-text-muted);
+}
+
+.metric-card__breakdown {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--atlas-text-muted);
+  line-height: 1.35;
+}
+
+.metric-card__collecting {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--atlas-text-muted);
+  font-style: italic;
 }
 
 .metric-card__hint {
@@ -1772,6 +1856,56 @@ pre {
 .metric-card__spark {
   min-width: 0;
   margin-top: var(--space-1);
+}
+
+.monitoring-alerts {
+  align-items: start;
+}
+
+.monitoring-alerts__form {
+  margin-top: var(--space-3);
+}
+
+.monitoring-alerts__toggle-row {
+  margin-top: var(--space-3);
+}
+
+.monitoring-alerts__actions {
+  margin-top: var(--space-4);
+}
+
+.monitoring-alerts__table {
+  margin-top: var(--space-4);
+}
+
+.monitoring-alerts__empty-rules {
+  margin: var(--space-4) 0 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px dashed var(--atlas-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--atlas-surface-1);
+}
+
+.monitoring-alerts__empty-events {
+  margin-top: var(--space-3);
+  padding: var(--space-5) var(--space-4);
+  border: 1px solid var(--atlas-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--atlas-surface-1);
+  text-align: center;
+}
+
+.monitoring-alerts__empty-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--atlas-text-strong);
+}
+
+.alert-feed {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
 }
 
 .atlas-progress-status {
@@ -1823,11 +1957,6 @@ pre {
 
 .atlas-progress-status--idle {
   border-color: var(--atlas-border-subtle);
-}
-
-.alert-feed {
-  display: grid;
-  gap: var(--space-3);
 }
 
 .atlas-code-editor {
