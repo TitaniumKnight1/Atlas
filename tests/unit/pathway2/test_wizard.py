@@ -139,32 +139,18 @@ def test_wizard_run_complete_after_server_started() -> None:
     assert "run" not in wizard["blockers"] or "start your server" not in wizard["blockers"].get("run", "").lower()
 
 
-def test_wizard_return_blocked_by_contamination_gate() -> None:
-    wizard = build_wizard_status(
-        adopt_status=_adopt_status(
-            normalized=True,
-            secrets_substituted=True,
-            dev_transformed=True,
-            run_ready=True,
-        ),
-        return_path={
-            "contamination_report": {
-                "allowed": False,
-                "gate_status": "BLOCKED",
-                "findings": [
-                    {
-                        "path": "resources/foo.cfg",
-                        "line": 12,
-                        "secret_type": "license_key",
-                        "redacted_preview": "****",
-                    }
-                ],
-                "summary_lines": [],
-            }
-        },
+def test_wizard_done_gate_requires_server_started() -> None:
+    status = _adopt_status(
+        normalized=True,
+        secrets_substituted=True,
+        dev_transformed=True,
+        run_ready=True,
     )
-    assert wizard["gates"]["return"] is False
-    assert "resources/foo.cfg" in wizard["blockers"]["return"]
+    status["pathway2_state"]["server_started"] = True
+    wizard = build_wizard_status(adopt_status=status)
+    assert wizard["active_step"] == "done"
+    assert wizard["gates"]["done"] is True
+    assert "return" not in wizard["gates"]
 
 
 def test_wizard_fivem_gate_blocks_normalize() -> None:

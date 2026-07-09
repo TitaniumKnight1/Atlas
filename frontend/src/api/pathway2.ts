@@ -73,7 +73,7 @@ export async function getPathway2Status(projectId: string): Promise<BackendRespo
   return requestBackend<Pathway2Status>(`/api/v1/projects/${projectId}/pathway2/status`);
 }
 
-export type WizardStepId = "adopt" | "normalize" | "secrets" | "tuning" | "run" | "return" | "done";
+export type WizardStepId = "adopt" | "normalize" | "secrets" | "tuning" | "run" | "done";
 
 export interface WizardStepItem {
   id: WizardStepId;
@@ -99,7 +99,7 @@ export interface Pathway2WizardStatus extends Pathway2Status {
     next_step: WizardStepId | null;
     secrets_step: SecretsStepGuidance;
   };
-  return_path?: ReturnPathStatus;
+  local_dev_boundary?: LocalDevBoundary;
 }
 
 export async function getPathway2WizardStatus(projectId: string): Promise<BackendResponse<Pathway2WizardStatus>> {
@@ -178,90 +178,34 @@ export async function applyDevConfigTransform(projectId: string, options?: DevTr
   return requestBackend<CommandResultData>(`/api/v1/projects/${projectId}/pathway2/transform/apply`, jsonRequest(options ?? {}));
 }
 
-export interface ReturnPathCommitScope {
-  normalization_paths: string[];
-  dev_change_paths: string[];
-  normalization_only: boolean;
-  total_paths: number;
-}
-
-export interface ReturnPathRepoSlice {
-  repo_path: string;
-  real_target: string;
-  branch_name: string | null;
-  remote_redacted: string | null;
-  git_repository_id: string | null;
-  default_commit_paths: string[];
-  commit_scope: ReturnPathCommitScope;
-  contamination_report: ContaminationReport;
-  gitignore_contains_overlay: boolean;
-  is_dirty: boolean;
-  has_changes: boolean;
-}
-
-export interface ReturnPathUnownedLocal {
+export interface LocalDevBoundaryUnownedPath {
   path: string;
   reason: string;
 }
 
-export interface ReturnPathStatus {
+export interface LocalDevBoundaryTrackedRepo {
+  repo_path: string;
+  branch: string | null;
+  remote_redacted: string | null;
+  kind: string;
+  is_junction: boolean;
+}
+
+export interface LocalDevBoundary {
   project_id: string;
-  structure_kind?: string;
-  git_repository_id: string | null;
-  branch_name: string | null;
-  is_dirty: boolean;
-  default_commit_paths: string[];
-  commit_scope?: ReturnPathCommitScope;
-  contamination_report: ContaminationReport;
-  gitignore_contains_overlay: boolean;
-  manual_push_message: string;
-  repos?: ReturnPathRepoSlice[];
-  unowned_local_paths?: ReturnPathUnownedLocal[];
-  has_any_changes?: boolean;
-  nothing_to_return?: boolean;
+  structure_kind: string;
+  unowned_local_paths: LocalDevBoundaryUnownedPath[];
+  tracked_repos: LocalDevBoundaryTrackedRepo[];
+  overlay_gitignored: boolean;
+  overlay_filename: string;
+  gitignore_overlay_entry: string;
+  normalization_note: string | null;
+  git_handoff_message: string;
+  local_secrets_message: string;
 }
 
-export interface ContaminationReport {
-  gate_status: "PASS" | "BLOCKED" | "PARTIAL";
-  allowed: boolean;
-  staged_paths: string[];
-  overlay_excluded: boolean;
-  server_cfg_placeholder_only: boolean | null;
-  findings: Array<{
-    path: string;
-    line: number;
-    secret_type: string;
-    redacted_preview: string;
-    reason: string;
-  }>;
-  blocked_paths?: string[];
-  summary_lines: string[];
-  push_seam: string;
-  manual_push_message: string;
-}
-
-export interface SafeReturnCommitRequest {
-  git_repository_id: string;
-  message: string;
-  paths?: string[] | null;
-  include_server_cfg?: boolean;
-}
-
-export async function getReturnPathStatus(projectId: string, gitRepositoryId?: string): Promise<BackendResponse<ReturnPathStatus>> {
-  const query = gitRepositoryId ? `?git_repository_id=${encodeURIComponent(gitRepositoryId)}` : "";
-  return requestBackend<ReturnPathStatus>(`/api/v1/projects/${projectId}/pathway2/return-path/status${query}`);
-}
-
-export async function previewSafeReturnCommit(projectId: string, request: SafeReturnCommitRequest): Promise<BackendResponse<CommandPreviewData>> {
-  return requestBackend<CommandPreviewData>(`/api/v1/projects/${projectId}/pathway2/return-commit-plan`, jsonRequest(request));
-}
-
-export async function dryRunSafeReturnCommit(projectId: string, request: SafeReturnCommitRequest): Promise<BackendResponse<DryRunData>> {
-  return requestBackend<DryRunData>(`/api/v1/projects/${projectId}/pathway2/return-commit-dry-run`, jsonRequest(request));
-}
-
-export async function applySafeReturnCommit(projectId: string, request: SafeReturnCommitRequest): Promise<BackendResponse<CommandResultData>> {
-  return requestBackend<CommandResultData>(`/api/v1/projects/${projectId}/pathway2/return-commit/apply`, jsonRequest(request));
+export async function getLocalDevBoundary(projectId: string): Promise<BackendResponse<LocalDevBoundary>> {
+  return requestBackend<LocalDevBoundary>(`/api/v1/projects/${projectId}/pathway2/local-dev-boundary`);
 }
 
 export async function undoPathway2Command(projectId: string, commandExecutionId: string): Promise<BackendResponse<CommandResultData>> {

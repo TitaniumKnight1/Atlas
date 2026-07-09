@@ -48,7 +48,7 @@ import {
   DevSecretEntryForm,
   InlineSecretsReport,
   Pathway2StatusBadges,
-  ReturnPathPanel,
+  LocalDevBoundaryPanel,
   StructureScorecardView,
   SubstitutionSlotsReport,
   WizardGateAlert
@@ -60,7 +60,6 @@ const WIZARD_STEP_DEFS = [
   { id: "secrets", label: "Dev secrets" },
   { id: "tuning", label: "Dev tuning" },
   { id: "run", label: "Run locally" },
-  { id: "return", label: "Return work" },
   { id: "done", label: "Done" }
 ] as const;
 
@@ -91,7 +90,6 @@ export function JoinTeamWizardView() {
 
   const [projectDetail, setProjectDetail] = useState<ProjectDetail | null>(null);
   const [serverDataPath, setServerDataPath] = useState("");
-  const [commitCompleted, setCommitCompleted] = useState(false);
 
   useEffect(() => {
     if (projectsResource.state !== "ready" || projectId) {
@@ -497,36 +495,31 @@ export function JoinTeamWizardView() {
               <section className="wizard-step">
                 <div className="wizard-step__content">
                   <SectionHeading
-                    title="You're set up for local team development"
-                    detail="Your server is running under Atlas supervision. Make feature changes in your repo when you're ready — return work is a later step, not part of setup."
+                    title="Your local dev environment is ready"
+                    detail="Atlas set up and verified your server. Operate from here — git stays in your own tools."
                   />
                   <Alert severity="success" title="Pathway 2 complete">
                     <ul className="plain-list">
-                      <li>Adopted team repo with overlay structure (server.cfg.local is gitignored).</li>
-                      <li>Production secrets substituted — your dev values stay local and masked in previews.</li>
-                      <li>Server started locally — your setup is verified.</li>
+                      <li>Your local dev environment is ready and running.</li>
+                      <li>Your dev secrets and overlay (server.cfg.local) stay local and are never committed or pushed.</li>
                       <li>
-                        Tracked server.cfg uses placeholders plus an exec server.cfg.local trailer. That safe normalization is
-                        available to share with your team later — your overlay and dev secrets never leave this machine.
+                        Atlas normalized server.cfg to use placeholders plus a gitignored overlay. If that normalization
+                        changed a tracked file in your repo, review and commit it with your own git tools — Atlas does not
+                        commit for you.
                       </li>
+                      <li>Make and commit your code changes with your own git tools (Cursor, etc.). Atlas does not touch tracked repositories.</li>
                     </ul>
                   </Alert>
                   <Surface kind="card">
                     <SectionHeading
-                      title="Return work later (optional)"
-                      detail="When you have changes to share with your team, use the safe return commit below. Atlas never pushes — you push your branch manually (ADR-0010)."
+                      title="Local vs tracked"
+                      detail="What stays on this machine vs what belongs to your team's git repos."
                     />
-                    <ReturnPathPanel
+                    <LocalDevBoundaryPanel
                       projectId={projectId}
-                      initialReturnPath={wizardStatus?.return_path}
-                      presentation="optional"
-                      onStatusChange={() => {
-                        setCommitCompleted(true);
-                        void refreshWizardStatus(projectId, { syncActiveStep: false });
-                      }}
+                      initialBoundary={wizardStatus?.local_dev_boundary}
                     />
                   </Surface>
-                  {commitCompleted ? <Badge variant="info">Local commit recorded</Badge> : null}
                 </div>
                 <div className="wizard-step__footer">
                   <Button variant="secondary" onClick={() => goToStep("run")}>

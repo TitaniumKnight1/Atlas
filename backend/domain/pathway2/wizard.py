@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 from backend.domain.pathway2.secrets_step import derive_secrets_step_guidance
 
-WizardStepId = Literal["adopt", "normalize", "secrets", "tuning", "run", "return", "done"]
+WizardStepId = Literal["adopt", "normalize", "secrets", "tuning", "run", "done"]
 WizardStepStatus = Literal["upcoming", "active", "complete", "failed"]
 
 WIZARD_STEP_DEFS: tuple[tuple[WizardStepId, str], ...] = (
@@ -15,7 +15,6 @@ WIZARD_STEP_DEFS: tuple[tuple[WizardStepId, str], ...] = (
     ("secrets", "Dev secrets"),
     ("tuning", "Dev tuning"),
     ("run", "Run locally"),
-    ("return", "Return work"),
     ("done", "Done"),
 )
 
@@ -52,7 +51,6 @@ def _step_complete(
     dev_transformed: bool,
     run_ready: bool,
     server_started: bool,
-    commit_gate_passed: bool,
 ) -> bool:
     if step_id == "adopt":
         return bool(origin)
@@ -64,15 +62,12 @@ def _step_complete(
         return dev_transformed
     if step_id == "run":
         return server_started
-    if step_id == "return":
-        return commit_gate_passed
     return False
 
 
 def build_wizard_status(
     *,
     adopt_status: dict[str, Any],
-    return_path: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     state = adopt_status.get("pathway2_state") or {}
     scorecard = adopt_status.get("structure_scorecard") or {}
@@ -86,22 +81,6 @@ def build_wizard_status(
     run_ready = bool(state.get("run_ready"))
     server_started = bool(state.get("server_started"))
     looks_like_fivem = bool(scorecard.get("looks_like_fivem_server"))
-
-    contamination = (return_path or {}).get("contamination_report") or {}
-    repos = list((return_path or {}).get("repos") or [])
-    changed_repos = [repo for repo in repos if repo.get("has_changes")]
-    if changed_repos:
-        commit_allowed = any(bool((repo.get("contamination_report") or {}).get("allowed")) for repo in changed_repos)
-        commit_gate_passed = all(
-            (repo.get("contamination_report") or {}).get("gate_status") == "PASS" for repo in changed_repos
-        )
-    else:
-        # Nothing to return, or legacy single-report payload without repos[].
-        commit_allowed = bool(contamination.get("allowed", True)) if return_path else True
-        commit_gate_passed = contamination.get("gate_status", "PASS") == "PASS" if return_path else True
-        if return_path and not repos:
-            commit_allowed = bool(contamination.get("allowed"))
-            commit_gate_passed = contamination.get("gate_status") == "PASS"
 
     active_step = derive_active_step(
         origin=origin,
@@ -117,8 +96,6 @@ def build_wizard_status(
     for step_id, label in WIZARD_STEP_DEFS:
         if step_id == active_step:
             status: WizardStepStatus = "active"
-        elif step_id == "return" and active_step == "done":
-            status = "upcoming"
         elif _step_complete(
             step_id,
             origin=origin,
@@ -127,12 +104,11 @@ def build_wizard_status(
             dev_transformed=dev_transformed,
             run_ready=run_ready,
             server_started=server_started,
-            commit_gate_passed=commit_gate_passed,
         ):
             status = "complete"
         elif step_id == "adopt" and not origin:
             status = "upcoming"
-        elif step_id in {"normalize", "secrets", "tuning", "run", "return", "done"} and not origin:
+        elif step_id in {"normalize", "secrets", "tuning", "run", "done"} and not origin:
             status = "upcoming"
         else:
             status = "complete" if _step_index(step_id) < _step_index(active_step) else "upcoming"
@@ -147,8 +123,6 @@ def build_wizard_status(
         run_blocked_reason=run_blocked_reason,
         unset_dev_slots=unset_dev_slots,
         looks_like_fivem=looks_like_fivem,
-        contamination=contamination,
-        return_path=return_path,
     )
 
     gates = {
@@ -157,7 +131,6 @@ def build_wizard_status(
         "secrets": secrets_substituted and run_ready,
         "tuning": True,
         "run": run_ready,
-        "return": commit_allowed,
         "done": bool(origin) and normalized and run_ready and server_started,
     }
 
@@ -216,8 +189,6 @@ def _build_blockers(
     run_blocked_reason: str | None,
     unset_dev_slots: list[str],
     looks_like_fivem: bool,
-    contamination: dict[str, Any],
-    return_path: dict[str, Any] | None,
 ) -> dict[str, str]:
     blockers: dict[str, str] = {}
     if origin and not looks_like_fivem:
@@ -232,36 +203,4 @@ def _build_blockers(
         blockers["run"] = run_blocked_reason
     elif run_ready and not server_started:
         blockers["run"] = "Start your server to continue — this confirms your local setup works."
-    if return_path:
-        repos = list(return_path.get("repos") or [])
-        blocked = [
-            repo
-            for repo in repos
-            if repo.get("has_changes") and not (repo.get("contamination_report") or {}).get("allowed", True)
-        ]
-        if blocked:
-            first_repo = blocked[0]
-            findings = (first_repo.get("contamination_report") or {}).get("findings") or []
-            repo_label = first_repo.get("repo_path") or "repo"
-            if findings:
-                first = findings[0]
-                blockers["return"] = (
-                    f"Remove the secret in {repo_label}/{first.get('path')}:{first.get('line')} "
-                    f"({first.get('secret_type')}) before committing that repo."
-                )
-            else:
-                blockers["return"] = f"Return-path secret gate blocked {repo_label}."
-        elif not contamination.get("allowed") and not repos:
-            summary = contamination.get("summary_lines") or []
-            findings = contamination.get("findings") or []
-            if findings:
-                first = findings[0]
-                blockers["return"] = (
-                    f"Remove the secret in {first.get('path')}:{first.get('line')} "
-                    f"({first.get('secret_type')}) before committing."
-                )
-            elif summary:
-                blockers["return"] = str(summary[0])
-            else:
-                blockers["return"] = "Return-path secret gate blocked this commit."
     return blockers

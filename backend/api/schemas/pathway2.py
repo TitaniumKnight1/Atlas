@@ -36,14 +36,6 @@ class ApplyDevTransformRequest(BaseModel):
     idempotency_key: str | None = None
 
 
-class SafeReturnCommitRequest(BaseModel):
-    git_repository_id: str
-    message: str
-    paths: list[str] | None = None
-    include_server_cfg: bool = False
-    idempotency_key: str | None = None
-
-
 class Pathway2UndoRequest(BaseModel):
     command_execution_id: str
 

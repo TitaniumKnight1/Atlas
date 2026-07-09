@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 
 from backend.api.dependencies import get_container
 from backend.api.schemas.pathway2 import (
@@ -12,7 +12,6 @@ from backend.api.schemas.pathway2 import (
     ApplyDevTransformRequest,
     ApplyRepoNormalizationRequest,
     ApplySecretSubstitutionRequest,
-    SafeReturnCommitRequest,
     AuditReference,
     ErrorPayload,
     Pathway2UndoRequest,
@@ -263,73 +262,13 @@ def apply_dev_config_transform(
         return _failure(error)
 
 
-@router.get("/projects/{project_id}/pathway2/return-path/status", response_model=ResponseEnvelope)
-def get_return_path_status(
+@router.get("/projects/{project_id}/pathway2/local-dev-boundary", response_model=ResponseEnvelope)
+def get_local_dev_boundary(
     project_id: str,
-    git_repository_id: str | None = Query(default=None),
     container: ApplicationContainer = Depends(get_container),
 ) -> ResponseEnvelope:
     try:
-        return _success(container.create_adopt_service().get_return_path_status(ProjectId(project_id), git_repository_id=git_repository_id))
-    except Pathway2ApplicationError as error:
-        return _failure(error)
-
-
-@router.post("/projects/{project_id}/pathway2/return-commit-plan", response_model=ResponseEnvelope)
-def plan_safe_return_commit(
-    project_id: str,
-    request: SafeReturnCommitRequest,
-    container: ApplicationContainer = Depends(get_container),
-) -> ResponseEnvelope:
-    try:
-        preview = container.create_adopt_service().preview_safe_return_commit(
-            project_id=ProjectId(project_id),
-            git_repository_id=request.git_repository_id,
-            message=request.message,
-            paths=request.paths,
-            include_server_cfg=request.include_server_cfg,
-        )
-        return _success(_preview_data(preview), warnings=preview.warnings)
-    except Pathway2ApplicationError as error:
-        return _failure(error)
-
-
-@router.post("/projects/{project_id}/pathway2/return-commit-dry-run", response_model=ResponseEnvelope)
-def dry_run_safe_return_commit(
-    project_id: str,
-    request: SafeReturnCommitRequest,
-    container: ApplicationContainer = Depends(get_container),
-) -> ResponseEnvelope:
-    try:
-        dry_run = container.create_adopt_service().dry_run_safe_return_commit(
-            project_id=ProjectId(project_id),
-            git_repository_id=request.git_repository_id,
-            message=request.message,
-            paths=request.paths,
-            include_server_cfg=request.include_server_cfg,
-        )
-        return _success(_dry_run_data(dry_run), warnings=dry_run.warnings)
-    except Pathway2ApplicationError as error:
-        return _failure(error)
-
-
-@router.post("/projects/{project_id}/pathway2/return-commit/apply", response_model=ResponseEnvelope)
-def apply_safe_return_commit(
-    project_id: str,
-    request: SafeReturnCommitRequest,
-    container: ApplicationContainer = Depends(get_container),
-) -> ResponseEnvelope:
-    try:
-        return _command_success(
-            container.create_adopt_service().execute_safe_return_commit(
-                project_id=ProjectId(project_id),
-                git_repository_id=request.git_repository_id,
-                message=request.message,
-                paths=request.paths,
-                include_server_cfg=request.include_server_cfg,
-                idempotency_key=request.idempotency_key,
-            )
-        )
+        return _success(container.create_adopt_service().get_local_dev_boundary(ProjectId(project_id)))
     except Pathway2ApplicationError as error:
         return _failure(error)
 
