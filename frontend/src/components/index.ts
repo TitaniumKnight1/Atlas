@@ -21,6 +21,8 @@ export type { TabItem } from "./Tabs";
 export { Toggle } from "./Toggle";
 export { Tooltip } from "./Tooltip";
 export { ProgressBar } from "./ProgressBar";
+export { ProgressStatus } from "./ProgressStatus";
+export type { ProgressStatusAction, ProgressStatusPhase } from "./ProgressStatus";
 export { WizardStepper } from "./WizardStepper";
 export type { WizardStepItem, WizardStepStatus } from "./WizardStepper";
 export { CodeEditor } from "./CodeEditor";

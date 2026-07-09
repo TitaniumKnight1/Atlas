@@ -40,6 +40,7 @@ import { EmptyState, ErrorState, LoadingState } from "../../components/StateView
 import { useProjectDirectory } from "../../components/ProjectDirectoryContext";
 import { PathwayChoice } from "../onboarding/PathwayChoice";
 import { consumeAdoptResumeProjectId } from "../onboarding/resumeProject";
+import { stashMonitoringHandoffProjectId } from "../monitoring/handoff";
 import { ConfigFindingsPanel } from "../config/ConfigFindingsPanel";
 import { RunLocallyWizardStep } from "./RunLocallyWizardStep";
 import {
@@ -525,7 +526,15 @@ export function JoinTeamWizardView() {
                   <Button variant="secondary" onClick={() => goToStep("run")}>
                     Back to run locally
                   </Button>
-                  <Button variant="primary" onClick={() => (window.location.hash = "#/monitoring")}>
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      if (projectId) {
+                        stashMonitoringHandoffProjectId(projectId);
+                      }
+                      window.location.hash = "#/monitoring";
+                    }}
+                  >
                     Open server monitoring
                   </Button>
                 </div>

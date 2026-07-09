@@ -1089,10 +1089,18 @@ pre {
   opacity: 1;
 }
 
+.atlas-sparkline-wrap {
+  display: block;
+  width: 100%;
+  height: 2.25rem;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+}
+
 .atlas-sparkline {
   display: block;
   width: 100%;
-  height: 40px;
+  height: 100%;
   color: var(--atlas-accent);
 }
 
@@ -1116,15 +1124,22 @@ pre {
   color: var(--atlas-danger-text);
 }
 
+.atlas-sparkline--muted {
+  color: var(--atlas-text-muted);
+}
+
 .atlas-sparkline__line {
   fill: none;
   stroke: currentColor;
-  stroke-width: 2;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
 }
 
 .atlas-sparkline__area {
   fill: currentColor;
-  opacity: 0.16;
+  opacity: 0.14;
   stroke: none;
 }
 
@@ -1635,19 +1650,131 @@ pre {
   --series-color: var(--atlas-danger-text);
 }
 
+.metric-dashboard {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+  width: 100%;
+}
+
 .metric-card-grid {
   display: grid;
   gap: var(--space-3);
-  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+  width: 100%;
+  min-width: 0;
 }
 
-@media (min-width: 1200px) {
-  .metric-card-grid {
-    grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
-  }
+.metric-section {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.metric-section__title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--atlas-text-muted);
 }
 
 .metric-card {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--atlas-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--atlas-surface-2);
+  box-shadow: var(--shadow-1), var(--hairline-top);
+  overflow: hidden;
+}
+
+.metric-card--unavailable {
+  background: var(--atlas-surface-1);
+  border-color: var(--atlas-border-subtle);
+  opacity: 0.92;
+}
+
+.metric-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.metric-card__label {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--atlas-text-muted);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.metric-card__status-dot {
+  flex-shrink: 0;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-top: 0.2rem;
+  border-radius: 999px;
+  background: var(--atlas-status-idle);
+}
+
+.metric-card__status-dot--ok {
+  background: var(--atlas-status-running);
+}
+
+.metric-card__status-dot--warn {
+  background: var(--atlas-status-pending);
+}
+
+.metric-card__status-dot--error {
+  background: var(--atlas-status-crashed);
+}
+
+.metric-card__status-dot--muted {
+  background: var(--atlas-text-muted);
+  opacity: 0.55;
+}
+
+.metric-card__value {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--atlas-text-strong);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.metric-card--unavailable .metric-card__value {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--atlas-text-muted);
+}
+
+.metric-card__hint {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--atlas-text-muted);
+  line-height: 1.35;
+}
+
+.metric-card__meta {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--atlas-text-muted);
+}
+
+.metric-card__spark {
+  min-width: 0;
+  margin-top: var(--space-1);
+}
+
+.atlas-progress-status {
   display: grid;
   gap: var(--space-3);
   padding: var(--space-4);
@@ -1657,11 +1784,45 @@ pre {
   box-shadow: var(--shadow-1), var(--hairline-top);
 }
 
-.metric-card__value {
+.atlas-progress-status__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.atlas-progress-status__titles {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  flex: 1 1 14rem;
+}
+
+.atlas-progress-status__detail {
   margin: 0;
-  font-size: var(--text-xl);
-  font-weight: 700;
-  color: var(--atlas-text-strong);
+  font-size: var(--text-sm);
+  color: var(--atlas-text);
+  line-height: 1.45;
+}
+
+.atlas-progress-status__hint {
+  margin: 0;
+}
+
+.atlas-progress-status__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.atlas-progress-status--live {
+  border-color: var(--atlas-status-running-border);
+}
+
+.atlas-progress-status--idle {
+  border-color: var(--atlas-border-subtle);
 }
 
 .alert-feed {
