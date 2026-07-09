@@ -104,6 +104,17 @@ def test_default_paths_exclude_bulk_untracked_import_tree() -> None:
     assert paths == [".gitignore", "server.cfg", "server.cfg.local.example"]
 
 
+def test_default_paths_include_untracked_additions_with_baseline() -> None:
+    changes = [
+        SimpleNamespace(path="resources/demo/new.lua", change_status=ChangeStatus.UNTRACKED),
+        SimpleNamespace(path="server.cfg.local", change_status=ChangeStatus.UNTRACKED),
+        SimpleNamespace(path="resources/demo/file.lua", change_status=ChangeStatus.MODIFIED),
+    ]
+    paths = select_default_return_commit_paths(file_changes=changes, include_untracked_additions=True)
+    assert paths == ["resources/demo/file.lua", "resources/demo/new.lua"]
+    assert "server.cfg.local" not in paths
+
+
 def test_server_cfg_eligible_for_return_commit_requires_placeholders(tmp_path) -> None:
     root = tmp_path / "repo"
     root.mkdir()

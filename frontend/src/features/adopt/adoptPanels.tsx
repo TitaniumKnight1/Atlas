@@ -320,8 +320,8 @@ export function ReturnPathPanel({
   const [returnStatus, setReturnStatus] = useState<ReturnPathStatus | null>(initialReturnPath ?? null);
   const [statusError, setStatusError] = useState<unknown>(null);
   const [branchName, setBranchName] = useState("feature/atlas-dev");
-  const [commitMessage, setCommitMessage] = useState("Atlas: overlay-safe config normalization");
-  const [creatingBranch, setCreatingBranch] = useState(false);
+  const [commitMessages, setCommitMessages] = useState<Record<string, string>>({});
+  const [creatingBranchFor, setCreatingBranchFor] = useState<string | null>(null);
 
   useEffect(() => {
     if (initialReturnPath) {
@@ -348,40 +348,62 @@ export function ReturnPathPanel({
     };
   }, [projectId, initialReturnPath]);
 
-  const commitRequest = useMemo(
-    () =>
-      returnStatus
-        ? {
-            git_repository_id: returnStatus.git_repository_id,
-            message: commitMessage,
-            paths: returnStatus.default_commit_paths
-          }
-        : null,
-    [returnStatus, commitMessage]
-  );
+  const repos = returnStatus?.repos ?? [];
+  const changedRepos = repos.filter((repo) => repo.has_changes);
+  const unownedLocal = returnStatus?.unowned_local_paths ?? [];
+  const nothingToReturn = returnStatus?.nothing_to_return ?? (changedRepos.length === 0 && (returnStatus?.default_commit_paths.length ?? 0) === 0);
+  const multiRepo = repos.length > 1 || (returnStatus?.structure_kind != null && returnStatus.structure_kind !== "single_repo");
 
-  const commitBlocked = returnStatus?.contamination_report.allowed === false;
-  const commitScope = returnStatus?.commit_scope;
-  const normalizationOnly = commitScope?.normalization_only ?? false;
-  const pathCount = returnStatus?.default_commit_paths.length ?? 0;
-  const commitBlockReason =
-    returnStatus?.contamination_report.findings[0] != null
-      ? `Remove the secret in ${returnStatus.contamination_report.findings[0].path}:${returnStatus.contamination_report.findings[0].line} before committing.`
-      : returnStatus?.contamination_report.summary_lines[0];
+  // Legacy single-repo fallback when repos[] is absent.
+  const legacySingle =
+    repos.length === 0 && returnStatus?.git_repository_id
+      ? {
+          repo_path: ".",
+          real_target: "",
+          branch_name: returnStatus.branch_name,
+          remote_redacted: null,
+          git_repository_id: returnStatus.git_repository_id,
+          default_commit_paths: returnStatus.default_commit_paths,
+          commit_scope: returnStatus.commit_scope ?? {
+            normalization_paths: [],
+            dev_change_paths: [],
+            normalization_only: true,
+            total_paths: returnStatus.default_commit_paths.length
+          },
+          contamination_report: returnStatus.contamination_report,
+          gitignore_contains_overlay: returnStatus.gitignore_contains_overlay,
+          is_dirty: returnStatus.is_dirty,
+          has_changes: returnStatus.default_commit_paths.length > 0
+        }
+      : null;
 
-  async function createFeatureBranch() {
-    if (!returnStatus || !branchName.trim()) {
+  const displayRepos = repos.length > 0 ? changedRepos : legacySingle && legacySingle.has_changes ? [legacySingle] : [];
+  const normalizationOnly =
+    displayRepos.length > 0 && displayRepos.every((repo) => repo.commit_scope?.normalization_only);
+
+  function messageFor(repoId: string): string {
+    return commitMessages[repoId] ?? "Atlas: overlay-safe return commit";
+  }
+
+  async function createFeatureBranch(gitRepositoryId: string) {
+    if (!branchName.trim()) {
       return;
     }
-    setCreatingBranch(true);
+    setCreatingBranchFor(gitRepositoryId);
     try {
-      await createBranch(projectId, returnStatus.git_repository_id, branchName.trim());
-      const response = await getReturnPathStatus(projectId, returnStatus.git_repository_id);
+      await createBranch(projectId, gitRepositoryId, branchName.trim());
+      const response = await getReturnPathStatus(projectId);
       setReturnStatus(response.data);
       onStatusChange?.();
     } finally {
-      setCreatingBranch(false);
+      setCreatingBranchFor(null);
     }
+  }
+
+  async function refreshStatus() {
+    const response = await getReturnPathStatus(projectId);
+    setReturnStatus(response.data);
+    onStatusChange?.();
   }
 
   return (
@@ -389,58 +411,133 @@ export function ReturnPathPanel({
       {statusError ? <ErrorState error={statusError} /> : null}
       {returnStatus ? (
         <>
-          {presentation === "optional" && normalizationOnly ? (
+          {presentation === "optional" && (nothingToReturn || normalizationOnly) ? (
             <Alert severity="info" title="No dev changes to return yet">
-              {pathCount > 0
-                ? `Atlas prepared ${pathCount} safe normalization file${pathCount === 1 ? "" : "s"} (placeholder server.cfg, .gitignore, etc.) you can share with your team when you choose. Your secrets and server.cfg.local stay local and are never committed.`
+              {normalizationOnly && displayRepos.length > 0
+                ? `Atlas prepared safe normalization file(s) you can share with your team when you choose. Your secrets and server.cfg.local stay local and are never committed.`
                 : "You have not made feature changes yet. When you do, use the safe return commit below — your secrets and server.cfg.local stay local and are never committed."}
             </Alert>
           ) : null}
-          <DefinitionGrid
-            items={[
-              ["Branch", returnStatus.branch_name ?? "detached"],
-              ["Git repo", returnStatus.git_repository_id],
-              ["Overlay gitignored", returnStatus.gitignore_contains_overlay ? "Yes" : "No"],
-              ["Gate", returnStatus.contamination_report.gate_status]
-            ]}
-          />
-          <ContaminationReportView report={returnStatus.contamination_report} />
-          {commitBlocked && commitBlockReason ? (
-            <EmptyState title="Commit blocked" detail={commitBlockReason} />
-          ) : null}
-          <InputGroup>
-            <Field label="Feature branch">
-              <div className="inline-actions">
-                <Input value={branchName} onChange={(event) => setBranchName(event.target.value)} />
-                <Button variant="secondary" disabled={creatingBranch} onClick={() => void createFeatureBranch()}>
-                  {creatingBranch ? "Creating…" : "Create branch"}
-                </Button>
-              </div>
-            </Field>
-            <Field label="Commit message">
-              <Input value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} />
-            </Field>
-          </InputGroup>
-          {commitRequest && pathCount > 0 ? (
-            <CommandPanel
-              title={presentation === "optional" ? "Share safe normalization (optional)" : "Safe return commit"}
-              description={returnStatus.manual_push_message}
-              executeLabel="Commit locally"
-              presentation="guided"
-              disabled={commitBlocked}
-              onPreview={() => previewSafeReturnCommit(projectId, commitRequest)}
-              onDryRun={() => dryRunSafeReturnCommit(projectId, commitRequest)}
-              onExecute={() => applySafeReturnCommit(projectId, commitRequest)}
-              onSuccess={async () => {
-                const response = await getReturnPathStatus(projectId, returnStatus.git_repository_id);
-                setReturnStatus(response.data);
-                onStatusChange?.();
-              }}
+
+          {multiRepo ? (
+            <DefinitionGrid
+              items={[
+                ["Structure", returnStatus.structure_kind ?? "multi_repo"],
+                ["Repos with changes", String(displayRepos.length)],
+                ["Overlay gitignored", returnStatus.gitignore_contains_overlay ? "Yes" : "No"],
+                ["Overall gate", returnStatus.contamination_report.gate_status]
+              ]}
             />
           ) : null}
+
+          {unownedLocal.length > 0 ? (
+            <Alert severity="info" title="Stays local (not tracked by any repo)">
+              <ul className="plain-list">
+                {unownedLocal.map((item) => (
+                  <li key={item.path}>
+                    <code>{item.path}</code> — {item.reason}
+                  </li>
+                ))}
+              </ul>
+            </Alert>
+          ) : null}
+
+          {displayRepos.length === 0 && !normalizationOnly ? (
+            <Alert severity="info" title="No dev changes to return yet">
+              Each discovered repo is clean against its own baseline. Parent-level assembly files stay local.
+            </Alert>
+          ) : null}
+
+          {displayRepos.map((repo) => {
+            const repoId = repo.git_repository_id;
+            if (!repoId) {
+              return null;
+            }
+            const commitBlocked = repo.contamination_report.allowed === false;
+            const pathCount = repo.default_commit_paths.length;
+            const commitRequest = {
+              git_repository_id: repoId,
+              message: messageFor(repoId),
+              paths: repo.default_commit_paths
+            };
+            const commitBlockReason =
+              repo.contamination_report.findings[0] != null
+                ? `Remove the secret in ${repo.contamination_report.findings[0].path}:${repo.contamination_report.findings[0].line} before committing.`
+                : repo.contamination_report.summary_lines[0];
+
+            return (
+              <Surface key={repoId} kind="card">
+                <SectionHeading
+                  title={multiRepo ? repo.repo_path : "Safe return commit"}
+                  detail={
+                    multiRepo
+                      ? `${pathCount} path${pathCount === 1 ? "" : "s"} · ${repo.branch_name ?? "detached"}${
+                          repo.remote_redacted ? ` · ${repo.remote_redacted}` : ""
+                        }`
+                      : returnStatus.manual_push_message
+                  }
+                />
+                <DefinitionGrid
+                  items={[
+                    ["Branch", repo.branch_name ?? "detached"],
+                    ...(multiRepo && repo.remote_redacted ? [["Remote", repo.remote_redacted] as [string, string]] : []),
+                    ["Gate", repo.contamination_report.gate_status],
+                    ["Paths", String(pathCount)]
+                  ]}
+                />
+                <ContaminationReportView report={repo.contamination_report} />
+                {commitBlocked && commitBlockReason ? <EmptyState title="Commit blocked for this repo" detail={commitBlockReason} /> : null}
+                <InputGroup>
+                  <Field label="Feature branch">
+                    <div className="inline-actions">
+                      <Input value={branchName} onChange={(event) => setBranchName(event.target.value)} />
+                      <Button
+                        variant="secondary"
+                        disabled={creatingBranchFor === repoId}
+                        onClick={() => void createFeatureBranch(repoId)}
+                      >
+                        {creatingBranchFor === repoId ? "Creating…" : "Create branch"}
+                      </Button>
+                    </div>
+                  </Field>
+                  <Field label="Commit message">
+                    <Input
+                      value={messageFor(repoId)}
+                      onChange={(event) =>
+                        setCommitMessages((current) => ({
+                          ...current,
+                          [repoId]: event.target.value
+                        }))
+                      }
+                    />
+                  </Field>
+                </InputGroup>
+                {pathCount > 0 ? (
+                  <CommandPanel
+                    title={
+                      presentation === "optional" && repo.commit_scope?.normalization_only
+                        ? "Share safe normalization (optional)"
+                        : multiRepo
+                          ? `Commit ${repo.repo_path}`
+                          : "Safe return commit"
+                    }
+                    description={returnStatus.manual_push_message}
+                    executeLabel="Commit locally"
+                    presentation="guided"
+                    disabled={commitBlocked}
+                    onPreview={() => previewSafeReturnCommit(projectId, commitRequest)}
+                    onDryRun={() => dryRunSafeReturnCommit(projectId, commitRequest)}
+                    onExecute={() => applySafeReturnCommit(projectId, commitRequest)}
+                    onSuccess={() => void refreshStatus()}
+                  />
+                ) : null}
+              </Surface>
+            );
+          })}
+
         </>
       ) : (
-        <LoadingState title="Loading return-path status" detail="Discovering git repository and running contamination scan." />
+        <LoadingState title="Loading return-path status" detail="Discovering repositories and running contamination scan." />
       )}
     </>
   );

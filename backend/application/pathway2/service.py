@@ -45,14 +45,17 @@ from backend.domain.pathway2.supervisor_fallback import (
     resolve_plus_set_overrides,
 )
 from backend.domain.pathway2.commit_safety import (
-    build_normalization_path_candidates,
-    classify_commit_scope,
     evaluate_commit_safety,
     is_overlay_path,
     load_staged_files,
-    select_default_return_commit_paths,
-    server_cfg_eligible_for_return_commit,
 )
+from backend.domain.pathway2.return_grouping import (
+    aggregate_return_gate,
+    build_repo_return_slice,
+    build_unowned_local_entries,
+    match_registered_repo,
+)
+from backend.domain.project.topology import discover_project_repo_topology
 from backend.domain.pathway2.transform import DevTransformOptions, build_transform_diff, default_transform_options, plan_dev_config_transform
 from backend.domain.shared_kernel import ErrorCode, ProjectId, StableIdentifier
 from backend.infrastructure.unit_of_work import RepositoryContext
@@ -652,38 +655,105 @@ class AdoptApplicationService:
 
     def get_return_path_status(self, *, project_id: ProjectId, git_repository_id: str | None = None) -> dict[str, Any]:
         self._require_pathway2_origin(project_id)
-        repo = self._resolve_git_repository(project_id, git_repository_id)
-        git_service = self._container.create_git_service()
-        worktree = git_service.get_worktree_status(project_id, repo["git_repository_id"])
-        project_root = Path(repo["local_path"]).resolve()
-        file_changes = _file_changes_from_worktree(worktree)
+        project_root = self._require_project_root(project_id)
+        topology = discover_project_repo_topology(project_root)
+        registered = self._container.create_git_service().list_git_repositories(project_id)
+        if not registered and not topology.repos:
+            raise Pathway2ApplicationError(ErrorCode.NOT_FOUND, "No git repository discovered for project")
+
+        # Ensure nested/assembly repos are registered so per-repo status/commit can resolve IDs.
+        self._ensure_topology_repos_registered(project_id=project_id, topology=topology, registered=registered)
+        registered = self._container.create_git_service().list_git_repositories(project_id)
+
         server_cfg_rel = self._pathway2_settings(project_id).get(Pathway2SettingKeys.SERVER_CFG_PATH)
-        normalization_paths = build_normalization_path_candidates(server_cfg_rel=server_cfg_rel)
-        include_server_cfg = server_cfg_eligible_for_return_commit(
-            file_changes=file_changes,
-            project_root=project_root,
-            read_text=self.filesystem.read_text,
-            normalization_paths=normalization_paths,
-        )
-        default_paths = select_default_return_commit_paths(
-            file_changes=file_changes,
-            include_server_cfg=include_server_cfg,
-            normalization_paths=normalization_paths,
-        )
-        staged_files = load_staged_files(repo_root=project_root, paths=default_paths, read_text=self.filesystem.read_text)
-        safety = evaluate_commit_safety(staged_files=staged_files, scanner=self.secret_scanner)
-        gitignore_ok = self._overlay_gitignored(project_root)
-        commit_scope = classify_commit_scope(paths=default_paths, normalization_paths=normalization_paths)
+        git_service = self._container.create_git_service()
+        repo_slices = []
+        for discovered in topology.repos:
+            matched = match_registered_repo(discovered=discovered, registered_repos=registered)
+            if matched is None:
+                continue
+            if git_repository_id and matched["git_repository_id"] != git_repository_id:
+                continue
+            worktree = git_service.get_worktree_status(project_id, matched["git_repository_id"])
+            file_changes = _file_changes_from_worktree(worktree)
+            repo_root = Path(discovered.real_target).resolve()
+            slice_ = build_repo_return_slice(
+                project_root=project_root,
+                discovered=discovered,
+                registered=matched,
+                file_changes=file_changes,
+                branch_name=worktree.get("branch_name"),
+                is_dirty=bool(worktree.get("is_dirty")),
+                server_cfg_rel=server_cfg_rel,
+                read_text=self.filesystem.read_text,
+                scanner=self.secret_scanner,
+                overlay_gitignored=self._overlay_gitignored(repo_root) or self._overlay_gitignored(project_root),
+                has_git_baseline=bool(worktree.get("head_commit_sha")),
+            )
+            repo_slices.append(slice_)
+
+        if git_repository_id and not repo_slices:
+            # Fallback: registered repo not in topology scan (legacy single-repo path).
+            repo = self._resolve_git_repository(project_id, git_repository_id)
+            worktree = git_service.get_worktree_status(project_id, repo["git_repository_id"])
+            from backend.domain.project.topology import DiscoveredRepo, RepoKind
+
+            discovered = DiscoveredRepo(
+                path=repo["local_path"],
+                real_target=repo["local_path"],
+                kind=RepoKind.ROOT,
+                branch=worktree.get("branch_name"),
+                remote_redacted=repo.get("remote_url"),
+                is_junction=False,
+            )
+            repo_slices.append(
+                build_repo_return_slice(
+                    project_root=project_root,
+                    discovered=discovered,
+                    registered=repo,
+                    file_changes=_file_changes_from_worktree(worktree),
+                    branch_name=worktree.get("branch_name"),
+                    is_dirty=bool(worktree.get("is_dirty")),
+                    server_cfg_rel=server_cfg_rel,
+                    read_text=self.filesystem.read_text,
+                    scanner=self.secret_scanner,
+                    overlay_gitignored=self._overlay_gitignored(Path(repo["local_path"]).resolve()),
+                    has_git_baseline=bool(worktree.get("head_commit_sha")),
+                )
+            )
+
+        changed_slices = [item for item in repo_slices if item.has_changes]
+        aggregate = aggregate_return_gate(repo_slices)
+        unowned_local = build_unowned_local_entries(project_root=project_root, topology=topology)
+
+        # Backward-compatible primary fields: first changed repo, else first repo, else empty.
+        # Single-repo keeps the per-repo report; multi-repo surfaces the aggregate gate.
+        primary = changed_slices[0] if changed_slices else (repo_slices[0] if repo_slices else None)
+        primary_paths = list(primary.default_commit_paths) if primary else []
+        primary_scope = primary.commit_scope if primary else {
+            "normalization_paths": [],
+            "dev_change_paths": [],
+            "normalization_only": True,
+            "total_paths": 0,
+        }
+        primary_report = primary.contamination_report if primary and len(repo_slices) <= 1 else aggregate
+
         return {
             "project_id": str(project_id),
-            "git_repository_id": repo["git_repository_id"],
-            "branch_name": worktree.get("branch_name"),
-            "is_dirty": worktree.get("is_dirty"),
-            "default_commit_paths": default_paths,
-            "commit_scope": commit_scope,
-            "contamination_report": safety.to_report(),
-            "gitignore_contains_overlay": gitignore_ok,
-            "manual_push_message": safety.to_report()["manual_push_message"],
+            "structure_kind": topology.structure_kind.value,
+            "git_repository_id": primary.git_repository_id if primary else None,
+            "branch_name": primary.branch_name if primary else None,
+            "is_dirty": any(item.is_dirty for item in repo_slices),
+            "default_commit_paths": primary_paths,
+            "commit_scope": primary_scope,
+            "contamination_report": primary_report,
+            "gitignore_contains_overlay": any(item.gitignore_contains_overlay for item in repo_slices)
+            or self._overlay_gitignored(project_root),
+            "manual_push_message": aggregate["manual_push_message"],
+            "repos": [item.to_dict() for item in repo_slices],
+            "unowned_local_paths": unowned_local,
+            "has_any_changes": len(changed_slices) > 0,
+            "nothing_to_return": len(changed_slices) == 0,
         }
 
     def preview_safe_return_commit(
@@ -960,33 +1030,95 @@ class AdoptApplicationService:
         paths: list[str] | None,
         include_server_cfg: bool,
     ):
+        project_root = self._require_project_root(project_id)
+        topology = discover_project_repo_topology(project_root)
         worktree = self._container.create_git_service().get_worktree_status(project_id, repo["git_repository_id"])
-        project_root = Path(repo["local_path"]).resolve()
+        repo_root = Path(repo["local_path"]).resolve()
         file_changes = _file_changes_from_worktree(worktree)
         server_cfg_rel = self._pathway2_settings(project_id).get(Pathway2SettingKeys.SERVER_CFG_PATH)
-        normalization_paths = build_normalization_path_candidates(server_cfg_rel=server_cfg_rel)
-        resolved_paths = paths or select_default_return_commit_paths(
-            file_changes=file_changes,
-            include_server_cfg=include_server_cfg
-            if paths is not None
-            else server_cfg_eligible_for_return_commit(
-                file_changes=file_changes,
-                project_root=project_root,
-                read_text=self.filesystem.read_text,
-                normalization_paths=normalization_paths,
+
+        from backend.domain.project.topology import DiscoveredRepo, RepoKind, resolve_path_owning_repo
+
+        discovered = next(
+            (
+                item
+                for item in topology.repos
+                if Path(item.real_target).resolve() == repo_root or Path(item.path).resolve() == repo_root
             ),
-            normalization_paths=normalization_paths,
+            None,
         )
+        if discovered is None:
+            discovered = DiscoveredRepo(
+                path=str(repo_root),
+                real_target=str(repo_root),
+                kind=RepoKind.ROOT,
+                branch=worktree.get("branch_name"),
+                remote_redacted=repo.get("remote_url"),
+                is_junction=False,
+            )
+
+        if paths:
+            for path in paths:
+                absolute = (repo_root / path).resolve()
+                if not _path_inside(absolute, repo_root):
+                    raise Pathway2ApplicationError(
+                        ErrorCode.VALIDATION_FAILED,
+                        f"{path} is outside this repository and cannot be committed here",
+                    )
+                owner = resolve_path_owning_repo(project_root, absolute, topology)
+                if owner is None and not any(_path_inside(absolute, Path(item.real_target)) for item in topology.repos):
+                    raise Pathway2ApplicationError(
+                        ErrorCode.VALIDATION_FAILED,
+                        f"{path} stays local (not tracked by any repo) and cannot be committed",
+                    )
+
+        slice_ = build_repo_return_slice(
+            project_root=project_root,
+            discovered=discovered,
+            registered=repo,
+            file_changes=file_changes,
+            branch_name=worktree.get("branch_name"),
+            is_dirty=bool(worktree.get("is_dirty")),
+            server_cfg_rel=server_cfg_rel,
+            read_text=self.filesystem.read_text,
+            scanner=self.secret_scanner,
+            overlay_gitignored=self._overlay_gitignored(repo_root) or self._overlay_gitignored(project_root),
+            include_server_cfg=include_server_cfg if paths is not None else None,
+            paths=paths,
+            has_git_baseline=bool(worktree.get("head_commit_sha")),
+        )
+        resolved_paths = list(slice_.default_commit_paths)
         if any(is_overlay_path(path) for path in resolved_paths):
             raise Pathway2ApplicationError(ErrorCode.VALIDATION_FAILED, f"{OVERLAY_FILENAME} cannot be included in a return-path commit")
-        staged_files = load_staged_files(repo_root=project_root, paths=resolved_paths, read_text=self.filesystem.read_text)
+        staged_files = load_staged_files(repo_root=repo_root, paths=resolved_paths, read_text=self.filesystem.read_text)
         safety = evaluate_commit_safety(staged_files=staged_files, scanner=self.secret_scanner)
         return resolved_paths, safety
+
+    def _ensure_topology_repos_registered(
+        self,
+        *,
+        project_id: ProjectId,
+        topology,
+        registered: list[dict[str, Any]],
+    ) -> None:
+        """Register any topology-discovered repos missing from the git registry."""
+        for discovered in topology.repos:
+            if match_registered_repo(discovered=discovered, registered_repos=registered) is None:
+                self._container.create_git_service().execute_discover_git_repositories(project_id=project_id)
+                return
 
     def _overlay_gitignored(self, project_root: Path) -> bool:
         gitignore_path = project_root / ".gitignore"
         content = self.filesystem.read_text(gitignore_path) or ""
         return GITIGNORE_OVERLAY_ENTRY in content
+
+
+def _path_inside(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
 
 
 def _file_changes_from_worktree(worktree: dict[str, Any]) -> list[Any]:

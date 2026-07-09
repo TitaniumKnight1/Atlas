@@ -185,9 +185,29 @@ export interface ReturnPathCommitScope {
   total_paths: number;
 }
 
+export interface ReturnPathRepoSlice {
+  repo_path: string;
+  real_target: string;
+  branch_name: string | null;
+  remote_redacted: string | null;
+  git_repository_id: string | null;
+  default_commit_paths: string[];
+  commit_scope: ReturnPathCommitScope;
+  contamination_report: ContaminationReport;
+  gitignore_contains_overlay: boolean;
+  is_dirty: boolean;
+  has_changes: boolean;
+}
+
+export interface ReturnPathUnownedLocal {
+  path: string;
+  reason: string;
+}
+
 export interface ReturnPathStatus {
   project_id: string;
-  git_repository_id: string;
+  structure_kind?: string;
+  git_repository_id: string | null;
   branch_name: string | null;
   is_dirty: boolean;
   default_commit_paths: string[];
@@ -195,10 +215,14 @@ export interface ReturnPathStatus {
   contamination_report: ContaminationReport;
   gitignore_contains_overlay: boolean;
   manual_push_message: string;
+  repos?: ReturnPathRepoSlice[];
+  unowned_local_paths?: ReturnPathUnownedLocal[];
+  has_any_changes?: boolean;
+  nothing_to_return?: boolean;
 }
 
 export interface ContaminationReport {
-  gate_status: "PASS" | "BLOCKED";
+  gate_status: "PASS" | "BLOCKED" | "PARTIAL";
   allowed: boolean;
   staged_paths: string[];
   overlay_excluded: boolean;
@@ -210,6 +234,7 @@ export interface ContaminationReport {
     redacted_preview: string;
     reason: string;
   }>;
+  blocked_paths?: string[];
   summary_lines: string[];
   push_seam: string;
   manual_push_message: string;

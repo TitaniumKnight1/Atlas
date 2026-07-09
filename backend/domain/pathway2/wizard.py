@@ -88,8 +88,20 @@ def build_wizard_status(
     looks_like_fivem = bool(scorecard.get("looks_like_fivem_server"))
 
     contamination = (return_path or {}).get("contamination_report") or {}
-    commit_allowed = bool(contamination.get("allowed"))
-    commit_gate_passed = contamination.get("gate_status") == "PASS"
+    repos = list((return_path or {}).get("repos") or [])
+    changed_repos = [repo for repo in repos if repo.get("has_changes")]
+    if changed_repos:
+        commit_allowed = any(bool((repo.get("contamination_report") or {}).get("allowed")) for repo in changed_repos)
+        commit_gate_passed = all(
+            (repo.get("contamination_report") or {}).get("gate_status") == "PASS" for repo in changed_repos
+        )
+    else:
+        # Nothing to return, or legacy single-report payload without repos[].
+        commit_allowed = bool(contamination.get("allowed", True)) if return_path else True
+        commit_gate_passed = contamination.get("gate_status", "PASS") == "PASS" if return_path else True
+        if return_path and not repos:
+            commit_allowed = bool(contamination.get("allowed"))
+            commit_gate_passed = contamination.get("gate_status") == "PASS"
 
     active_step = derive_active_step(
         origin=origin,
@@ -220,17 +232,36 @@ def _build_blockers(
         blockers["run"] = run_blocked_reason
     elif run_ready and not server_started:
         blockers["run"] = "Start your server to continue — this confirms your local setup works."
-    if return_path and not contamination.get("allowed"):
-        summary = contamination.get("summary_lines") or []
-        findings = contamination.get("findings") or []
-        if findings:
-            first = findings[0]
-            blockers["return"] = (
-                f"Remove the secret in {first.get('path')}:{first.get('line')} "
-                f"({first.get('secret_type')}) before committing."
-            )
-        elif summary:
-            blockers["return"] = str(summary[0])
-        else:
-            blockers["return"] = "Return-path secret gate blocked this commit."
+    if return_path:
+        repos = list(return_path.get("repos") or [])
+        blocked = [
+            repo
+            for repo in repos
+            if repo.get("has_changes") and not (repo.get("contamination_report") or {}).get("allowed", True)
+        ]
+        if blocked:
+            first_repo = blocked[0]
+            findings = (first_repo.get("contamination_report") or {}).get("findings") or []
+            repo_label = first_repo.get("repo_path") or "repo"
+            if findings:
+                first = findings[0]
+                blockers["return"] = (
+                    f"Remove the secret in {repo_label}/{first.get('path')}:{first.get('line')} "
+                    f"({first.get('secret_type')}) before committing that repo."
+                )
+            else:
+                blockers["return"] = f"Return-path secret gate blocked {repo_label}."
+        elif not contamination.get("allowed") and not repos:
+            summary = contamination.get("summary_lines") or []
+            findings = contamination.get("findings") or []
+            if findings:
+                first = findings[0]
+                blockers["return"] = (
+                    f"Remove the secret in {first.get('path')}:{first.get('line')} "
+                    f"({first.get('secret_type')}) before committing."
+                )
+            elif summary:
+                blockers["return"] = str(summary[0])
+            else:
+                blockers["return"] = "Return-path secret gate blocked this commit."
     return blockers

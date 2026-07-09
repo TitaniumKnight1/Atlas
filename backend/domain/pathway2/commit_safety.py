@@ -140,20 +140,27 @@ def select_default_return_commit_paths(
     file_changes: list[Any],
     include_server_cfg: bool = False,
     normalization_paths: set[str] | None = None,
+    include_untracked_additions: bool = False,
 ) -> list[str]:
     """Explicit return-path commit scope — never blanket `git add -A`.
 
-    Untracked files from a freshly imported tree (no git baseline) are excluded except
-    Atlas normalization artifacts. Tracked modifications/deletions are dev-facing changes.
+    When the repo has no usable baseline, untracked files are excluded except Atlas
+    normalization artifacts (avoids whole-tree floods). With a real per-repo baseline,
+    set include_untracked_additions=True so genuine new files in that repo are included.
+    Tracked modifications/deletions are always candidate paths.
     """
     normalization_paths = normalization_paths or set()
     selected: list[str] = []
     for change in file_changes:
         path = change.path.replace("\\", "/")
         if change.change_status == ChangeStatus.UNTRACKED:
+            if is_overlay_path(path):
+                continue
             if path in normalization_paths or Path(path).name in RETURN_PATH_UNTRACKED_ALLOWLIST:
                 selected.append(path)
             elif include_server_cfg and _is_server_cfg_path(path):
+                selected.append(path)
+            elif include_untracked_additions:
                 selected.append(path)
             continue
         if change.change_status == ChangeStatus.DELETED:
